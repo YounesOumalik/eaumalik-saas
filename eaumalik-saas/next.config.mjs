@@ -25,16 +25,24 @@ const nextConfig = {
       .replace(/^https?:\/\//, '')
       .replace(/\/$/, '');
     const imgHosts = ['picsum.photos', 'images.unsplash.com'];
+    // CDN externes nécessaires au rendu (fonts, icônes)
+    const fontHosts = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'];
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
+      // Scripts : autoriser eval pour Next.js HMR/devtools ; unsafe-inline pour SSR inline scripts
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
+      // Styles : Google Fonts + FontAwesome
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'",
+      "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
       "img-src 'self' data: blob: " + [...imgHosts, 'https:'].join(' '),
-      `connect-src 'self' ${supabaseHost ? `https://${supabaseHost} wss://${supabaseHost}` : ''} https://raw.githubusercontent.com`,
-      "font-src 'self' data:",
+      `connect-src 'self' ${supabaseHost ? `https://${supabaseHost} wss://${supabaseHost}` : ''} https://raw.githubusercontent.com https://*.supabase.co wss://*.supabase.co`,
+      // Fonts : autoriser Google Fonts (woff2) + data URIs
+      `font-src 'self' data: https://${fontHosts.join(' https://')}`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
+      // Workers : permettre les blobs pour Web Workers Next.js
+      "worker-src 'self' blob:",
     ].join('; ');
 
     return [
