@@ -25,14 +25,18 @@ if (!fs.existsSync(ORDERS_FILE)) {
   fs.writeFileSync(ORDERS_FILE, JSON.stringify([], null, 2));
 }
 if (!fs.existsSync(USERS_FILE)) {
-  // Default admin user
+  // ⚠️ ATTENTION (audit Phase 3) — NE JAMAIS écrire de mot de passe en clair.
+  // L'auth est désormais gérée exclusivement par Supabase Auth (cf. lib/supabase/server.ts).
+  // Ce fichier ne sert plus qu'aux listings legacy (StaffManager lit pour informations).
+  // Pour réinitialiser le mot de passe admin : script `supabase/seed.sql` (admin créé via service role).
   const defaultUsers: any[] = [
     {
       id: 'admin-id',
       email: 'eaumaliksarl@gmail.com',
-      password: 'adminpassword123', // plain password for local dev ease
+      // Pas de champ "password" stocké en clair.
       full_name: 'Administrateur EAUMALIK',
       role: 'admin',
+      has_password: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }

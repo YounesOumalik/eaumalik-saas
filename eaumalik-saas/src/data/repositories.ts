@@ -16,7 +16,7 @@ import {
   readUsers,
 } from '@/data/localDb';
 
-const useMocks = (): boolean => {
+const shouldUseMocks = (): boolean => {
   if (process.env.NEXT_PUBLIC_USE_MOCKS === 'true') return true;
   return !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 };
@@ -36,7 +36,7 @@ export async function listProducts(filters?: {
   featured?: boolean;
   includeArchived?: boolean;
 }): Promise<Product[]> {
-  if (useMocks()) {
+  if (shouldUseMocks()) {
     let list = readProducts();
     if (!filters?.includeArchived) {
       list = list.filter(p => !p.is_archived);
@@ -77,7 +77,7 @@ export async function createProduct(product: Omit<Product, 'id' | 'created_at' |
     slug: product.slug || product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
   };
 
-  if (useMocks()) {
+  if (shouldUseMocks()) {
     const list = readProducts();
     list.push(newProduct);
     writeProducts(list);
@@ -92,7 +92,7 @@ export async function createProduct(product: Omit<Product, 'id' | 'created_at' |
 
 export async function updateProduct(id: string, product: Partial<Omit<Product, 'id' | 'created_at' | 'updated_at'>>): Promise<Product> {
   const now = new Date().toISOString();
-  if (useMocks()) {
+  if (shouldUseMocks()) {
     const list = readProducts();
     const idx = list.findIndex(p => p.id === id);
     if (idx !== -1) {
@@ -110,7 +110,7 @@ export async function updateProduct(id: string, product: Partial<Omit<Product, '
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  if (useMocks()) {
+  if (shouldUseMocks()) {
     const list = readProducts();
     const idx = list.findIndex(p => p.id === id);
     if (idx !== -1) {
@@ -127,7 +127,7 @@ export async function deleteProduct(id: string): Promise<void> {
 }
 
 export async function updateProductStock(productId: string, delta: number): Promise<void> {
-  if (useMocks()) {
+  if (shouldUseMocks()) {
     const list = readProducts();
     const p = list.find(x => x.id === productId);
     if (p) {
@@ -146,7 +146,7 @@ export async function updateProductStock(productId: string, delta: number): Prom
 // ORDERS
 // ============================================================================
 export async function listOrders(): Promise<Order[]> {
-  if (useMocks()) return readOrders();
+  if (shouldUseMocks()) return readOrders();
   const supabase = await getSupabase();
   const { data, error } = await supabase.from('orders').select('*, items:order_items(*)').order('created_at', { ascending: false });
   if (error) throw error;
@@ -154,7 +154,7 @@ export async function listOrders(): Promise<Order[]> {
 }
 
 export async function updateOrderStatus(orderId: string, status: Order['status']): Promise<void> {
-  if (useMocks()) {
+  if (shouldUseMocks()) {
     const list = readOrders();
     const o = list.find(x => x.id === orderId);
     if (o) {
@@ -180,7 +180,7 @@ export async function createOrder(input: {
   const total = subtotal + delivery;
   const order_number = `CMD-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
 
-  if (useMocks()) {
+  if (shouldUseMocks()) {
     const id = `o-${Date.now()}`;
     const order: Order = {
       id,
@@ -252,7 +252,7 @@ export async function createOrder(input: {
 // USERS / CLIENTS
 // ============================================================================
 export async function listClients(): Promise<User[]> {
-  if (useMocks()) {
+  if (shouldUseMocks()) {
     const all = readUsers();
     return all.filter(u => u.role === 'client');
   }
@@ -266,7 +266,7 @@ export async function listClients(): Promise<User[]> {
 // MAINTENANCE
 // ============================================================================
 export async function listMaintenance(): Promise<MaintenanceAlert[]> {
-  if (useMocks()) return [...MOCK_MAINTENANCE];
+  if (shouldUseMocks()) return [...MOCK_MAINTENANCE];
   const supabase = await getSupabase();
   const { data, error } = await supabase.from('maintenance_alerts').select('*').order('next_filter_change', { ascending: true });
   if (error) throw error;
@@ -274,7 +274,7 @@ export async function listMaintenance(): Promise<MaintenanceAlert[]> {
 }
 
 export async function updateMaintenanceStatus(id: string, status: MaintenanceAlert['status']): Promise<void> {
-  if (useMocks()) {
+  if (shouldUseMocks()) {
     const m = MOCK_MAINTENANCE.find(x => x.id === id);
     if (m) { m.status = status; m.updated_at = new Date().toISOString(); }
     return;
@@ -287,7 +287,7 @@ export async function updateMaintenanceStatus(id: string, status: MaintenanceAle
 // COMPANY
 // ============================================================================
 export async function getCompanyProfile(): Promise<CompanyProfile> {
-  if (useMocks()) return MOCK_COMPANY;
+  if (shouldUseMocks()) return MOCK_COMPANY;
   const supabase = await getSupabase();
   const { data, error } = await supabase.from('company_profile').select('*').single();
   if (error || !data) return MOCK_COMPANY;

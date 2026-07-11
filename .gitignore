@@ -1,0 +1,15 @@
+# Racine du dépôt Eaumalik
+# Le runtime Node pré-installé (node-v20.17.0-linux-x64) est historiquement
+# tracké depuis les commits initiaux — il est conservé tel quel.
+# On ignore uniquement les futures archives redondantes à la racine.
+
+# Archives runtime Node (déjà décompressées)
+node.tar.gz
+node.tar.xz
+
+# Secrets / fichiers locaux non versionnés
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store

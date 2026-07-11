@@ -10,7 +10,7 @@ const TABS = [
   { id: 'commandes',    label: 'Commandes',     href: '/admin',                  icon: Box },
   { id: 'stocks',       label: 'Stocks',        href: '/admin/stocks',           icon: Warehouse },
   { id: 'catalogue',    label: 'Catalogue',     href: '/admin/catalogue',        icon: Tags },
-  { id: 'comptabilite', label: 'Comptabilite',  href: '/admin/comptabilite',     icon: TrendingUp },
+  { id: 'comptabilite', label: 'Comptabilité',  href: '/admin/comptabilite',     icon: TrendingUp },
   { id: 'personnels',   label: 'Personnels',    href: '/admin/personnels',       icon: Users },
 ];
 

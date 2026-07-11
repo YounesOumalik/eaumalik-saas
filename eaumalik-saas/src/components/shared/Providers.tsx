@@ -4,11 +4,11 @@ import { ReactNode } from 'react';
 import { CartProvider } from './CartProvider';
 import { ThemeProvider } from './ThemeProvider';
 import { ToastProvider } from './ToastProvider';
-import { SessionProvider } from 'next-auth/react';
+import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 
 export default function Providers({ children }: { children: ReactNode }) {
   return (
-    <SessionProvider>
+    <SupabaseAuthProvider>
       <ThemeProvider>
         <ToastProvider>
           <CartProvider>
@@ -16,6 +16,6 @@ export default function Providers({ children }: { children: ReactNode }) {
           </CartProvider>
         </ToastProvider>
       </ThemeProvider>
-    </SessionProvider>
+    </SupabaseAuthProvider>
   );
 }

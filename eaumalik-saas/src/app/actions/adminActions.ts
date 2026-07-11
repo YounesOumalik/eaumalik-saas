@@ -1,136 +1,141 @@
 'use server';
 
-import { readUsers, writeUsers } from '@/data/localDb';
+import 'server-only';
+import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
-import { getServerSession } from 'next-auth';
+import { requireAdmin, createSupabaseServiceRoleClient } from '@/lib/supabase/server';
 
-// Helper to check if current user is superadmin (admin)
-async function requireSuperAdmin() {
-  const session = await getServerSession();
-  if (!session?.user?.email) throw new Error('Non authentifié.');
-  const users = readUsers();
-  const user = users.find(u => u.email.toLowerCase() === session.user!.email!.toLowerCase());
-  if (!user || user.role !== 'admin') {
-    throw new Error('Accès refusé. Droits superadministrateur requis.');
-  }
-  return user;
+const PermissionsSchema = z.object({
+  can_view_products: z.boolean(),
+  can_edit_products: z.boolean(),
+  can_validate_orders: z.boolean(),
+  can_follow_prospects: z.boolean(),
+  can_view_comptabilite: z.boolean(),
+  can_view_stocks: z.boolean(),
+});
+
+const StaffCreateSchema = z.object({
+  email: z.string().email('Email invalide.'),
+  password: z.string()
+    .min(8, 'Mot de passe trop court (min. 8 caractères).')
+    .regex(/[A-Z]/, 'Doit contenir une majuscule.')
+    .regex(/[0-9]/, 'Doit contenir un chiffre.'),
+  full_name: z.string().min(3).max(100),
+  phone: z.string().regex(/^0[6-7][0-9]{8}$/, 'Numéro marocain invalide.'),
+  role: z.string().min(1).max(40),
+  permissions: PermissionsSchema,
+});
+
+const StaffUpdateSchema = z.object({
+  email: z.string().email(),
+  full_name: z.string().min(3).max(100),
+  phone: z.string().regex(/^0[6-7][0-9]{8}$/),
+  role: z.string().min(1).max(40),
+  password: z.string()
+    .min(8, 'Mot de passe trop court (min. 8 caractères).')
+    .regex(/[A-Z]/, 'Doit contenir une majuscule.')
+    .regex(/[0-9]/, 'Doit contenir un chiffre.')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  permissions: PermissionsSchema,
+});
+
+async function gate() {
+  return await requireAdmin();
 }
 
 export async function listStaffUsersAction() {
   try {
-    await requireSuperAdmin();
-    const users = readUsers();
-    // Staff are users whose role is NOT 'client'
-    const staff = users.filter(u => u.role !== 'client');
-    return { success: true, staff };
+    await gate();
+    const supabase = createSupabaseServiceRoleClient();
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, email, full_name, phone, role, permissions, created_at, updated_at')
+      .neq('role', 'client')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return { success: true as const, staff: data ?? [] };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    return { success: false as const, error: err.message ?? 'Erreur.' };
   }
 }
 
-export async function createStaffUserAction(data: {
-  email: string;
-  passwordHash: string;
-  full_name: string;
-  phone: string;
-  role: string;
-  permissions: {
-    can_view_products: boolean;
-    can_edit_products: boolean;
-    can_validate_orders: boolean;
-    can_follow_prospects: boolean;
-    can_view_comptabilite: boolean;
-    can_view_stocks: boolean;
-  };
-}) {
+export async function createStaffUserAction(raw: unknown) {
+  const parsed = StaffCreateSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Validation échouée.' };
+  }
   try {
-    await requireSuperAdmin();
-    const users = readUsers();
-    if (users.some(u => u.email.toLowerCase() === data.email.toLowerCase())) {
-      return { success: false, error: 'Cet email est déjà utilisé.' };
-    }
+    await gate();
+    const supabase = createSupabaseServiceRoleClient();
+    const { data, error } = await supabase.auth.admin.createUser({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      email_confirm: true,
+      user_metadata: { full_name: parsed.data.full_name, phone: parsed.data.phone },
+    });
+    if (error || !data.user) throw error ?? new Error('Création échouée.');
+    const { error: upsertErr } = await supabase.from('users').upsert({
+      id: data.user.id,
+      email: parsed.data.email,
+      full_name: parsed.data.full_name,
+      phone: parsed.data.phone,
+      role: parsed.data.role,
+      permissions: parsed.data.permissions,
+    });
+    if (upsertErr) throw upsertErr;
+    revalidatePath('/admin/personnels');
+    return { success: true as const, staff: data.user };
+  } catch (err: any) {
+    return { success: false as const, error: err.message ?? 'Erreur.' };
+  }
+}
 
-    const newStaff = {
-      id: `staff-${Date.now()}`,
-      email: data.email,
-      password: data.passwordHash,
-      full_name: data.full_name,
-      phone: data.phone,
-      role: data.role,
-      permissions: data.permissions,
-      created_at: new Date().toISOString(),
+export async function updateStaffUserAction(id: string, raw: unknown) {
+  const parsed = StaffUpdateSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Validation échouée.' };
+  }
+  try {
+    await gate();
+    const supabase = createSupabaseServiceRoleClient();
+    const update: Record<string, unknown> = {
+      email: parsed.data.email,
+      full_name: parsed.data.full_name,
+      phone: parsed.data.phone,
+      role: parsed.data.role,
+      permissions: parsed.data.permissions,
       updated_at: new Date().toISOString(),
     };
-
-    users.push(newStaff);
-    writeUsers(users);
-    revalidatePath('/admin/personnels');
-    return { success: true, staff: newStaff };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-export async function updateStaffUserAction(
-  id: string,
-  data: {
-    email: string;
-    full_name: string;
-    phone: string;
-    role: string;
-    password?: string;
-    permissions: {
-      can_view_products: boolean;
-      can_edit_products: boolean;
-      can_validate_orders: boolean;
-      can_follow_prospects: boolean;
-      can_view_comptabilite: boolean;
-      can_view_stocks: boolean;
-    };
-  }
-) {
-  try {
-    await requireSuperAdmin();
-    const users = readUsers();
-    const staff = users.find(u => u.id === id);
-    if (!staff) return { success: false, error: 'Membre du personnel introuvable.' };
-
-    // Check email uniqueness if changed
-    if (data.email.toLowerCase() !== staff.email.toLowerCase() && users.some(u => u.email.toLowerCase() === data.email.toLowerCase())) {
-      return { success: false, error: 'Cet email est déjà utilisé.' };
+    const { error } = await supabase.from('users').update(update).eq('id', id);
+    if (error) throw error;
+    if (parsed.data.password && parsed.data.password.length >= 8) {
+      const { error: pwdErr } = await supabase.auth.admin.updateUserById(id, { password: parsed.data.password });
+      if (pwdErr) throw pwdErr;
     }
-
-    staff.email = data.email;
-    staff.full_name = data.full_name;
-    staff.phone = data.phone;
-    staff.role = data.role;
-    staff.permissions = data.permissions;
-    if (data.password && data.password.trim()) {
-      staff.password = data.password;
-    }
-    staff.updated_at = new Date().toISOString();
-
-    writeUsers(users);
     revalidatePath('/admin/personnels');
-    return { success: true, staff };
+    return { success: true as const };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    return { success: false as const, error: err.message ?? 'Erreur.' };
   }
 }
 
 export async function deleteStaffUserAction(id: string) {
   try {
-    const admin = await requireSuperAdmin();
+    const admin = await gate();
     if (id === admin.id) {
-      return { success: false, error: 'Vous ne pouvez pas supprimer votre propre compte administrateur.' };
+      return {
+        success: false as const,
+        error: 'Vous ne pouvez pas supprimer votre propre compte administrateur.',
+      };
     }
-
-    const users = readUsers();
-    const filtered = users.filter(u => u.id !== id);
-    writeUsers(filtered);
+    const supabase = createSupabaseServiceRoleClient();
+    const { error } = await supabase.auth.admin.deleteUser(id);
+    if (error) throw error;
+    await supabase.from('users').delete().eq('id', id);
     revalidatePath('/admin/personnels');
-    return { success: true };
+    return { success: true as const };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    return { success: false as const, error: err.message ?? 'Erreur.' };
   }
 }

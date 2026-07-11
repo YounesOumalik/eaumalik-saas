@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { useSupabaseAuth } from './SupabaseAuthProvider';
 import ThemeToggle from './ThemeToggle';
 import CartButton from './CartButton';
 import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
@@ -18,7 +18,7 @@ const ADMIN_LINKS = [
   { id: 'commandes',    href: '/admin?tab=commandes', label: 'Commandes' },
   { id: 'stocks',       href: '/admin?tab=stocks',        label: 'Stocks' },
   { id: 'catalogue',    href: '/admin?tab=catalogue',     label: 'Catalogue' },
-  { id: 'comptabilite', href: '/admin?tab=comptabilite',  label: 'Comptabilite' },
+  { id: 'comptabilite', href: '/admin?tab=comptabilite',  label: 'Comptabilité' },
   { id: 'personnels',   href: '/admin/personnels?tab=personnels', label: 'Personnels' },
 ];
 
@@ -32,7 +32,7 @@ const CRM_LINKS = [
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { data: session } = useSession();
+  const { session, signOut, isAdmin } = useSupabaseAuth();
 
   const [permissions, setPermissions] = useState<any>(null);
 
@@ -50,7 +50,7 @@ export default function Navbar() {
     return pathname.startsWith(href.split('?')[0]);
   };
 
-  const userRole = (session as any)?.role || 'client';
+  const userRole = isAdmin ? 'admin' : 'client';
   const isStaff = userRole !== 'client';
 
   const allowedAdminLinks = ADMIN_LINKS.filter(l => {
@@ -97,7 +97,7 @@ export default function Navbar() {
                 </Link>
               )}
               <button
-                onClick={() => signOut({ callbackUrl: '/' })}
+                onClick={async () => { await signOut(); window.location.href = '/'; }}
                 className="nav-link text-xs px-2.5 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold cursor-pointer border border-red-500/20"
               >
                 Déconnexion
@@ -156,7 +156,7 @@ export default function Navbar() {
               <Link href="/client" className="mobile-link" onClick={() => setMobileOpen(false)}>Mon Espace</Link>
             )}
             <button
-              onClick={() => { signOut({ callbackUrl: '/' }); setMobileOpen(false); }}
+              onClick={async () => { await signOut(); window.location.href = '/'; setMobileOpen(false); }}
               className="mobile-link text-left text-red-400 font-semibold cursor-pointer w-full"
             >
               Déconnexion

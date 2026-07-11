@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Trash2, Plus, Minus, CheckCircle2, ShoppingCart, Lock, ArrowLeft, Truck } from 'lucide-react';
 import { useCart } from '@/components/shared/CartProvider';
 import { useToast } from '@/components/shared/ToastProvider';
-import { useSession } from 'next-auth/react';
+import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
 import { useRouter } from 'next/navigation';
 import { getUserProfileAction } from '@/app/actions/clientActions';
 import { formatCurrency, PHONE_MA_REGEX } from '@/lib/utils';
@@ -16,32 +16,37 @@ import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 export default function CartPage() {
   const { items, count, subtotal, updateQty, remove, clear } = useCart();
   const toast = useToast();
-  const { data: session } = useSession();
+  const { session, user } = useSupabaseAuth();
   const router = useRouter();
   const [checkout, setCheckout] = useState(false);
   const [success, setSuccess] = useState<{ orderNumber: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [profile, setProfile] = useState<{
     full_name?: string;
-    phone?: string;
-    city?: string;
-    address?: string;
+    phone?: string | null;
+    city?: string | null;
+    address?: string | null;
   } | null>(null);
   const [selectedCity, setSelectedCity] = useState('');
 
   useEffect(() => {
-    if (!session) return;
+    if (!user) return;
     const fetchProfile = async () => {
       const res = await getUserProfileAction();
       if (res.success && res.profile) {
-        setProfile(res.profile);
+        setProfile({
+          full_name: res.profile.full_name ?? undefined,
+          phone: res.profile.phone,
+          city: res.profile.city,
+          address: res.profile.address,
+        });
         if (res.profile.city) {
           setSelectedCity(res.profile.city);
         }
       }
     };
-    fetchProfile();
-  }, [session]);
+    void fetchProfile();
+  }, [user]);
 
   const delivery = subtotal >= 2000 ? 0 : 50;
   const total = subtotal + delivery;
@@ -81,7 +86,7 @@ export default function CartPage() {
       if (!res.ok) throw new Error(result.error ?? 'Erreur inconnue');
       setSuccess({ orderNumber: result.order_number });
       clear();
-      toast(`Commande ${result.order_number} creee avec succes !`, 'success');
+      toast(`Commande ${result.order_number} créée avec succès !`, 'success');
     } catch (err: any) {
       toast(err.message ?? 'Erreur lors de la commande', 'error');
     } finally {
@@ -95,12 +100,12 @@ export default function CartPage() {
         <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: 'rgba(16,185,129,0.15)' }}>
           <CheckCircle2 className="text-emerald-400" size={36} />
         </div>
-        <h2 className="font-display font-extrabold text-2xl mb-2">Commande confirmee !</h2>
+        <h2 className="font-display font-extrabold text-2xl mb-2">Commande confirmée !</h2>
         <p className="mb-2" style={{ color: 'var(--text-secondary)' }}>
-          Votre commande <span className="gradient-text font-bold">{success.orderNumber}</span> a ete enregistree.
+          Votre commande <span className="gradient-text font-bold">{success.orderNumber}</span> a été enregistrée.
         </p>
         <p className="mb-8 text-sm" style={{ color: 'var(--text-muted)' }}>
-          Paiement a la livraison. Vous serez contacte par telephone pour confirmer.
+          Paiement à la livraison. Vous serez contacté par téléphone pour confirmer.
         </p>
         <Link href="/boutique" className="btn-primary">Continuer mes achats</Link>
       </div>
@@ -113,10 +118,10 @@ export default function CartPage() {
         <ShoppingCart className="mx-auto mb-4" size={56} style={{ color: 'var(--text-muted)' }} />
         <h2 className="font-display font-bold text-xl mb-2">Votre panier est vide</h2>
         <p className="mb-6" style={{ color: 'var(--text-muted)' }}>
-          Decouvrez nos produits et trouvez la solution ideale pour votre eau.
+          Découvrez nos produits et trouvez la solution idéale pour votre eau.
         </p>
         <Link href="/boutique" className="btn-primary">
-          <ArrowLeft size={14} aria-hidden="true" /> Retourner a la boutique
+          <ArrowLeft size={14} aria-hidden="true" /> Retourner à la boutique
         </Link>
       </div>
     );
@@ -204,7 +209,7 @@ export default function CartPage() {
                 <Lock size={14} aria-hidden="true" /> Passer la commande
               </button>
               <p className="text-center mt-3 text-xs flex items-center justify-center gap-2" style={{ color: 'var(--text-muted)' }}>
-                <Truck size={12} /> Paiement a la livraison
+                <Truck size={12} /> Paiement à la livraison
               </p>
             </div>
           </aside>
@@ -244,7 +249,7 @@ export default function CartPage() {
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="form-label" htmlFor="client_phone">Telephone *</label>
+                  <label className="form-label" htmlFor="client_phone">Téléphone *</label>
                   <input
                     id="client_phone"
                     name="client_phone"
@@ -270,7 +275,7 @@ export default function CartPage() {
                 </div>
               </div>
               <div>
-                <label className="form-label" htmlFor="client_address">Adresse complete *</label>
+                <label className="form-label" htmlFor="client_address">Adresse complète *</label>
                 <textarea
                   id="client_address"
                   name="client_address"
@@ -284,14 +289,14 @@ export default function CartPage() {
               </div>
               <div>
                 <label className="form-label" htmlFor="notes">Notes (optionnel)</label>
-                <input id="notes" name="notes" type="text" className="form-input" placeholder="Instructions speciales..." />
+                <input id="notes" name="notes" type="text" className="form-input" placeholder="Instructions spéciales..." />
               </div>
 
               <div className="p-4 rounded-lg flex items-center gap-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                 <Truck style={{ color: 'var(--primary-light)' }} aria-hidden="true" />
                 <div>
-                  <div className="font-semibold text-sm">Paiement a la livraison</div>
-                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Vous payez en cash a la reception de votre commande</div>
+                  <div className="font-semibold text-sm">Paiement à la livraison</div>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Vous payez en cash à la réception de votre commande</div>
                 </div>
               </div>
 

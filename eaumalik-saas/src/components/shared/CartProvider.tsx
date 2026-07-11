@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import type { CartItem } from '@/types';
-import { useSession } from 'next-auth/react';
+import { useSupabaseAuth } from './SupabaseAuthProvider';
 import { saveUserCartAction, getUserCartAction } from '@/app/actions/clientActions';
 
 interface CartContextValue {
@@ -25,7 +25,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
-  const { data: session } = useSession();
+  const { session, user } = useSupabaseAuth();
 
   // Hydrate from localStorage
   useEffect(() => {
@@ -36,26 +36,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setHydrated(true);
   }, []);
 
-  // Fetch cart from server on login
+  // Fetch cart from server on login (côté Supabase à activer en phase 2 d'auth).
   useEffect(() => {
-    if (!session) return;
+    if (!user) return;
     const fetchServerCart = async () => {
       const res = await getUserCartAction();
-      if (res.success && res.items && res.items.length > 0) {
-        setItems(res.items);
+      if (res.success && Array.isArray(res.items) && res.items.length > 0) {
+        setItems(res.items as CartItem[]);
       }
     };
-    fetchServerCart();
-  }, [session]);
+    void fetchServerCart();
+  }, [user]);
 
   // Persist local and server-side
   useEffect(() => {
     if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    if (session) {
-      saveUserCartAction(items);
+    if (user) {
+      void saveUserCartAction(items);
     }
-  }, [items, hydrated, session]);
+  }, [items, hydrated, user]);
 
   const add = useCallback((item: CartItem) => {
     setItems(prev => {
