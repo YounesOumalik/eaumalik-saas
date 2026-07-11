@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSession, signOut } from 'next-auth/react';
 import ThemeToggle from './ThemeToggle';
 import CartButton from './CartButton';
+import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 
 const NAV_LINKS = [
   { href: '/', label: 'Accueil' },
@@ -13,25 +15,58 @@ const NAV_LINKS = [
 ];
 
 const ADMIN_LINKS = [
-  { href: '/admin?tab=commandes', label: 'Commandes' },
-  { href: '/admin?tab=stocks', label: 'Stocks' },
-  { href: '/admin?tab=catalogue', label: 'Catalogue' },
-  { href: '/admin?tab=comptabilite', label: 'Comptabilite' },
+  { id: 'commandes',    href: '/admin?tab=commandes', label: 'Commandes' },
+  { id: 'stocks',       href: '/admin?tab=stocks',        label: 'Stocks' },
+  { id: 'catalogue',    href: '/admin?tab=catalogue',     label: 'Catalogue' },
+  { id: 'comptabilite', href: '/admin?tab=comptabilite',  label: 'Comptabilite' },
+  { id: 'personnels',   href: '/admin/personnels?tab=personnels', label: 'Personnels' },
 ];
 
 const CRM_LINKS = [
-  { href: '/crm?tab=maintenance', label: 'Maintenance' },
-  { href: '/crm?tab=clients', label: 'Clients' },
+  { id: 'maintenance', href: '/crm?tab=maintenance', label: 'Maintenance' },
+  { id: 'clients',     href: '/crm/clients?tab=clients',     label: 'Clients' },
+  { id: 'messages',    href: '/crm/messages?tab=messages',    label: 'Messages Clients' },
+  { id: 'news',        href: '/crm/news?tab=news',        label: 'Publier Actualité' },
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: session } = useSession();
+
+  const [permissions, setPermissions] = useState<any>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    getCurrentUserPermissionsAction().then(res => {
+      if (res.success) {
+        setPermissions(res.permissions);
+      }
+    });
+  }, [session]);
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
     return pathname.startsWith(href.split('?')[0]);
   };
+
+  const userRole = (session as any)?.role || 'client';
+  const isStaff = userRole !== 'client';
+
+  const allowedAdminLinks = ADMIN_LINKS.filter(l => {
+    if (l.id === 'personnels') return userRole === 'admin';
+    return true;
+  });
+
+  const allowedCrmLinks = CRM_LINKS.filter(l => {
+    if (userRole === 'admin') return true;
+    if (!permissions) return true; // show by default while loading
+
+    if (l.id === 'clients') return permissions.can_follow_prospects;
+    if (l.id === 'messages') return permissions.can_follow_prospects;
+    if (l.id === 'news') return permissions.can_edit_products;
+    return true;
+  });
 
   return (
     <nav className="nav-glass fixed top-0 left-0 right-0 z-50">
@@ -49,8 +84,30 @@ export default function Navbar() {
             </Link>
           ))}
 
-          <DropdownMenu title="Administration" links={ADMIN_LINKS} isActive={isActive('/admin')} />
-          <DropdownMenu title="CRM" links={CRM_LINKS} isActive={isActive('/crm')} />
+          {session ? (
+            <>
+              {isStaff ? (
+                <>
+                  <DropdownMenu title="Administration" links={allowedAdminLinks} isActive={isActive('/admin')} />
+                  <DropdownMenu title="CRM" links={allowedCrmLinks} isActive={isActive('/crm')} />
+                </>
+              ) : (
+                <Link href="/client" className={`nav-link ${isActive('/client') ? 'active' : ''}`}>
+                  Mon Espace
+                </Link>
+              )}
+              <button
+                onClick={() => signOut({ callbackUrl: '/' })}
+                className="nav-link text-xs px-2.5 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold cursor-pointer border border-red-500/20"
+              >
+                Déconnexion
+              </button>
+            </>
+          ) : (
+            <Link href="/login" className="nav-link font-semibold text-[color:var(--primary-light)]">
+              Connexion
+            </Link>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -84,12 +141,30 @@ export default function Navbar() {
         {NAV_LINKS.map(l => (
           <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>{l.label}</Link>
         ))}
-        {ADMIN_LINKS.map(l => (
-          <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>Admin - {l.label}</Link>
-        ))}
-        {CRM_LINKS.map(l => (
-          <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>CRM - {l.label}</Link>
-        ))}
+        {session ? (
+          <>
+            {isStaff ? (
+              <>
+                {allowedAdminLinks.map(l => (
+                  <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>Admin - {l.label}</Link>
+                ))}
+                {allowedCrmLinks.map(l => (
+                  <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>CRM - {l.label}</Link>
+                ))}
+              </>
+            ) : (
+              <Link href="/client" className="mobile-link" onClick={() => setMobileOpen(false)}>Mon Espace</Link>
+            )}
+            <button
+              onClick={() => { signOut({ callbackUrl: '/' }); setMobileOpen(false); }}
+              className="mobile-link text-left text-red-400 font-semibold cursor-pointer w-full"
+            >
+              Déconnexion
+            </button>
+          </>
+        ) : (
+          <Link href="/login" className="mobile-link font-semibold text-[color:var(--primary-light)]" onClick={() => setMobileOpen(false)}>Connexion</Link>
+        )}
         <Link href="/panier" className="mobile-link" onClick={() => setMobileOpen(false)}>Panier</Link>
       </div>
     </nav>

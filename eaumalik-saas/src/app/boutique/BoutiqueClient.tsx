@@ -16,7 +16,8 @@ export default function BoutiqueClient({ initialProducts }: { initialProducts: P
       const searchOk = !q
         || p.name.toLowerCase().includes(q)
         || (p.description ?? '').toLowerCase().includes(q);
-      return catOk && searchOk;
+      const notArchived = !p.is_archived;
+      return catOk && searchOk && notArchived;
     });
   }, [initialProducts, category, search]);
 

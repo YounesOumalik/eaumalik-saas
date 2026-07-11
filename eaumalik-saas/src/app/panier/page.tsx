@@ -1,26 +1,47 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Trash2, Plus, Minus, CheckCircle2, ShoppingCart, Lock, ArrowLeft, Truck } from 'lucide-react';
 import { useCart } from '@/components/shared/CartProvider';
 import { useToast } from '@/components/shared/ToastProvider';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { getUserProfileAction } from '@/app/actions/clientActions';
 import { formatCurrency, PHONE_MA_REGEX } from '@/lib/utils';
 import type { CheckoutFormData } from '@/types';
-
-const CITIES = [
-  'Casablanca', 'Rabat', 'Marrakech', 'Fes', 'Tanger', 'Agadir',
-  'Meknes', 'Oujda', 'Kenitra', 'Tetouan', 'Sale', 'Temara',
-  'Mohammedia', 'El Jadida', 'Nador',
-];
+import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 
 export default function CartPage() {
   const { items, count, subtotal, updateQty, remove, clear } = useCart();
   const toast = useToast();
+  const { data: session } = useSession();
+  const router = useRouter();
   const [checkout, setCheckout] = useState(false);
   const [success, setSuccess] = useState<{ orderNumber: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [profile, setProfile] = useState<{
+    full_name?: string;
+    phone?: string;
+    city?: string;
+    address?: string;
+  } | null>(null);
+  const [selectedCity, setSelectedCity] = useState('');
+
+  useEffect(() => {
+    if (!session) return;
+    const fetchProfile = async () => {
+      const res = await getUserProfileAction();
+      if (res.success && res.profile) {
+        setProfile(res.profile);
+        if (res.profile.city) {
+          setSelectedCity(res.profile.city);
+        }
+      }
+    };
+    fetchProfile();
+  }, [session]);
 
   const delivery = subtotal >= 2000 ? 0 : 50;
   const total = subtotal + delivery;
@@ -36,8 +57,10 @@ export default function CartPage() {
       notes: String(fd.get('notes') ?? '') || undefined,
     };
 
-    if (data.client_name.length < 3) return toast('Nom requis (min. 3 caracteres)', 'error');
-    if (!PHONE_MA_REGEX.test(data.client_phone)) return toast('Telephone invalide (format 06XXXXXXXX)', 'error');
+    if (data.client_name.length < 3) return toast('Nom complet requis (min. 3 caractères)', 'error');
+    if (!PHONE_MA_REGEX.test(data.client_phone)) return toast('Téléphone invalide (format 06XXXXXXXX)', 'error');
+    if (!data.client_city) return toast('Veuillez choisir une ville', 'error');
+    if (data.client_address.trim().length < 5) return toast('Veuillez renseigner une adresse complète (min. 5 caractères)', 'error');
 
     try {
       setSubmitting(true);
@@ -141,14 +164,43 @@ export default function CartPage() {
             <div className="glass-card p-6" style={{ transform: 'none' }}>
               <h3 className="font-display font-bold text-lg mb-4">Recapitulatif</h3>
               <dl className="space-y-3 text-sm">
-                <div className="flex justify-between"><dt style={{ color: 'var(--text-secondary)' }}>Sous-total ({count} article{count > 1 ? 's' : ''})</dt><dd>{formatCurrency(subtotal)}</dd></div>
-                <div className="flex justify-between"><dt style={{ color: 'var(--text-secondary)' }}>Livraison</dt><dd>{delivery === 0 ? <span style={{ color: 'var(--success)' }}>Gratuite</span> : formatCurrency(delivery)}</dd></div>
+                <div className="flex justify-between">
+                  <dt style={{ color: 'var(--text-secondary)' }}>Sous-total (TTC)</dt>
+                  <dd>{formatCurrency(subtotal)}</dd>
+                </div>
+                {subtotal > 0 && (
+                  <>
+                    <div className="flex justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <dt>dont TVA (20%)</dt>
+                      <dd>{formatCurrency((subtotal * 20) / 120)}</dd>
+                    </div>
+                    <div className="flex justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <dt>Montant HT</dt>
+                      <dd>{formatCurrency(subtotal - (subtotal * 20) / 120)}</dd>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between">
+                  <dt style={{ color: 'var(--text-secondary)' }}>Livraison</dt>
+                  <dd>{delivery === 0 ? <span style={{ color: 'var(--success)' }}>Gratuite</span> : formatCurrency(delivery)}</dd>
+                </div>
                 {delivery > 0 && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Livraison gratuite a partir de 2 000 DH</p>}
                 <div className="flex justify-between pt-3 font-display font-extrabold text-lg" style={{ borderTop: '1px solid var(--border)' }}>
-                  <dt>Total</dt><dd className="gradient-text">{formatCurrency(total)}</dd>
+                  <dt>Total</dt>
+                  <dd className="gradient-text">{formatCurrency(total)}</dd>
                 </div>
               </dl>
-              <button onClick={() => setCheckout(true)} className="btn-primary w-full justify-center mt-6">
+              <button
+                onClick={() => {
+                  if (!session) {
+                    toast('Vous devez vous connecter ou créer un compte pour passer la commande.', 'info');
+                    router.push('/login?callbackUrl=/panier');
+                  } else {
+                    setCheckout(true);
+                  }
+                }}
+                className="btn-primary w-full justify-center mt-6"
+              >
                 <Lock size={14} aria-hidden="true" /> Passer la commande
               </button>
               <p className="text-center mt-3 text-xs flex items-center justify-center gap-2" style={{ color: 'var(--text-muted)' }}>
@@ -156,6 +208,17 @@ export default function CartPage() {
               </p>
             </div>
           </aside>
+        </div>
+      ) : !session ? (
+        <div className="max-w-md mx-auto text-center py-12 space-y-4">
+          <Lock className="mx-auto text-amber-500" size={48} />
+          <h2 className="font-display font-bold text-xl">Connexion requise</h2>
+          <p style={{ color: 'var(--text-muted)' }} className="text-sm">
+            Vous devez posséder un compte client pour finaliser votre commande.
+          </p>
+          <Link href="/login?callbackUrl=/panier" className="btn-primary w-full justify-center">
+            Se connecter / Créer un compte
+          </Link>
         </div>
       ) : (
         <div className="lg:flex gap-8">
@@ -167,24 +230,57 @@ export default function CartPage() {
               <h3 className="font-display font-bold text-lg mb-2">Informations de livraison</h3>
               <div>
                 <label className="form-label" htmlFor="client_name">Nom complet *</label>
-                <input id="client_name" name="client_name" type="text" required minLength={3} className="form-input" placeholder="Votre nom complet" />
+                <input
+                  id="client_name"
+                  name="client_name"
+                  type="text"
+                  required
+                  minLength={3}
+                  className="form-input"
+                  placeholder="Votre nom complet"
+                  defaultValue={profile?.full_name || ''}
+                  key={profile?.full_name || 'name-empty'}
+                />
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="form-label" htmlFor="client_phone">Telephone *</label>
-                  <input id="client_phone" name="client_phone" type="tel" required pattern="0[6-7][0-9]{8}" className="form-input" placeholder="06XXXXXXXX" />
+                  <input
+                    id="client_phone"
+                    name="client_phone"
+                    type="tel"
+                    required
+                    pattern="0[6-7][0-9]{8}"
+                    className="form-input"
+                    placeholder="06XXXXXXXX"
+                    defaultValue={profile?.phone || ''}
+                    key={profile?.phone || 'phone-empty'}
+                  />
                 </div>
                 <div>
                   <label className="form-label" htmlFor="client_city">Ville *</label>
-                  <select id="client_city" name="client_city" required className="form-input">
-                    <option value="">Choisir une ville</option>
-                    {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  <SearchableCitySelect
+                    id="client_city"
+                    name="client_city"
+                    value={selectedCity}
+                    onChange={setSelectedCity}
+                    placeholder="Choisir une ville"
+                    required
+                  />
                 </div>
               </div>
               <div>
                 <label className="form-label" htmlFor="client_address">Adresse complete *</label>
-                <textarea id="client_address" name="client_address" rows={2} required className="form-input" placeholder="Numero, rue, quartier, code postal..." />
+                <textarea
+                  id="client_address"
+                  name="client_address"
+                  rows={2}
+                  required
+                  className="form-input"
+                  placeholder="Numero, rue, quartier, code postal..."
+                  defaultValue={profile?.address || ''}
+                  key={profile?.address || 'address-empty'}
+                />
               </div>
               <div>
                 <label className="form-label" htmlFor="notes">Notes (optionnel)</label>
@@ -199,6 +295,19 @@ export default function CartPage() {
                 </div>
               </div>
 
+              <div className="flex items-center gap-2 py-1 select-none">
+                <input
+                  type="checkbox"
+                  id="request_invoice"
+                  name="request_invoice"
+                  defaultChecked
+                  className="rounded border-[color:var(--border)] text-[color:var(--primary)] focus:ring-[color:var(--primary)] bg-[color:var(--bg-card)]"
+                />
+                <label htmlFor="request_invoice" className="text-xs cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
+                  Demander une facture d&apos;achat officielle (PDF) sur mon compte à la confirmation
+                </label>
+              </div>
+
               <button type="submit" disabled={submitting} className="btn-primary w-full justify-center py-3.5 text-base disabled:opacity-50">
                 {submitting ? 'Envoi...' : (
                   <> <CheckCircle2 size={16} aria-hidden="true" /> Confirmer la commande — {formatCurrency(total)} </>
@@ -210,15 +319,21 @@ export default function CartPage() {
           <aside className="lg:w-72 mt-6 lg:mt-0">
             <div className="glass-card p-5" style={{ transform: 'none' }}>
               <h4 className="font-display font-semibold text-sm mb-3">Votre commande</h4>
-              <div className="space-y-2 text-sm">
+              <div className="space-y-2 text-sm pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
                 {items.map(i => (
-                  <div key={i.product_id} className="flex justify-between">
-                    <span style={{ color: 'var(--text-secondary)' }} className="truncate mr-2">{i.name} x{i.quantity}</span>
-                    <span>{formatCurrency(i.price * i.quantity)}</span>
+                  <div key={i.product_id} className="flex justify-between items-start gap-4">
+                    <span style={{ color: 'var(--text-secondary)' }} className="truncate">{i.name} x{i.quantity}</span>
+                    <span className="whitespace-nowrap flex-shrink-0">{formatCurrency(i.price * i.quantity)}</span>
                   </div>
                 ))}
               </div>
-              <div className="mt-3 pt-3 flex justify-between font-display font-bold" style={{ borderTop: '1px solid var(--border)' }}>
+              <div className="space-y-2 text-xs py-3" style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                <div className="flex justify-between"><span>Sous-total (TTC)</span><span>{formatCurrency(subtotal)}</span></div>
+                <div className="flex justify-between"><span>dont TVA (20%)</span><span>{formatCurrency((subtotal * 20) / 120)}</span></div>
+                <div className="flex justify-between"><span>Montant HT</span><span>{formatCurrency(subtotal - (subtotal * 20) / 120)}</span></div>
+                <div className="flex justify-between"><span>Livraison</span><span>{delivery === 0 ? 'Gratuite' : formatCurrency(delivery)}</span></div>
+              </div>
+              <div className="mt-3 flex justify-between font-display font-bold">
                 <span>Total</span><span className="gradient-text">{formatCurrency(total)}</span>
               </div>
             </div>

@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import type { CartItem } from '@/types';
+import { useSession } from 'next-auth/react';
+import { saveUserCartAction, getUserCartAction } from '@/app/actions/clientActions';
 
 interface CartContextValue {
   items: CartItem[];
@@ -23,6 +25,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const { data: session } = useSession();
 
   // Hydrate from localStorage
   useEffect(() => {
@@ -33,11 +36,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setHydrated(true);
   }, []);
 
-  // Persist
+  // Fetch cart from server on login
+  useEffect(() => {
+    if (!session) return;
+    const fetchServerCart = async () => {
+      const res = await getUserCartAction();
+      if (res.success && res.items && res.items.length > 0) {
+        setItems(res.items);
+      }
+    };
+    fetchServerCart();
+  }, [session]);
+
+  // Persist local and server-side
   useEffect(() => {
     if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  }, [items, hydrated]);
+    if (session) {
+      saveUserCartAction(items);
+    }
+  }, [items, hydrated, session]);
 
   const add = useCallback((item: CartItem) => {
     setItems(prev => {

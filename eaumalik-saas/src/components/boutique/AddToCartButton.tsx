@@ -16,10 +16,12 @@ export default function AddToCartButton({ product, size = 'md', className = '', 
   const { add } = useCart();
   const toast = useToast();
 
+  const isOutOfStock = product.stock === 0 || product.is_out_of_stock;
+
   const onClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (disabled || product.stock === 0) return;
+    if (disabled || isOutOfStock) return;
     add({
       product_id: product.id,
       name: product.name,
@@ -39,12 +41,12 @@ export default function AddToCartButton({ product, size = 'md', className = '', 
   return (
     <button
       onClick={onClick}
-      disabled={disabled || product.stock === 0}
+      disabled={disabled || isOutOfStock}
       className={`btn-primary inline-flex items-center gap-2 ${sizeClass} ${className} disabled:opacity-50 disabled:cursor-not-allowed`}
       aria-label={`Ajouter ${product.name} au panier`}
     >
       <ShoppingCart size={size === 'sm' ? 12 : 14} aria-hidden="true" />
-      <span>Ajouter</span>
+      <span>{isOutOfStock ? 'Rupture' : 'Ajouter'}</span>
     </button>
   );
 }

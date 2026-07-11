@@ -1,0 +1,69 @@
+[
+  {
+    "id": "o-1783788835623",
+    "order_number": "CMD-2026-7779",
+    "user_id": null,
+    "client_name": "hamid",
+    "client_phone": "0623456799",
+    "client_address": "kjfdskfhfb jsfbas 242j fdsf",
+    "client_city": "Meknes",
+    "status": "livree",
+    "subtotal": 4998,
+    "delivery_fee": 0,
+    "total": 4998,
+    "notes": null,
+    "payment_method": "cash_on_delivery",
+    "invoice_generated": false,
+    "created_at": "2026-07-11T16:53:55.623Z",
+    "updated_at": "2026-07-11T16:53:55.623Z",
+    "items": [
+      {
+        "id": "o-1783788835623-item-0",
+        "order_id": "o-1783788835623",
+        "product_id": "p1",
+        "product_name": "Purificateur d'Eau Pro Modèle 1",
+        "unit_price": 2499,
+        "quantity": 1,
+        "line_total": 2499
+      },
+      {
+        "id": "o-1783788835623-item-1",
+        "order_id": "o-1783788835623",
+        "product_id": "p2",
+        "product_name": "Purificateur d'Eau Pro Modèle 2",
+        "unit_price": 2499,
+        "quantity": 1,
+        "line_total": 2499
+      }
+    ]
+  },
+  {
+    "id": "o-1783786830908",
+    "order_number": "CMD-2026-4246",
+    "user_id": null,
+    "client_name": "Younes oumalik",
+    "client_phone": "0617862500",
+    "client_address": "ain sbaa",
+    "client_city": "Casablanca",
+    "status": "livree",
+    "subtotal": 2499,
+    "delivery_fee": 0,
+    "total": 2499,
+    "notes": null,
+    "payment_method": "cash_on_delivery",
+    "invoice_generated": false,
+    "created_at": "2026-07-11T16:20:30.908Z",
+    "updated_at": "2026-07-11T16:20:30.908Z",
+    "items": [
+      {
+        "id": "o-1783786830908-item-0",
+        "order_id": "o-1783786830908",
+        "product_id": "p1",
+        "product_name": "Purificateur d'Eau Pro Modèle 1",
+        "unit_price": 2499,
+        "quantity": 1,
+        "line_total": 2499
+      }
+    ]
+  }
+]

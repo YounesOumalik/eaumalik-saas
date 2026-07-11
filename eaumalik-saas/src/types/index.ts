@@ -17,6 +17,9 @@ export interface Product {
   stock: number;
   stock_alert_threshold: number;
   filter_lifespan_months: number | null;
+  wholesale_price?: number; // MAD
+  is_out_of_stock?: boolean;
+  is_archived?: boolean;
   created_at: string;
   updated_at: string;
 }

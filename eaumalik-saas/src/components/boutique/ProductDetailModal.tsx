@@ -76,14 +76,14 @@ export default function ProductDetailModal({ product, onClose }: Props) {
             <div className="flex items-center justify-between mb-4">
               <span className="text-2xl font-display font-extrabold gradient-text">{formatCurrency(product.price)}</span>
               <span
-                className="text-sm"
+                className="text-sm font-semibold"
                 style={{
-                  color: product.stock > 5 ? 'var(--success)'
-                       : product.stock > 0 ? 'var(--warning)'
+                  color: (product.stock > 5 && !product.is_out_of_stock) ? 'var(--success)'
+                       : (product.stock > 0 && !product.is_out_of_stock) ? 'var(--warning)'
                        : 'var(--danger)',
                 }}
               >
-                {product.stock > 0 ? `${product.stock} en stock` : 'Rupture'}
+                {(product.stock > 0 && !product.is_out_of_stock) ? `${product.stock} en stock` : 'Rupture de stock'}
               </span>
             </div>
             <AddToCartButton product={product} size="lg" className="w-full justify-center" />

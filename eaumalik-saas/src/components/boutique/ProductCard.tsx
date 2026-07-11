@@ -16,7 +16,7 @@ export default function ProductCard({ product }: { product: Product }) {
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (product.stock === 0) return;
+    if (product.stock === 0 || product.is_out_of_stock) return;
     add({
       product_id: product.id,
       name: product.name,
@@ -27,8 +27,8 @@ export default function ProductCard({ product }: { product: Product }) {
     toast(`${product.name} ajoute au panier`, 'success');
   };
 
-  const lowStock = product.stock > 0 && product.stock < product.stock_alert_threshold;
-  const outOfStock = product.stock === 0;
+  const lowStock = product.stock > 0 && product.stock < product.stock_alert_threshold && !product.is_out_of_stock;
+  const outOfStock = product.stock === 0 || !!product.is_out_of_stock;
 
   return (
     <>

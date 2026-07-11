@@ -1,0 +1,46 @@
+{
+  "admin-id": [
+    {
+      "product_id": "p1",
+      "name": "Purificateur d'Eau Pro Modèle 1",
+      "price": 2499,
+      "image_url": "/products/product-01.jpeg",
+      "quantity": 1
+    }
+  ],
+  "u-1783786132348": [
+    {
+      "product_id": "p4",
+      "name": "Purificateur d'Eau Pro Modèle 4",
+      "price": 2499,
+      "image_url": "/products/product-04.jpeg",
+      "quantity": 1
+    }
+  ],
+  "u-1783786619901": [
+    {
+      "product_id": "p1",
+      "name": "Purificateur d'Eau Pro Modèle 1",
+      "price": 2499,
+      "image_url": "/products/product-01.jpeg",
+      "quantity": 1
+    },
+    {
+      "product_id": "p3",
+      "name": "Purificateur d'Eau Pro Modèle 3",
+      "price": 2499,
+      "image_url": "/products/product-03.jpeg",
+      "quantity": 1
+    }
+  ],
+  "staff-1783787947397": [
+    {
+      "product_id": "p1",
+      "name": "Purificateur d'Eau Pro Modèle 1",
+      "price": 2499,
+      "image_url": "/products/product-01.jpeg",
+      "quantity": 1
+    }
+  ],
+  "u-1783788806072": []
+}

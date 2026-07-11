@@ -26,11 +26,18 @@ export const MOCK_PRODUCTS: Product[] = Array.from({ length: 13 }).map((_, i) =>
   id: `p${i + 1}`,
   name: `Purificateur d'Eau Pro Modèle ${i + 1}`,
   slug: `purificateur-eau-pro-modele-${i + 1}`,
-  description: "Système de traitement d'eau avancé pour une purification optimale. Élimine les impuretés et garantit une eau saine au quotidien.",
+  description: "Notre mission est simple : vous fournir une eau pure, saine et de qualité grâce à des technologies modernes, un service professionnel et un suivi durable. EAUMALIK SARL vous accompagne avec des équipements fiables, performants et adaptés à chaque besoin.",
   price: 2499,
   category: 'purificateurs',
   image_url: `/products/product-${(i + 1).toString().padStart(2, '0')}.jpeg`,
-  specs: ['Filtration avancée', 'Installation facile', 'Garantie 1 an', 'Design moderne'],
+  specs: [
+    'Qualité Supérieure', 
+    'Technologies Avancées', 
+    'Installation Professionnelle', 
+    'Accompagnement Personnalisé', 
+    'Service Après-Vente Réactif', 
+    'Garantie 1 an'
+  ],
   is_featured: i < 6, // Les 6 premiers sont en page d'accueil
   stock: 20,
   stock_alert_threshold: 5,

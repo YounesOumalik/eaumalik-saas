@@ -8,6 +8,13 @@ import {
   MOCK_PRODUCTS, MOCK_USERS, MOCK_ORDERS, MOCK_ORDER_ITEMS,
   MOCK_MAINTENANCE, MOCK_COMPANY,
 } from '@/data/mock';
+import {
+  readProducts,
+  writeProducts,
+  readOrders,
+  writeOrders,
+  readUsers,
+} from '@/data/localDb';
 
 const useMocks = (): boolean => {
   if (process.env.NEXT_PUBLIC_USE_MOCKS === 'true') return true;
@@ -27,9 +34,13 @@ export async function listProducts(filters?: {
   category?: string;
   search?: string;
   featured?: boolean;
+  includeArchived?: boolean;
 }): Promise<Product[]> {
   if (useMocks()) {
-    let list = [...MOCK_PRODUCTS];
+    let list = readProducts();
+    if (!filters?.includeArchived) {
+      list = list.filter(p => !p.is_archived);
+    }
     if (filters?.category && filters.category !== 'all') list = list.filter(p => p.category === filters.category);
     if (filters?.featured) list = list.filter(p => p.is_featured);
     if (filters?.search) {
@@ -43,6 +54,9 @@ export async function listProducts(filters?: {
 
   const supabase = await getSupabase();
   let query = supabase.from('products').select('*').order('created_at', { ascending: false });
+  if (!filters?.includeArchived) {
+    query = query.or('is_archived.is.null,is_archived.eq.false');
+  }
   if (filters?.category && filters.category !== 'all') query = query.eq('category', filters.category);
   if (filters?.featured) query = query.eq('is_featured', true);
   if (filters?.search) query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
@@ -52,10 +66,74 @@ export async function listProducts(filters?: {
   return (data ?? []) as Product[];
 }
 
+export async function createProduct(product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> {
+  const id = `p-${Date.now()}`;
+  const now = new Date().toISOString();
+  const newProduct: Product = {
+    id,
+    created_at: now,
+    updated_at: now,
+    ...product,
+    slug: product.slug || product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+  };
+
+  if (useMocks()) {
+    const list = readProducts();
+    list.push(newProduct);
+    writeProducts(list);
+    return newProduct;
+  }
+
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('products').insert(newProduct).select().single();
+  if (error) throw error;
+  return data as Product;
+}
+
+export async function updateProduct(id: string, product: Partial<Omit<Product, 'id' | 'created_at' | 'updated_at'>>): Promise<Product> {
+  const now = new Date().toISOString();
+  if (useMocks()) {
+    const list = readProducts();
+    const idx = list.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...product, updated_at: now };
+      writeProducts(list);
+      return list[idx];
+    }
+    throw new Error('Product not found in mocks');
+  }
+
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('products').update({ ...product, updated_at: now }).eq('id', id).select().single();
+  if (error) throw error;
+  return data as Product;
+}
+
+export async function deleteProduct(id: string): Promise<void> {
+  if (useMocks()) {
+    const list = readProducts();
+    const idx = list.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      list.splice(idx, 1);
+      writeProducts(list);
+      return;
+    }
+    throw new Error('Product not found in mocks');
+  }
+
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('products').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function updateProductStock(productId: string, delta: number): Promise<void> {
   if (useMocks()) {
-    const p = MOCK_PRODUCTS.find(x => x.id === productId);
-    if (p) p.stock = Math.max(0, p.stock + delta);
+    const list = readProducts();
+    const p = list.find(x => x.id === productId);
+    if (p) {
+      p.stock = Math.max(0, p.stock + delta);
+      writeProducts(list);
+    }
     return;
   }
   const supabase = await getSupabase();
@@ -68,7 +146,7 @@ export async function updateProductStock(productId: string, delta: number): Prom
 // ORDERS
 // ============================================================================
 export async function listOrders(): Promise<Order[]> {
-  if (useMocks()) return [...MOCK_ORDERS];
+  if (useMocks()) return readOrders();
   const supabase = await getSupabase();
   const { data, error } = await supabase.from('orders').select('*, items:order_items(*)').order('created_at', { ascending: false });
   if (error) throw error;
@@ -77,8 +155,12 @@ export async function listOrders(): Promise<Order[]> {
 
 export async function updateOrderStatus(orderId: string, status: Order['status']): Promise<void> {
   if (useMocks()) {
-    const o = MOCK_ORDERS.find(x => x.id === orderId);
-    if (o) o.status = status;
+    const list = readOrders();
+    const o = list.find(x => x.id === orderId);
+    if (o) {
+      o.status = status;
+      writeOrders(list);
+    }
     return;
   }
   const supabase = await getSupabase();
@@ -127,7 +209,9 @@ export async function createOrder(input: {
         line_total: i.unit_price * i.quantity,
       })),
     };
-    MOCK_ORDERS.unshift(order);
+    const list = readOrders();
+    list.unshift(order);
+    writeOrders(list);
     return order;
   }
 
@@ -168,7 +252,10 @@ export async function createOrder(input: {
 // USERS / CLIENTS
 // ============================================================================
 export async function listClients(): Promise<User[]> {
-  if (useMocks()) return [...MOCK_USERS];
+  if (useMocks()) {
+    const all = readUsers();
+    return all.filter(u => u.role === 'client');
+  }
   const supabase = await getSupabase();
   const { data, error } = await supabase.from('users').select('*').eq('role', 'client').order('created_at', { ascending: false });
   if (error) throw error;

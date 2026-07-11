@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS products (
   stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
   stock_alert_threshold INTEGER DEFAULT 5,
   filter_lifespan_months INTEGER,
+  is_out_of_stock BOOLEAN DEFAULT false,
+  is_archived BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

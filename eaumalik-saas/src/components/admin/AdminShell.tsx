@@ -2,14 +2,16 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ReactNode } from 'react';
-import { LayoutDashboard, Box, Warehouse, Tags, TrendingUp, LogIn } from 'lucide-react';
+import { ReactNode, useState, useEffect } from 'react';
+import { LayoutDashboard, Box, Warehouse, Tags, TrendingUp, LogIn, Users } from 'lucide-react';
+import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 
 const TABS = [
   { id: 'commandes',    label: 'Commandes',     href: '/admin',                  icon: Box },
   { id: 'stocks',       label: 'Stocks',        href: '/admin/stocks',           icon: Warehouse },
   { id: 'catalogue',    label: 'Catalogue',     href: '/admin/catalogue',        icon: Tags },
   { id: 'comptabilite', label: 'Comptabilite',  href: '/admin/comptabilite',     icon: TrendingUp },
+  { id: 'personnels',   label: 'Personnels',    href: '/admin/personnels',       icon: Users },
 ];
 
 export default function AdminShell({ title, children }: { title: string; children: ReactNode }) {
@@ -17,7 +19,30 @@ export default function AdminShell({ title, children }: { title: string; childre
   const params = useSearchParams();
   const currentTab = params.get('tab') ?? 'commandes';
 
-  const setTab = (tab: string) => router.push(`/admin?tab=${tab}`);
+  const [permissions, setPermissions] = useState<any>(null);
+  const [role, setRole] = useState<string>('');
+
+  useEffect(() => {
+    getCurrentUserPermissionsAction().then(res => {
+      if (res.success) {
+        setPermissions(res.permissions);
+        setRole(res.role || '');
+      }
+    });
+  }, []);
+
+  const allowedTabs = TABS.filter(tab => {
+    if (!permissions) return true;
+    if (role === 'admin') return true;
+
+    if (tab.id === 'commandes') return permissions.can_validate_orders;
+    if (tab.id === 'stocks') return permissions.can_view_stocks;
+    if (tab.id === 'catalogue') return permissions.can_view_products;
+    if (tab.id === 'comptabilite') return permissions.can_view_comptabilite;
+    if (tab.id === 'personnels') return role === 'admin';
+
+    return true;
+  });
 
   return (
     <div className="pt-0 min-h-[calc(100vh-4rem)]">
@@ -29,7 +54,7 @@ export default function AdminShell({ title, children }: { title: string; childre
               <LayoutDashboard size={14} />
             </Link>
           </div>
-          {TABS.map(tab => {
+          {allowedTabs.map(tab => {
             const Icon = tab.icon;
             const active = currentTab === tab.id;
             return (

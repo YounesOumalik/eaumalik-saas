@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import PDFDocument from 'pdfkit';
-import { getCompanyProfile } from '@/data/repositories';
-import { REPOSITORY } from '@/data/mock';
+import { getCompanyProfile, listOrders } from '@/data/repositories';
 import { formatCurrency } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -13,11 +12,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'order_id requis' }, { status: 400 });
   }
 
-  const order = REPOSITORY.orders.find(o => o.id === orderId);
+  const orders = await listOrders();
+  const order = orders.find(o => o.id === orderId);
   if (!order) {
     return NextResponse.json({ error: 'Commande introuvable' }, { status: 404 });
   }
-  const items = REPOSITORY.orderItems.filter(i => i.order_id === orderId);
+  const items = order.items || [];
   const company = await getCompanyProfile();
 
   // Génération PDF streamée
@@ -70,9 +70,20 @@ export async function GET(req: NextRequest) {
 
   doc.moveTo(50, y).lineTo(550, y).strokeColor('#ccc').stroke();
   y += 12;
-  doc.fontSize(12).fillColor('#666').text('Sous-total', cols.price, y);
+  doc.fontSize(10).fillColor('#666').text('Sous-total (TTC)', cols.price, y);
   doc.fillColor('#0f172a').text(formatCurrency(order.subtotal), cols.total, y);
+  y += 15;
+
+  const tva = (order.subtotal * 20) / 120; // 20% TVA included
+  const ht = order.subtotal - tva;
+
+  doc.fillColor('#666').text('dont TVA (20%)', cols.price, y);
+  doc.fillColor('#0f172a').text(formatCurrency(tva), cols.total, y);
+  y += 15;
+  doc.fillColor('#666').text('Montant HT', cols.price, y);
+  doc.fillColor('#0f172a').text(formatCurrency(ht), cols.total, y);
   y += 18;
+
   doc.fillColor('#666').text('Livraison', cols.price, y);
   doc.fillColor('#0f172a').text(order.delivery_fee === 0 ? 'Gratuite' : formatCurrency(order.delivery_fee), cols.total, y);
   y += 22;
@@ -89,7 +100,7 @@ export async function GET(req: NextRequest) {
   doc.end();
   const buffer = await done;
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="facture-${order.order_number}.pdf"`,

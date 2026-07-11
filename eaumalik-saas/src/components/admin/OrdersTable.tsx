@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Order, OrderStatus, OrderItem } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Eye, ArrowRight, FileText } from 'lucide-react';
 import { useToast } from '@/components/shared/ToastProvider';
+import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   en_attente:   'En attente',
@@ -20,6 +21,20 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
   const [filter, setFilter] = useState<'all' | OrderStatus>('all');
   const [detail, setDetail] = useState<Order | null>(null);
   const toast = useToast();
+
+  const [permissions, setPermissions] = useState<any>(null);
+  const [role, setRole] = useState<string>('');
+
+  useEffect(() => {
+    getCurrentUserPermissionsAction().then(res => {
+      if (res.success) {
+        setPermissions(res.permissions);
+        setRole(res.role || '');
+      }
+    });
+  }, []);
+
+  const canValidate = !permissions || role === 'admin' || permissions.can_validate_orders;
 
   const counts: Record<string, number> = { total: orders.length };
   orders.forEach(o => { counts[o.status] = (counts[o.status] ?? 0) + 1; });
@@ -119,7 +134,7 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
                 <td><span className={`badge badge-${o.status}`}><span className="pulse-dot" style={{ width: 6, height: 6, background: o.status === 'en_attente' ? '#fbbf24' : o.status === 'en_livraison' ? '#22d3ee' : 'transparent' }} /> {STATUS_LABELS[o.status]}</span></td>
                 <td>
                   <div className="flex gap-1.5">
-                    {STATUS_CYCLE.includes(o.status) && (
+                    {STATUS_CYCLE.includes(o.status) && canValidate && (
                       <button onClick={() => advance(o.id)} className="btn-primary btn-sm" title="Avancer le statut"><ArrowRight size={12} /></button>
                     )}
                     <button onClick={() => setDetail(o)} className="btn-outline btn-sm" title="Details"><Eye size={12} /></button>
@@ -144,7 +159,7 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
 
 function OrderDetailModal({ order, onClose }: { order: Order; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-modal-in"
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-[color:var(--bg-base)] animate-modal-in"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog" aria-modal="true">
       <div className="glass-card max-w-2xl w-full max-h-[85vh] overflow-y-auto">
