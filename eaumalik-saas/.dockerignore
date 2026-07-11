@@ -1,0 +1,25 @@
+# filepath: eaumalik-saas/.dockerignore
+node_modules
+.next
+out
+.git
+.github
+.gitignore
+.env
+.env.local
+.env.production
+.env*.local
+data-store/*.json
+!data-store/.gitkeep
+.DS_Store
+*.log
+npm-debug.log*
+.vscode
+.idea
+*.md
+!README.md
+!Docs/**/*.md
+next-env.d.ts
+.venv
+__pycache__
+*.pyc

@@ -51,8 +51,16 @@ export async function updateSupabaseSession(request: NextRequest) {
   });
 
   // Rafraîchit le token si nécessaire.
-  const { data } = await supabase.auth.getUser();
-  const isAuthed = !!data.user;
+  // Note : getUser() peut lever/renvoyer une erreur "Unauthorized" (401) si la
+  // session est absente ou expirée. On catche pour ne pas casser le rendu des
+  // pages publiques (landing, boutique, ...) qui tolèrent l'absence d'utilisateur.
+  let isAuthed = false;
+  try {
+    const { data } = await supabase.auth.getUser();
+    isAuthed = !!data.user;
+  } catch {
+    isAuthed = false;
+  }
 
   // Protection des routes privées.
   if (isProtected(request.nextUrl.pathname) && !isAuthed) {

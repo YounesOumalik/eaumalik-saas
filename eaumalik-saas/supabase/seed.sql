@@ -1,11 +1,18 @@
 -- ============================================================================
 -- EAUMALIK SARL — Seed manuel (mot de passe à fournir HORS de ce fichier).
 --
--- 1. Créez l'utilisateur via Supabase Dashboard (Authentication > Users > Add user)
---    OU via service-role (cf. script Node ci-dessous — NE JAMAIS écrire de mdp ici).
+-- Cible : db-prod sur SmartServeur. Le schéma SQL vit sous "eaumalik.*".
+-- On a créé des VUES public.* qui pointent vers eaumalik.* (cf. views-public-bridge.sql).
 --
--- 2. Promouvez en admin :
---      UPDATE public.users
+-- 1. Créez l'utilisateur via l'API admin de auth-prod :
+--      curl -X POST 'https://db-dev.smartefp.com/auth/v1/admin/users' \
+--        -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+--        -H "Content-Type: application/json" \
+--        -d '{"email":"eaumaliksarl@gmail.com","password":"...","email_confirm":true,
+--             "user_metadata":{"full_name":"Administrateur EAUMALIK","role":"admin"}}'
+--
+-- 2. Promouvez en admin (la vue public.* redirige vers eaumalik.*) :
+--      UPDATE eaumalik.users
 --         SET role = 'admin'
 --       WHERE email = 'eaumaliksarl@gmail.com';
 --
@@ -18,3 +25,5 @@
 --      });
 --
 -- ⚠️ Le mot de passe NE DOIT JAMAIS apparaître dans ce fichier ni dans le repo.
+-- ⚠️ Si la VUE public.users existe (cf. views-public-bridge.sql), un UPDATE via
+--    la VUE fonctionne et écrit dans eaumalik.users via le trigger INSTEAD OF.
