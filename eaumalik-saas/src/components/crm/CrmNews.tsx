@@ -28,14 +28,14 @@ export default function CrmNews() {
     if (!title.trim() || !content.trim() || publishing) return;
     setPublishing(true);
 
-    const res = await publishNewsAction(title, content, imageUrl || undefined);
+    const res = await publishNewsAction({ title, content, imageUrl: imageUrl || undefined });
     if (res.success) {
       toast('Actualité publiée avec succès !', 'success');
       setTitle('');
       setContent('');
       setImageUrl('');
     } else {
-      toast('Erreur lors de la publication: ' + res.error, 'error');
+      toast('Erreur lors de la publication : ' + res.error, 'error');
     }
     setPublishing(false);
   };

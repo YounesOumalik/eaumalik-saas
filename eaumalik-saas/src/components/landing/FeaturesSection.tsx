@@ -3,11 +3,11 @@
 import { useEffect } from 'react';
 
 const FEATURES = [
-  { icon: 'fa-solid fa-award',       title: 'Expertise professionnelle',  desc: "Plusieurs annees d'experience dans le traitement et la purification de l'eau au Maroc." },
+  { icon: 'fa-solid fa-award',       title: 'Expertise professionnelle',  desc: "Plusieurs années d'expérience dans le traitement et la purification de l'eau au Maroc." },
   { icon: 'fa-solid fa-shield-halved', title: 'Produits de qualite',        desc: 'Equipements certifies et testes pour garantir une performance optimale et une duree de vie maximale.' },
   { icon: 'fa-solid fa-droplet',     title: 'Eau pure et sure',           desc: "Elimination de jusqu'a 99% des impuretes, bacteries et contaminants pour une eau saine." },
   { icon: 'fa-solid fa-wrench',      title: 'Installation professionnelle', desc: 'Nos techniciens qualifies assurent une installation rapide et conforme aux normes.' },
-  { icon: 'fa-solid fa-headset',     title: 'Service apres-vente',        desc: "Support reactif et suivi continu. Nous sommes a votre ecoute avant et apres l'achat." },
+  { icon: 'fa-solid fa-headset',     title: 'Service après-vente',        desc: "Support réactif et suivi continu. Nous sommes à votre écoute avant et après l'achat." },
   { icon: 'fa-solid fa-leaf',        title: 'Developpement durable',      desc: 'Solutions eco-responsables qui reduisent la consommation de bouteilles en plastique.' },
 ];
 

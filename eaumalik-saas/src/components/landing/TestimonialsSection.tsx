@@ -1,6 +1,6 @@
 const TESTIMONIALS = [
-  { name: 'Mohammed Alami',         role: 'Restaurant, Casablanca', text: "Depuis l'installation du systeme EAUMALIK, la qualite de notre eau a considerablement ameliore. Nos clients remarquent la difference.", rating: 5 },
-  { name: 'Fatima Zahra Bennani',   role: 'Foyer, Rabat',          text: "Service impeccable du debut a la fin. L'installateur etait ponctuel et professionnel. L'eau a un gout incroyable maintenant.", rating: 5 },
+  { name: 'Mohammed Alami',         role: 'Restaurant, Casablanca', text: "Depuis l'installation du système EAUMALIK, la qualité de notre eau a considérablement amélioré. Nos clients remarquent la différence.", rating: 5 },
+  { name: 'Fatima Zahra Bennani',   role: 'Foyer, Rabat',          text: "Service impeccable du début à la fin. L'installateur était ponctuel et professionnel. L'eau a un goût incroyable maintenant.", rating: 5 },
   { name: 'Karim Tazi',             role: 'Hotel, Marrakech',      text: "Nous avons equipe tout notre hotel avec les systemes EAUMALIK. Le rapport qualite-prix est excellent et le suivi maintenance est top.", rating: 4 },
 ];
 

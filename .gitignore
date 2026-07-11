@@ -7,6 +7,10 @@
 node.tar.gz
 node.tar.xz
 
+# Lockfiles racine parasites (le vrai vit dans eaumalik-saas/)
+package-lock.json
+package.json
+
 # Secrets / fichiers locaux non versionnés
 .env
 .env.local

@@ -9,10 +9,10 @@ import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   en_attente:   'En attente',
-  traitee:      'Traitee',
+  traitee:      'Traitée',
   en_livraison: 'En livraison',
   livree:       'Livreee',
-  annulee:      'Annulee',
+  annulee:      'Annulée',
 };
 const STATUS_CYCLE: OrderStatus[] = ['en_attente', 'traitee', 'en_livraison', 'livree'];
 
@@ -56,7 +56,7 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
       });
       toast(`${id} -> ${STATUS_LABELS[nextStatus]}`, 'info');
     } catch {
-      toast('Erreur reseau (modifie localement)', 'error');
+      toast('Erreur réseau (modifié localement)', 'error');
     }
   };
 
@@ -73,9 +73,9 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      toast(`Facture generee pour ${id}`, 'success');
+      toast(`Facture générée pour ${id}`, 'success');
     } catch {
-      toast('Generation PDF echouee', 'error');
+      toast('Génération PDF échouée', 'error');
     }
   };
 
@@ -83,8 +83,8 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
     { label: 'Total',         val: counts.total,          color: 'var(--primary-light)', bg: 'rgba(8,145,178,0.1)' },
     { label: 'En attente',    val: counts.en_attente || 0, color: '#fbbf24',            bg: 'rgba(245,158,11,0.1)' },
     { label: 'En livraison',  val: counts.en_livraison||0, color: '#22d3ee',            bg: 'rgba(6,182,212,0.1)' },
-    { label: 'Livrees',       val: counts.livree || 0,    color: '#34d399',            bg: 'rgba(16,185,129,0.1)' },
-    { label: 'Annulees',      val: counts.annulee || 0,   color: '#f87171',            bg: 'rgba(239,68,68,0.1)' },
+    { label: 'Livrées',       val: counts.livree || 0,    color: '#34d399',            bg: 'rgba(16,185,129,0.1)' },
+    { label: 'Annulées',      val: counts.annulee || 0,   color: '#f87171',            bg: 'rgba(239,68,68,0.1)' },
   ];
 
   return (
@@ -170,7 +170,7 @@ function OrderDetailModal({ order, onClose }: { order: Order; onClose: () => voi
           </div>
           <div className="grid sm:grid-cols-2 gap-4 mb-6">
             <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Client</div><div className="font-semibold text-sm">{order.client_name}</div></div>
-            <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Telephone</div><div className="font-semibold text-sm">{order.client_phone}</div></div>
+            <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Téléphone</div><div className="font-semibold text-sm">{order.client_phone}</div></div>
             <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Adresse</div><div className="text-sm">{order.client_address}, {order.client_city}</div></div>
             <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Date</div><div className="text-sm">{formatDate(order.created_at)}</div></div>
           </div>

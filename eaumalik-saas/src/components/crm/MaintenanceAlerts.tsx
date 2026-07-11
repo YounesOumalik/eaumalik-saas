@@ -13,7 +13,7 @@ const STATUS_LABELS: Record<MaintenanceStatus, string> = {
   a_renouveler:    'A renouveler',
   expire:          'Expire',
   rappel_envoye:   'Rappel envoye',
-  commande_creee:  'Commande creee',
+  commande_creee:  'Commande créée',
 };
 
 export default function MaintenanceAlerts({ initialAlerts }: { initialAlerts: MaintenanceAlert[] }) {

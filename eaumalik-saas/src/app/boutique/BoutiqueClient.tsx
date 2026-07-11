@@ -42,7 +42,7 @@ export default function BoutiqueClient({ initialProducts }: { initialProducts: P
       {filtered.length === 0 ? (
         <div className="text-center py-20">
           <i className="fa-solid fa-box-open text-4xl mb-4" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
-          <p style={{ color: 'var(--text-muted)' }}>Aucun produit ne correspond a votre recherche.</p>
+          <p style={{ color: 'var(--text-muted)' }}>Aucun produit ne correspond à votre recherche.</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">

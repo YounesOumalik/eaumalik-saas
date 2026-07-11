@@ -24,7 +24,7 @@ export default function ProductCard({ product }: { product: Product }) {
       image_url: product.image_url,
       quantity: 1,
     });
-    toast(`${product.name} ajoute au panier`, 'success');
+    toast(`${product.name} ajouté au panier`, 'success');
   };
 
   const lowStock = product.stock > 0 && product.stock < product.stock_alert_threshold && !product.is_out_of_stock;

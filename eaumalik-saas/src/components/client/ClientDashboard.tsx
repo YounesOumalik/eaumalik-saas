@@ -49,7 +49,7 @@ export default function ClientDashboard({ initialData }: Props) {
       toast('Coordonnées mises à jour avec succès !', 'success');
       setPassword('');
     } else {
-      toast('Erreur: ' + res.error, 'error');
+      toast('Erreur : ' + res.error, 'error');
     }
     setUpdating(false);
   };

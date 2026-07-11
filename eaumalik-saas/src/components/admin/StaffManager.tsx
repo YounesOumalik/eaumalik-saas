@@ -134,12 +134,17 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
         permissions,
       });
 
-      if (res.success && res.staff) {
-        setStaffList(prev => prev.map(u => (u.id === editingStaff.id ? res.staff : u)));
+      if (res.success) {
+        // Met à jour l'utilisateur dans la liste (on a déjà editingStaff en mémoire).
+        setStaffList(prev =>
+          prev.map(u => (u.id === editingStaff.id
+            ? { ...u, email, full_name: fullName, phone, role, permissions }
+            : u))
+        );
         toast('Membre du personnel mis à jour avec succès.', 'success');
         setModalOpen(false);
       } else {
-        toast('Erreur : ' + res.error, 'error');
+        toast('Erreur lors de la mise à jour : ' + res.error, 'error');
       }
     } else {
       if (!password) {
@@ -196,7 +201,7 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
               <th>Personnel</th>
               <th>Rôle</th>
               <th>Téléphone</th>
-              <th>Droits d'accès</th>
+              <th>Droits d&apos;accès</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -323,7 +328,7 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
                       <option value="sales">Commercial</option>
                       <option value="technician">Technicien</option>
                       <option value="stock_manager">Gestionnaire de Stock</option>
-                      <option value="admin_assistant">Assistante d'Administration</option>
+                      <option value="admin_assistant">Assistante d&apos;Administration</option>
                       <option value="admin">Superadministrateur (Accès Total)</option>
                     </select>
                   </div>
@@ -344,7 +349,7 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
 
                 {role !== 'admin' && (
                   <div className="border-t border-[color:var(--border)] pt-4">
-                    <span className="form-label font-bold block mb-3">Gestion des Droits & Permissions d'Accès</span>
+                    <span className="form-label font-bold block mb-3">Gestion des Droits &amp; Permissions d&apos;Accès</span>
                     <div className="grid sm:grid-cols-2 gap-3 text-xs">
                       <label className="flex items-center gap-2.5 p-2 rounded-lg bg-[color:var(--bg-card)] border border-[color:var(--border)] cursor-pointer">
                         <input

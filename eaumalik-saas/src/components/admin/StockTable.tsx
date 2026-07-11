@@ -26,7 +26,7 @@ export default function StockTable({ initialProducts }: { initialProducts: Produ
         toast(`Stock ${product.name} : ${newStock}`, 'info');
       }
     } catch {
-      toast('Erreur reseau', 'error');
+      toast('Erreur réseau', 'error');
     }
   };
 

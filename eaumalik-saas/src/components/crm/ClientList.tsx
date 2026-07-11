@@ -7,10 +7,10 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   en_attente: 'En attente',
-  traitee: 'Traitee',
+  traitee: 'Traitée',
   en_livraison: 'En livraison',
   livree: 'Livreee',
-  annulee: 'Annulee',
+  annulee: 'Annulée',
 };
 
 export default function ClientList({
@@ -90,7 +90,7 @@ export default function ClientList({
           type="search"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Rechercher par nom, email ou telephone..."
+          placeholder="Rechercher par nom, email ou téléphone..."
           className="form-input"
           aria-label="Rechercher un client"
         />

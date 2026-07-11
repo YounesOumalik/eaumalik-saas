@@ -84,7 +84,7 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
         );
         toast('Produit mis à jour', 'success');
       } else {
-        toast('Erreur lors de la mise à jour: ' + res.error, 'error');
+        toast('Erreur lors de la mise à jour : ' + res.error, 'error');
       }
     } else {
       const res = await createProductAction({
@@ -108,7 +108,7 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
         setProducts(prev => [res.product!, ...prev]);
         toast('Produit ajouté', 'success');
       } else {
-        toast('Erreur lors de l\'ajout: ' + res.error, 'error');
+        toast('Erreur lors de l\'ajout : ' + res.error, 'error');
       }
     }
     setEditing(null);
@@ -139,7 +139,7 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
       setProducts(prev => prev.filter(p => p.id !== id));
       toast('Produit supprimé', 'success');
     } else {
-      toast('Erreur lors de la suppression: ' + res.error, 'error');
+      toast('Erreur lors de la suppression : ' + res.error, 'error');
     }
   };
 

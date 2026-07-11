@@ -29,7 +29,7 @@ export default function AddToCartButton({ product, size = 'md', className = '', 
       image_url: product.image_url,
       quantity: 1,
     });
-    toast(`${product.name} ajoute au panier`, 'success');
+    toast(`${product.name} ajouté au panier`, 'success');
   };
 
   const sizeClass = {

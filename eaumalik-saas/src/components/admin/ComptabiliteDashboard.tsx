@@ -19,7 +19,7 @@ export default function ComptabiliteDashboard({ orders, products }: Props) {
   const [techComm, setTechComm] = useState<number>(150); // DH fixed per order
   const [transCost, setTransCost] = useState<number>(50); // DH fixed per order
   const [maintCost, setMaintCost] = useState<number>(100); // DH fixed per order
-  const [fallbackCostPct, setFallbackCostPct] = useState<number>(50); // % of price if wholesale_price missing
+  const [fallbackCostPct, setFallbackCostPct] = useState<number>(50); // % du prix si wholesale_price absent
 
   // Load configuration on mount
   useEffect(() => {
