@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useRef } from 'react';
 
 export default function HeroSection() {
@@ -54,12 +55,17 @@ export default function HeroSection() {
   return (
     <section className="hero-bg relative min-h-[calc(100vh-4rem)] flex items-center justify-center overflow-hidden">
       <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-[1]" aria-hidden="true" />
-      <div className="relative z-10 max-w-5xl mx-auto px-4 text-center">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium mb-8" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+      <div className="relative z-10 max-w-5xl mx-auto px-4 text-center reveal">
+        <div className="flex justify-center mb-6 animate-float">
+          <div className="h-64 sm:h-[28rem] w-full max-w-3xl sm:max-w-5xl relative">
+            <Image src="/logo.png" alt="EAUMALIK Logo" fill className="object-contain" unoptimized />
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium mb-8 animate-float" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
           <span className="pulse-dot" style={{ background: 'var(--primary-light)' }} />
           Leader du traitement de l&apos;eau au Maroc
         </div>
-        <h1 className="hero-title mb-6">
+        <h1 className="hero-title mb-6 animate-float-delay">
           L&apos;eau pure,<br /><span className="gradient-text">une vie plus saine</span>
         </h1>
         <p className="text-lg sm:text-xl max-w-2xl mx-auto mb-10" style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>

@@ -3,6 +3,7 @@ import FeaturesSection from '@/components/landing/FeaturesSection';
 import ProductsPreview from '@/components/landing/ProductsPreview';
 import TestimonialsSection from '@/components/landing/TestimonialsSection';
 import { listProducts, getCompanyProfile } from '@/data/repositories';
+import Script from 'next/script';
 
 export default async function HomePage() {
   const [featured, company] = await Promise.all([
@@ -12,6 +13,29 @@ export default async function HomePage() {
 
   return (
     <>
+      <Script
+        id="json-ld-local-business"
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'LocalBusiness',
+            name: 'EAUMALIK SARL',
+            image: 'https://eaumalik.ma/logo.png',
+            '@id': 'https://eaumalik.ma',
+            url: 'https://eaumalik.ma',
+            telephone: company.phone,
+            email: company.email,
+            address: {
+              '@type': 'PostalAddress',
+              streetAddress: company.address,
+              addressLocality: 'Casablanca',
+              addressCountry: 'MA',
+            },
+            description: 'Expert en purification d\'eau, osmose inverse et traitement de l\'eau au Maroc.',
+          })
+        }}
+      />
       <HeroSection />
       <FeaturesSection />
       <ProductsPreview products={featured} />

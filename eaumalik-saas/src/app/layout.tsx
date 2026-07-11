@@ -5,16 +5,43 @@ import Navbar from '@/components/shared/Navbar';
 import Footer from '@/components/shared/Footer';
 
 export const metadata: Metadata = {
-  title: 'EAUMALIK SARL — Solutions de Traitement et Purification de l\'Eau',
+  title: {
+    default: 'EAUMALIK SARL — Traitement, Purification et Osmose Inverse au Maroc',
+    template: '%s | EAUMALIK SARL',
+  },
   description:
-    'EAUMALIK SARL - Purificateurs d\'eau, osmose inverse, stations industrielles. Installation professionnelle au Maroc. L\'eau pure, une vie plus saine.',
+    "EAUMALIK SARL est le leader au Maroc de la purification d'eau et des systèmes d'osmose inverse. Profitez d'une eau pure, d'adoucisseurs et de filtres performants à domicile ou en industrie.",
   authors: [{ name: 'EAUMALIK SARL' }],
-  keywords: ['purificateur eau', 'osmose inverse', 'traitement eau', 'Maroc', 'Casablanca', 'EAUMALIK'],
+  keywords: [
+    'eau',
+    "purification d'eau",
+    'osmose inverse',
+    'filtre à eau',
+    'adoucisseur',
+    'traitement eau',
+    'purificateur',
+    'eau saine',
+    'Maroc',
+    'Casablanca',
+    'EAUMALIK'
+  ],
   openGraph: {
-    title: 'EAUMALIK SARL — L\'eau pure, une vie plus saine',
-    description: 'Solutions professionnelles de traitement et purification de l\'eau au Maroc.',
+    title: "EAUMALIK SARL — L'eau pure, une vie plus saine",
+    description: "Solutions professionnelles de traitement et purification de l'eau au Maroc. Osmose inverse et filtres à eau.",
     type: 'website',
     locale: 'fr_MA',
+    siteName: 'EAUMALIK SARL',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
 };
 

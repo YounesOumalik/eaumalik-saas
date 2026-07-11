@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import ThemeToggle from './ThemeToggle';
@@ -35,13 +36,10 @@ export default function Navbar() {
   return (
     <nav className="nav-glass fixed top-0 left-0 right-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-        <Link href="/" className="flex items-center gap-2.5" aria-label="EAUMALIK Accueil">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-dark))' }}>
-            <i className="fa-solid fa-droplet text-white text-sm" aria-hidden="true" />
+        <Link href="/" className="flex items-center" aria-label="EAUMALIK Accueil">
+          <div className="h-14 w-40 sm:w-48 relative">
+            <Image src="/logo.png" alt="EAUMALIK Logo" fill className="object-contain" unoptimized />
           </div>
-          <span className="font-display font-extrabold text-lg tracking-tight" style={{ color: 'var(--text)' }}>
-            Eau<span className="gradient-text">Malik</span>
-          </span>
         </Link>
 
         <div className="hidden lg:flex items-center gap-6">
@@ -101,8 +99,8 @@ export default function Navbar() {
 function DropdownMenu({ title, links, isActive }: { title: string; links: { href: string; label: string }[]; isActive: boolean }) {
   return (
     <div className="dropdown relative group">
-      <span className={`nav-link ${isActive ? 'active' : ''} flex items-center`}>{title} <i className="fa-solid fa-chevron-down text-[0.6rem] ml-1" aria-hidden="true" /></span>
-      <div className="dropdown-menu absolute left-0 top-full mt-2 w-48 flex flex-col bg-[color:var(--bg-surface)] border border-[color:var(--border)] rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible pointer-events-none group-hover:pointer-events-auto transition-all duration-200 z-50 p-2 gap-1">
+      <span className={`nav-link ${isActive ? 'active' : ''} flex items-center py-4 cursor-pointer`}>{title} <i className="fa-solid fa-chevron-down text-[0.6rem] ml-1" aria-hidden="true" /></span>
+      <div className="dropdown-menu absolute left-0 top-full w-48 flex flex-col bg-[color:var(--bg-surface)] border border-[color:var(--border)] rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible pointer-events-none group-hover:pointer-events-auto transition-all duration-200 z-50 p-2 gap-1 before:absolute before:-top-4 before:left-0 before:w-full before:h-4">
         {links.map(l => (
           <Link key={l.href} href={l.href} className="dropdown-item flex items-center gap-2.5 px-3 py-2 text-sm text-[color:var(--text-secondary)] hover:bg-[color:var(--bg-card-hover)] hover:text-[color:var(--primary-light)] rounded-lg transition-colors font-medium">
             <i className="fa-solid fa-chevron-right text-[0.65rem] opacity-70" aria-hidden="true" /> {l.label}

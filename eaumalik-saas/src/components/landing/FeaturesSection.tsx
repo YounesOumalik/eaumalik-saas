@@ -16,7 +16,7 @@ export default function FeaturesSection() {
     const observer = new IntersectionObserver(entries => {
       entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('revealed'); });
     }, { threshold: 0.1 });
-    document.querySelectorAll('#features .reveal').forEach(el => observer.observe(el));
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     return () => observer.disconnect();
   }, []);
 

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { getCompanyProfile } from '@/data/repositories';
 
 export default async function Footer() {
@@ -9,13 +10,10 @@ export default async function Footer() {
     <footer className="py-16 px-4" style={{ background: 'var(--bg)', borderTop: '1px solid var(--border)' }}>
       <div className="max-w-6xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
         <div>
-          <div className="flex items-center gap-2.5 mb-4">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-dark))' }}>
-              <i className="fa-solid fa-droplet text-white text-xs" aria-hidden="true" />
+          <div className="flex items-center mb-4">
+            <div className="h-10 w-32 sm:w-40 relative">
+              <Image src="/logo.png" alt="EAUMALIK Logo" fill className="object-contain object-left" unoptimized />
             </div>
-            <span className="font-display font-extrabold text-base" style={{ color: 'var(--text)' }}>
-              Eau<span className="gradient-text">Malik</span>
-            </span>
           </div>
           <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--text-muted)' }}>
             Captage, traitement et distribution d&apos;eau. L&apos;eau pure, une vie plus saine.
