@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Eye, User as UserIcon } from 'lucide-react';
+import { Eye, X } from 'lucide-react';
 import type { User, Order, OrderStatus, MaintenanceAlert } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import Dialog from '@/components/ui/Dialog';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   en_attente: 'En attente',
@@ -58,13 +57,13 @@ export default function ClientList({
 
   return (
     <>
-      <h2 className="font-display font-extrabold text-xl mb-6">Clients</h2>
+      <h2 className="font-display font-extrabold text-xl mb-6">Fiches Clients</h2>
 
       {/* Segmented Filter Tabs */}
       <div className="flex flex-wrap gap-2 mb-4">
         {[
-          { id: 'all', label: 'Clients', count: stats.length },
-          { id: 'buyers', label: 'Clients Acheteurs', count: stats.filter(c => c.orders_count > 0).length },
+          { id: 'all', label: 'Tous', count: stats.length },
+          { id: 'buyers', label: 'Clients', count: stats.filter(c => c.orders_count > 0).length },
           { id: 'prospects', label: 'Prospects', count: stats.filter(c => c.orders_count === 0).length },
         ].map(btn => (
           <button
@@ -183,27 +182,25 @@ function ClientDetailModal({
   const maintenance = allMaintenance.filter(m => m.user_id === user.id);
 
   return (
-    <Dialog
-      open={true}
-      onClose={onClose}
-      title={user.full_name}
-      subtitle={`${user.email} — ${user.phone || 'Pas de numéro'}`}
-      icon={<UserIcon size={18} />}
-      size="lg"
-      footer={
-        <button onClick={onClose} className="btn-primary flex-1 justify-center py-2.5 sm:flex-none sm:min-w-[160px]">
-          Fermer
-        </button>
-      }
+    <div
+      className="modal-overlay fixed inset-0 z-[1000] flex items-center justify-center p-4 animate-modal-in"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog" aria-modal="true"
     >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 -mt-2">
+      <div className="modal-surface max-w-2xl w-full max-h-[85vh] overflow-y-auto relative rounded-3xl">
+        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--modal-text)' }} aria-label="Fermer">
+          <X size={14} />
+        </button>
+        <div className="p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-full flex items-center justify-center font-display font-extrabold text-lg text-white" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-dark))' }}>
                 {user.full_name.split(' ').map(w => w[0]).join('')}
               </div>
               <div>
+                <h2 className="font-display font-extrabold text-lg">{user.full_name}</h2>
                 <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  Fiche client
+                  {user.email} — {user.phone || 'Pas de numéro'}
                 </div>
               </div>
             </div>
@@ -212,7 +209,7 @@ function ClientDetailModal({
                 ? 'bg-success-soft text-success border border-success'
                 : 'bg-warning-soft text-warning border border-warning'
             }`}>
-              {orders.length > 0 ? 'Client Acheteur' : 'Prospect'}
+              {orders.length > 0 ? 'Client' : 'Prospect'}
             </span>
           </div>
 
@@ -319,6 +316,9 @@ function ClientDetailModal({
               </div>
             </>
           )}
-    </Dialog>
+          <button onClick={onClose} className="btn-outline w-full justify-center mt-6">Fermer</button>
+        </div>
+      </div>
+    </div>
   );
 }
