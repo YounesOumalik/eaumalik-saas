@@ -181,7 +181,7 @@ export default async function Footer() {
           style={{ borderTop: '1px solid var(--border)', color: 'var(--text-muted)' }}
         >
           <span>
-            © {year} {company.legal_name} · Capital {company.capital.toLocaleString('fr-MA')} MAD
+            © {year} {company.legal_name} · Capital {company.capital.toLocaleString('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MAD
           </span>
           <span className="flex items-center gap-1.5">
             <span

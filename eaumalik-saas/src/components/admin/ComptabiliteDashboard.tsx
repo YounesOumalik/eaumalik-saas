@@ -154,7 +154,7 @@ export default function ComptabiliteDashboard({ orders, products }: Props) {
           plugins: { legend: { labels: { color: '#94a3b8', font: { family: 'Space Grotesk' } } } },
           scales: {
             x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b', font: { family: 'Space Grotesk' } } },
-            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b', font: { family: 'Space Grotesk' }, callback: (v: any) => v.toLocaleString('fr-MA') + ' DH' }, beginAtZero: true },
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b', font: { family: 'Space Grotesk' }, callback: (v: any) => Number(v).toLocaleString('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' DH' }, beginAtZero: true },
           },
         },
       });
