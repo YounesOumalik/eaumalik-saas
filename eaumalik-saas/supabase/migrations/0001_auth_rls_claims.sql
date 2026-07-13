@@ -42,7 +42,10 @@ DECLARE
   v_referred_by TEXT;
   v_referral_code TEXT;
 BEGIN
-  v_role := COALESCE((NEW.raw_user_meta_data ->> 'role'), 'client');
+  -- CRITIQUE : le rôle est TOUJOURS 'client' à l'inscription. Jamais via
+  -- raw_user_meta_data (contrôlable par le client via l'API Auth). L'élévation
+  -- en 'admin' ne se fait QUE via les Server Actions admin (service role).
+  v_role := 'client';
   v_full_name := COALESCE(NEW.raw_user_meta_data ->> 'full_name', split_part(NEW.email, '@', 1));
   v_phone := NULLIF(NEW.raw_user_meta_data ->> 'phone', '');
   v_city := NULLIF(NEW.raw_user_meta_data ->> 'city', 'Casablanca');

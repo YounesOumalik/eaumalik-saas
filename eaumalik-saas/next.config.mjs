@@ -29,13 +29,15 @@ const nextConfig = {
     const fontHosts = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'];
     const csp = [
       "default-src 'self'",
-      // Scripts : autoriser eval pour Next.js HMR/devtools ; unsafe-inline pour SSR inline scripts
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
+      // 'unsafe-eval' retiré (dev-only, dangereux en prod). 'unsafe-inline' conservé car requis par le SSR Next.js.
+      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
       // Styles : Google Fonts + FontAwesome
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
       "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
-      "img-src 'self' data: blob: " + [...imgHosts, 'https:'].join(' '),
-      `connect-src 'self' ${supabaseHost ? `https://${supabaseHost} wss://${supabaseHost}` : ''} https://raw.githubusercontent.com https://*.supabase.co wss://*.supabase.co`,
+      // img-src : hôtes explicites uniquement (pas de 'https:' générique qui autorise tout).
+      "img-src 'self' data: blob: " + [...imgHosts, 'https://db-dev.smartefp.com'].join(' '),
+      // connect-src : uniquement l'hôte Supabase réel (db-dev.smartefp.com) + ws. Pas de *.supabase.co ni raw.githubusercontent.com.
+      `connect-src 'self' ${supabaseHost ? `https://${supabaseHost} wss://${supabaseHost}` : ''}`,
       // Fonts : autoriser Google Fonts (woff2) + data URIs
       `font-src 'self' data: https://${fontHosts.join(' https://')}`,
       "frame-ancestors 'none'",
@@ -43,6 +45,8 @@ const nextConfig = {
       "form-action 'self'",
       // Workers : permettre les blobs pour Web Workers Next.js
       "worker-src 'self' blob:",
+      "object-src 'none'",
+      "upgrade-insecure-requests",
     ].join('; ');
 
     return [

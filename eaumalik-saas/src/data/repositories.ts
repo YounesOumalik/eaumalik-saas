@@ -15,6 +15,7 @@ import {
   writeOrders,
   readUsers,
 } from '@/data/localDb';
+import { sanitizePostgREST } from '@/lib/api-guard';
 
 const shouldUseMocks = (): boolean => {
   if (process.env.NEXT_PUBLIC_USE_MOCKS === 'true') return true;
@@ -59,7 +60,12 @@ export async function listProducts(filters?: {
   }
   if (filters?.category && filters.category !== 'all') query = query.eq('category', filters.category);
   if (filters?.featured) query = query.eq('is_featured', true);
-  if (filters?.search) query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+  if (filters?.search) {
+    const safe = sanitizePostgREST(filters.search);
+    if (safe.length > 0) {
+      query = query.or(`name.ilike.%${safe}%,description.ilike.%${safe}%`);
+    }
+  }
 
   const { data, error } = await query;
   if (error) throw error;
