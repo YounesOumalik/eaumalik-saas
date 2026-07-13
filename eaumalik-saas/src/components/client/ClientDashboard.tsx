@@ -95,12 +95,12 @@ export default function ClientDashboard({ initialData }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-4 bg-[color:var(--bg-surface)] border border-[color:var(--border)] p-4 rounded-2xl">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
+          <div className="w-10 h-10 rounded-xl bg-warning-soft flex items-center justify-center text-warning">
             <Gift size={20} />
           </div>
           <div>
             <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Mon Cashback disponible</div>
-            <div className="text-xl font-display font-extrabold text-amber-400">{formatCurrency(initialData.user.cashback_balance)}</div>
+            <div className="text-xl font-display font-extrabold text-warning">{formatCurrency(initialData.user.cashback_balance)}</div>
           </div>
         </div>
       </div>
@@ -140,7 +140,7 @@ export default function ClientDashboard({ initialData }: Props) {
         {activeTab === 'parrainage' && (
           <div className="grid md:grid-cols-2 gap-6">
             <div className="glass-card p-6" style={{ transform: 'none' }}>
-              <h3 className="font-display font-bold text-lg mb-4 flex items-center gap-2 text-amber-400">
+              <h3 className="font-display font-bold text-lg mb-4 flex items-center gap-2 text-warning">
                 <Gift size={18} /> Inviter des amis
               </h3>
               <p className="text-sm mb-6 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
@@ -169,7 +169,7 @@ export default function ClientDashboard({ initialData }: Props) {
                       className="btn-outline p-2.5 rounded-xl flex items-center justify-center flex-shrink-0"
                       title="Copier le lien"
                     >
-                      {copied ? <span className="text-xs text-emerald-400 font-bold px-1">Copié !</span> : <Copy size={16} />}
+                      {copied ? <span className="text-xs text-success font-bold px-1">Copié !</span> : <Copy size={16} />}
                     </button>
                   </div>
                 </div>
@@ -191,7 +191,7 @@ export default function ClientDashboard({ initialData }: Props) {
                         <div className="font-semibold">{refUser.name}</div>
                         <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{refUser.email}</div>
                       </div>
-                      <div className="text-xs font-bold text-emerald-400 bg-emerald-500/15 py-1 px-2 rounded-full">
+                      <div className="text-xs font-bold text-success bg-success-soft py-1 px-2 rounded-full">
                         +50 MAD de bonus
                       </div>
                     </div>
@@ -233,7 +233,7 @@ export default function ClientDashboard({ initialData }: Props) {
                         <h4 className="font-bold text-base">{deliveredOrder.items?.[0]?.product_name || "Purificateur d'Eau Pro"}</h4>
                         <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Installé le : {formatDateFR(installDate)}</div>
                       </div>
-                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400">
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-soft text-success">
                         Filtres à jour
                       </span>
                     </div>
@@ -260,12 +260,12 @@ export default function ClientDashboard({ initialData }: Props) {
                 );
               })() : shippingOrder ? (
                 <div className="border border-[color:var(--border)] rounded-2xl p-5 bg-[color:var(--bg-surface)] text-center py-10">
-                  <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-4 text-amber-400">
+                  <div className="w-12 h-12 rounded-full bg-warning-soft flex items-center justify-center mx-auto mb-4 text-warning">
                     <Truck size={24} />
                   </div>
                   <h4 className="font-bold text-base mb-1">Purificateur d&apos;Eau en cours de livraison</h4>
                   <p className="text-xs max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
-                    Votre commande <span className="font-mono font-bold text-amber-400">{shippingOrder.order_number}</span> est actuellement avec le statut <span className="font-semibold">&quot;{shippingOrder.status === 'en_attente' ? 'En attente' : shippingOrder.status === 'traitee' ? 'Traitée' : 'En cours de livraison'}&quot;</span>.
+                    Votre commande <span className="font-mono font-bold text-warning">{shippingOrder.order_number}</span> est actuellement avec le statut <span className="font-semibold">&quot;{shippingOrder.status === 'en_attente' ? 'En attente' : shippingOrder.status === 'traitee' ? 'Traitée' : 'En cours de livraison'}&quot;</span>.
                   </p>
                   <p className="text-xs mt-3 text-sky-400 font-medium">
                     Le suivi de la maintenance et le calendrier des révisions débuteront dès la finalisation de l&apos;installation de votre appareil.
@@ -286,10 +286,10 @@ export default function ClientDashboard({ initialData }: Props) {
           <div className="glass-card flex flex-col h-[55vh]" style={{ transform: 'none' }}>
             {/* Chat header */}
             <div className="p-4 flex items-center gap-3 border-b border-[color:var(--border)]">
-              <div className="w-8 h-8 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 font-bold text-xs">EM</div>
+              <div className="w-8 h-8 rounded-full bg-primary-soft flex items-center justify-center text-primary-light font-bold text-xs">EM</div>
               <div>
                 <div className="font-semibold text-sm">Support EAUMALIK</div>
-                <div className="text-[10px] text-emerald-400">En ligne</div>
+                <div className="text-[10px] text-success">En ligne</div>
               </div>
             </div>
 
@@ -409,7 +409,7 @@ export default function ClientDashboard({ initialData }: Props) {
                         <td className="font-bold text-sm">{formatCurrency(order.total)}</td>
                         <td>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            order.status === 'livree' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'
+                            order.status === 'livree' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'
                           }`}>
                             {order.status}
                           </span>

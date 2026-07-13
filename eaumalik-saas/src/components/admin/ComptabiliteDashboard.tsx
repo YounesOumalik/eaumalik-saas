@@ -226,21 +226,21 @@ export default function ComptabiliteDashboard({ orders, products }: Props) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="stat-card">
           <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Revenu total</div>
-          <div className="text-2xl font-display font-extrabold text-cyan-400">{formatCurrency(totalRevenue)}</div>
+          <div className="text-2xl font-display font-extrabold text-primary-light">{formatCurrency(totalRevenue)}</div>
         </div>
         <div className="stat-card">
           <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Total achat de gros</div>
-          <div className="text-2xl font-display font-extrabold text-red-400">{formatCurrency(totalWholesaleCost)}</div>
+          <div className="text-2xl font-display font-extrabold text-danger">{formatCurrency(totalWholesaleCost)}</div>
         </div>
         <div className="stat-card">
           <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Total charges & coms</div>
-          <div className="text-2xl font-display font-extrabold text-amber-500">{formatCurrency(totalChargesAll - totalWholesaleCost)}</div>
+          <div className="text-2xl font-display font-extrabold text-warning">{formatCurrency(totalChargesAll - totalWholesaleCost)}</div>
         </div>
         <div className="stat-card" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(16,185,129,0.05))', border: '1px solid rgba(16,185,129,0.2)' }}>
           <div className="text-xs mb-1" style={{ color: '#34d399' }}>Marge nette réelle</div>
-          <div className="text-2xl font-display font-extrabold text-emerald-400">
+          <div className="text-2xl font-display font-extrabold text-success">
             {formatCurrency(netMarginAll)}
-            <span className="text-xs font-semibold block text-emerald-300">({marginPct.toFixed(1)}% de marge)</span>
+            <span className="text-xs font-semibold block text-success">({marginPct.toFixed(1)}% de marge)</span>
           </div>
         </div>
       </div>
@@ -256,15 +256,15 @@ export default function ComptabiliteDashboard({ orders, products }: Props) {
           <h3 className="font-display font-semibold text-sm mb-4">Répartition des charges</h3>
           <div className="space-y-3.5">
             <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-2"><DollarSign size={14} className="text-red-400" /> Achat en gros</span>
+              <span className="flex items-center gap-2"><DollarSign size={14} className="text-danger" /> Achat en gros</span>
               <span className="font-semibold">{formatCurrency(totalWholesaleCost)}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-2"><TrendingUp size={14} className="text-amber-400" /> Com. Commerciaux</span>
+              <span className="flex items-center gap-2"><TrendingUp size={14} className="text-warning" /> Com. Commerciaux</span>
               <span className="font-semibold">{formatCurrency(totalCommerciaux)}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-2"><Wrench size={14} className="text-cyan-400" /> Com. Techniciens</span>
+              <span className="flex items-center gap-2"><Wrench size={14} className="text-primary-light" /> Com. Techniciens</span>
               <span className="font-semibold">{formatCurrency(totalTechnicians)}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
@@ -277,7 +277,7 @@ export default function ComptabiliteDashboard({ orders, products }: Props) {
             </div>
             <div className="pt-3 border-t border-[color:var(--border)] flex items-center justify-between text-sm font-bold">
               <span>Total charges</span>
-              <span className="text-red-400">{formatCurrency(totalChargesAll)}</span>
+              <span className="text-danger">{formatCurrency(totalChargesAll)}</span>
             </div>
           </div>
         </div>
@@ -305,12 +305,12 @@ export default function ComptabiliteDashboard({ orders, products }: Props) {
                 <tr key={t.order.id}>
                   <td className="font-semibold text-primary-light">{t.order.order_number}</td>
                   <td className="font-bold">{formatCurrency(t.revenue)}</td>
-                  <td className="text-red-400">{formatCurrency(t.wholesale)}</td>
+                  <td className="text-danger">{formatCurrency(t.wholesale)}</td>
                   <td>{formatCurrency(t.comm)}</td>
                   <td>{formatCurrency(t.tech)}</td>
                   <td>{formatCurrency(t.trans)}</td>
                   <td>{formatCurrency(t.maint)}</td>
-                  <td className={`font-bold ${t.netMargin >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <td className={`font-bold ${t.netMargin >= 0 ? 'text-success' : 'text-danger'}`}>
                     {formatCurrency(t.netMargin)}
                   </td>
                 </tr>

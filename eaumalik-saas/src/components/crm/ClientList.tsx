@@ -206,8 +206,8 @@ function ClientDetailModal({
             </div>
             <span className={`px-3 py-1 rounded-full text-xs font-bold ${
               orders.length > 0
-                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                ? 'bg-success-soft text-success border border-success'
+                : 'bg-warning-soft text-warning border border-warning'
             }`}>
               {orders.length > 0 ? 'Client Acheteur' : 'Prospect'}
             </span>
@@ -252,7 +252,7 @@ function ClientDetailModal({
 
                       {/* Visual Timeline Tracker */}
                       {o.status === 'annulee' ? (
-                        <div className="mt-3 p-2 rounded bg-red-500/10 border border-red-500/20 text-[10px] text-red-400 font-semibold flex items-center gap-1.5">
+                        <div className="mt-3 p-2 rounded bg-danger-soft border border-danger text-[10px] text-danger font-semibold flex items-center gap-1.5">
                           Commande annulée
                         </div>
                       ) : (
@@ -284,7 +284,7 @@ function ClientDetailModal({
                                   }`}>
                                     {isDone && sIdx !== 0 && sIdx !== 3 ? '✓' : step.icon}
                                   </div>
-                                  <span className={`mt-1 font-semibold ${isDone ? 'text-cyan-400' : 'text-[color:var(--text-muted)]'}`}>
+                                  <span className={`mt-1 font-semibold ${isDone ? 'text-primary-light' : 'text-[color:var(--text-muted)]'}`}>
                                     {step.label}
                                   </span>
                                 </div>

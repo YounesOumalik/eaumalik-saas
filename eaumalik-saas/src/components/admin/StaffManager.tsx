@@ -210,7 +210,7 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
               <tr key={member.id}>
                 <td>
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-cyan-500/10 text-cyan-400 flex items-center justify-center font-bold text-xs">
+                    <div className="w-9 h-9 rounded-full bg-primary-soft text-primary-light flex items-center justify-center font-bold text-xs">
                       {member.full_name.split(' ').map((n: string) => n[0]).join('')}
                     </div>
                     <div>
@@ -221,7 +221,7 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
                 </td>
                 <td>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                    member.role === 'admin' ? 'bg-red-500/15 text-red-400' : 'bg-cyan-500/15 text-cyan-400'
+                    member.role === 'admin' ? 'bg-danger-soft text-danger' : 'bg-primary-soft text-primary-light'
                   }`}>
                     {ROLE_LABELS[member.role] || member.role}
                   </span>
@@ -230,16 +230,16 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
                 <td>
                   <div className="flex flex-wrap gap-1 max-w-sm">
                     {member.permissions?.can_view_products && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/15 text-emerald-400">Voir Catalogue</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-success-soft text-success">Voir Catalogue</span>
                     )}
                     {member.permissions?.can_edit_products && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/15 text-emerald-400">Éditer Catalogue</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-success-soft text-success">Éditer Catalogue</span>
                     )}
                     {member.permissions?.can_validate_orders && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-cyan-500/15 text-cyan-400">Valider Commandes</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-primary-soft text-primary-light">Valider Commandes</span>
                     )}
                     {member.permissions?.can_follow_prospects && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/15 text-amber-400">Prospection/CRM</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-warning-soft text-warning">Prospection/CRM</span>
                     )}
                     {member.permissions?.can_view_stocks && (
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-500/15 text-purple-400">Voir Stocks</span>
@@ -258,7 +258,7 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
                       <Edit2 size={12} />
                     </button>
                     {member.role !== 'admin' && (
-                      <button onClick={() => handleDelete(member.id)} className="btn-outline btn-sm text-red-400 hover:bg-red-500/10 border-red-500/20" aria-label="Supprimer">
+                      <button onClick={() => handleDelete(member.id)} className="btn-outline btn-sm text-danger hover:bg-danger-soft border-danger" aria-label="Supprimer">
                         <Trash2 size={12} />
                       </button>
                     )}
@@ -278,7 +278,7 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
             </button>
             <div className="p-6">
               <h3 className="font-display font-extrabold text-lg mb-4 flex items-center gap-2">
-                <Shield size={18} className="text-cyan-400" />
+                <Shield size={18} className="text-primary-light" />
                 {editingStaff ? 'Modifier le membre' : 'Ajouter un membre du personnel'}
               </h3>
 

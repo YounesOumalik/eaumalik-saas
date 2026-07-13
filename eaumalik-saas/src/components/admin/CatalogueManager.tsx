@@ -182,7 +182,7 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
                 placeholder="Ex : Osmoseur Compact Premium"
                 {...register('name')}
               />
-              {errors.name && <p className="text-xs text-red-400 mt-1">{errors.name.message}</p>}
+              {errors.name && <p className="text-xs text-danger mt-1">{errors.name.message}</p>}
             </div>
             <div>
               <label className="form-label">Catégorie *</label>
@@ -203,7 +203,7 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
                 placeholder="0"
                 {...register('stock')}
               />
-              {errors.stock && <p className="text-xs text-red-400 mt-1">{errors.stock.message}</p>}
+              {errors.stock && <p className="text-xs text-danger mt-1">{errors.stock.message}</p>}
             </div>
             <div>
               <label className="form-label">Prix de vente (DH) *</label>
@@ -215,7 +215,7 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
                 placeholder="1999"
                 {...register('price')}
               />
-              {errors.price && <p className="text-xs text-red-400 mt-1">{errors.price.message}</p>}
+              {errors.price && <p className="text-xs text-danger mt-1">{errors.price.message}</p>}
             </div>
             <div>
               <label className="form-label">Prix d&apos;achat en gros (DH)</label>
@@ -266,7 +266,7 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
                     <button
                       type="button"
                       onClick={() => setImageUrl('')}
-                      className="text-xs text-red-400 hover:text-red-300 self-start font-semibold"
+                      className="text-xs text-danger hover:opacity-80 self-start font-semibold"
                     >
                       Supprimer la photo
                     </button>
@@ -278,16 +278,16 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" {...register('is_featured')} />
                 <span className="text-sm flex items-center gap-1">
-                  <Star size={12} className="text-amber-400" /> Produit phare
+                  <Star size={12} className="text-warning" /> Produit phare
                 </span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" {...register('is_out_of_stock')} />
-                <span className="text-sm text-red-400 font-semibold">Rupture de stock</span>
+                <span className="text-sm text-danger font-semibold">Rupture de stock</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" {...register('is_archived')} />
-                <span className="text-sm text-amber-500 font-semibold">
+                <span className="text-sm text-warning font-semibold">
                   Archivé (retirer de la boutique)
                 </span>
               </label>
@@ -341,7 +341,7 @@ function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmer', dange
             className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background: danger ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)' }}
           >
-            <AlertTriangle size={18} className={danger ? 'text-red-400' : 'text-amber-400'} />
+            <AlertTriangle size={18} className={danger ? 'text-danger' : 'text-warning'} />
           </div>
           <div>
             <h3 className="font-display font-bold text-base">{title}</h3>
@@ -663,24 +663,24 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                     {p.category === 'purificateurs' ? 'Purificateur' : p.category === 'industriel' ? 'Industriel' : 'Consommable'}
                   </td>
                   <td className="font-semibold text-sm">{formatCurrency(p.price)}</td>
-                  <td className="font-semibold text-sm text-cyan-400">
+                  <td className="font-semibold text-sm" style={{ color: 'var(--primary-light)' }}>
                     {p.wholesale_price ? formatCurrency(p.wholesale_price) : '—'}
                   </td>
                   <td className="text-sm">{p.stock}</td>
                   <td>
                     <div className="flex flex-wrap gap-1">
                       {p.is_featured && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 font-bold">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-warning-soft font-bold">
                           Phare
                         </span>
                       )}
                       {p.is_out_of_stock && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-300 font-bold">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-danger-soft font-bold">
                           Rupture
                         </span>
                       )}
                       {p.is_archived && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-500/20 text-gray-400 font-bold">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-soft font-bold">
                           Archivé
                         </span>
                       )}
@@ -707,8 +707,8 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                           <button
                             type="button"
                             onClick={() => askArchive(p)}
-                            className="btn-sm inline-flex items-center justify-center"
-                            style={{ background: 'rgba(245,158,11,0.15)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)' }}
+                            className="btn-sm inline-flex items-center justify-center bg-warning-soft"
+                            style={{ border: '1px solid var(--warning)' }}
                             title="Archiver"
                             aria-label={`Archiver ${p.name}`}
                           >
@@ -720,8 +720,8 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                             <button
                               type="button"
                               onClick={() => restore(p)}
-                              className="btn-sm inline-flex items-center justify-center"
-                              style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)' }}
+                              className="btn-sm inline-flex items-center justify-center bg-success-soft"
+                              style={{ border: '1px solid var(--success)' }}
                               title="Restaurer"
                               aria-label={`Restaurer ${p.name}`}
                             >
@@ -798,8 +798,8 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                         <button
                           type="button"
                           onClick={() => askArchive(p)}
-                          className="btn-sm inline-flex items-center justify-center"
-                          style={{ background: 'rgba(245,158,11,0.15)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)' }}
+                          className="btn-sm inline-flex items-center justify-center bg-warning-soft"
+                          style={{ border: '1px solid var(--warning)' }}
                           aria-label={`Archiver ${p.name}`}
                           title="Archiver"
                         >
@@ -811,8 +811,8 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                         <button
                           type="button"
                           onClick={() => restore(p)}
-                          className="btn-sm flex-1 justify-center"
-                          style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)' }}
+                          className="btn-sm flex-1 justify-center bg-success-soft"
+                          style={{ border: '1px solid var(--success)' }}
                         >
                           <RotateCcw size={12} /> Restaurer
                         </button>

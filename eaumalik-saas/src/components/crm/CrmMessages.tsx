@@ -96,7 +96,7 @@ export default function CrmMessages({ initialClients }: { initialClients: Client
             <>
               {/* Header */}
               <div className="p-4 border-b border-[color:var(--border)] bg-[color:var(--bg-card)] flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-cyan-500/15 flex items-center justify-center text-cyan-400">
+                <div className="w-9 h-9 rounded-full bg-primary-soft flex items-center justify-center text-primary-light">
                   <User size={18} />
                 </div>
                 <div>
