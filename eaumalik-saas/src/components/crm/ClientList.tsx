@@ -63,7 +63,7 @@ export default function ClientList({
       {/* Segmented Filter Tabs */}
       <div className="flex flex-wrap gap-2 mb-4">
         {[
-          { id: 'all', label: 'Tous', count: stats.length },
+          { id: 'all', label: 'Clients', count: stats.length },
           { id: 'buyers', label: 'Clients Acheteurs', count: stats.filter(c => c.orders_count > 0).length },
           { id: 'prospects', label: 'Prospects', count: stats.filter(c => c.orders_count === 0).length },
         ].map(btn => (
