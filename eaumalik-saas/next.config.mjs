@@ -8,6 +8,10 @@ const nextConfig = {
     ],
   },
   experimental: {
+    // Exclure pdfkit du bundle webpack côté serveur pour que __dirname
+    // (utilisé pour localiser les polices AFM Helvetica, Courier, Times…)
+    // résolve vers node_modules/pdfkit/js/data/ et non .next/server/vendor-chunks/.
+    serverComponentsExternalPackages: ['pdfkit'],
     serverActions: {
       // Origin serveur autorisée pour Server Actions.
       // Production : valeur issue de NEXT_PUBLIC_APP_URL. Dev : localhost.

@@ -129,12 +129,12 @@ export default function MaintenanceTable({ initialRecords }: { initialRecords: M
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="flex flex-wrap gap-1.5" role="tablist">
+        <div className="flex flex-wrap gap-2" role="tablist">
           {FILTER_OPTIONS.map(s => (
             <button
               key={s.key}
               onClick={() => setFilter(s.key)}
-              className={filter === s.key ? 'btn-primary btn-sm' : 'btn-outline btn-sm'}
+              className={`btn-chip ${filter === s.key ? (s.key === 'all' ? 'active btn-chip-fill' : 'active') : ''}`}
             >
               {s.label}
             </button>

@@ -109,18 +109,16 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="flex flex-wrap gap-1.5" role="tablist">
-          {(['all', ...STATUS_CYCLE, 'annulee'] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              className={filter === s ? 'btn-primary btn-sm' : 'btn-outline btn-sm'}
-            >
-              {s === 'all' ? 'Toutes' : STATUS_LABELS[s]}
-            </button>
-          ))}
-        </div>
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4" role="tablist">
+        {(['all', ...STATUS_CYCLE, 'annulee'] as const).map(s => (
+          <button
+            key={s}
+            onClick={() => setFilter(s)}
+            className={`btn-chip ${filter === s ? (s === 'all' ? 'btn-chip active btn-chip-fill' : 'active') : ''}`}
+          >
+            {s === 'all' ? 'Toutes' : STATUS_LABELS[s]}
+          </button>
+        ))}
       </div>
 
       <div className="glass-card overflow-x-auto" style={{ transform: 'none' }}>

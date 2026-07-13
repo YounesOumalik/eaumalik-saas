@@ -88,7 +88,12 @@ function LoginInner() {
         }
         // Login OK : on stocke la session factice et on redirige
         sessionStorage.setItem('eaumalik_dev_session', JSON.stringify(json.user));
-        router.push(callbackUrl);
+        const role = json.user?.role;
+        if (role === 'admin' || role === 'staff') {
+          router.push('/admin');
+        } else {
+          router.push(callbackUrl);
+        }
         router.refresh();
       } catch (err) {
         setError('Erreur de connexion au mode dev.');
@@ -130,13 +135,18 @@ function LoginInner() {
     }
 
     const supabase = createSupabaseBrowserClient();
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
     if (signInErr) {
       setError('Email ou mot de passe incorrect.');
       setLoading(false);
       return;
     }
-    router.push(callbackUrl);
+    const userRole = signInData.user?.user_metadata?.role;
+    if (userRole === 'admin' || userRole === 'staff') {
+      router.push('/admin');
+    } else {
+      router.push(callbackUrl);
+    }
     router.refresh();
   };
 

@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import PDFDocument from 'pdfkit';
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server';
-import { badRequest, forbidden, safeErrorResponse, unauthorized } from '@/lib/api-guard';
+import { badRequest, forbidden, isMockMode, safeErrorResponse, unauthorized } from '@/lib/api-guard';
+import { readOrders } from '@/data/localDb';
+import { MOCK_COMPANY } from '@/data/mock';
 
 export const dynamic = 'force-dynamic';
 
 // Garde-fous : le client ne peut télécharger QUE sa propre commande (anti-IDOR).
 async function loadOrderForCaller(orderId: string) {
+  // Mode mock : charger directement depuis le JSON local (pas d'auth Supabase).
+  if (isMockMode()) {
+    const orders = readOrders();
+    const order = orders.find(o => o.id === orderId);
+    if (!order) throw new Response('not found', { status: 404 });
+    return order;
+  }
+
   const supabase = createSupabaseServerClient();
   const { data: userRes, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userRes.user) throw new Response('unauthorized', { status: 401 });
@@ -58,11 +68,15 @@ export async function GET(req: NextRequest) {
     email: '',
     capital: 0,
   };
-  try {
-    const admin = createSupabaseServiceRoleClient();
-    const { data } = await admin.from('company_profile').select('*').maybeSingle();
-    if (data) company = data;
-  } catch { /* ignore */ }
+  if (isMockMode()) {
+    company = MOCK_COMPANY;
+  } else {
+    try {
+      const admin = createSupabaseServiceRoleClient();
+      const { data } = await admin.from('company_profile').select('*').maybeSingle();
+      if (data) company = data;
+    } catch { /* ignore */ }
+  }
 
   // PDF
   try {

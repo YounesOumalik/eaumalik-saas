@@ -60,7 +60,7 @@ export default function ClientList({
       <h2 className="font-display font-extrabold text-xl mb-6">Fiches Clients</h2>
 
       {/* Segmented Filter Tabs */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4" role="tablist">
         {[
           { id: 'all', label: 'Tous', count: stats.length },
           { id: 'buyers', label: 'Clients', count: stats.filter(c => c.orders_count > 0).length },
@@ -69,14 +69,10 @@ export default function ClientList({
           <button
             key={btn.id}
             onClick={() => setFilterType(btn.id as any)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              filterType === btn.id
-                ? 'bg-[color:var(--primary)] text-white shadow-lg shadow-cyan-500/15'
-                : 'bg-[color:var(--bg-card)] hover:bg-[color:var(--bg-card-hover)] text-[color:var(--text-secondary)] border border-[color:var(--border)]'
-            }`}
+            className={`btn-chip gap-2 ${filterType === btn.id ? 'active btn-chip-fill' : ''}`}
           >
             {btn.label}
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
               filterType === btn.id ? 'bg-white/20 text-white' : 'bg-[color:var(--bg-card-hover)] text-[color:var(--text-muted)]'
             }`}>
               {btn.count}

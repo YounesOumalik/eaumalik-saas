@@ -2,36 +2,26 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import type { Product, ProductCategory } from '@/types';
+import type { Product, ProductCategory, News } from '@/types';
 import ProductCard from '@/components/boutique/ProductCard';
 import CategoryFilters from '@/components/boutique/CategoryFilters';
 import BoutiqueHero from '@/components/boutique/BoutiqueHero';
-import BoutiqueFiltration from '@/components/boutique/BoutiqueFiltration';
-import BoutiqueIndustrial from '@/components/boutique/BoutiqueIndustrial';
-import BoutiqueContact from '@/components/boutique/BoutiqueContact';
 import BoutiquePromotions from '@/components/boutique/BoutiquePromotions';
 import { useToast } from '@/components/shared/ToastProvider';
-import type { News } from '@/types';
 
 /**
- * Page boutique du nouveau design :
- *  - Hero (Catalog Produits + navbar local)
- *  - Promotions & Actualités (issues du CRM)
- *  - 5 etapes de filtration
- *  - Catalogue filtres + recherche + grille de cartes
- *  - Section industrielle (6 secteurs)
- *  - Contact / devis
+ * Page boutique :
+ *  - Hero + Promotions (offres uniquement)
+ *  - Catalogue filtres + recherche + grille de cartes (articles a vendre)
  * Toutes les fonctions existantes (panier, toast, modal) sont preservees.
  */
 export default function BoutiqueClient({
   initialProducts,
   promotions = [],
-  news = [],
   featuredOnly = false,
 }: {
   initialProducts: Product[];
   promotions?: News[];
-  news?: News[];
   /** Landing page : n'affiche que les produits phares (is_featured). */
   featuredOnly?: boolean;
 }) {
@@ -76,9 +66,7 @@ export default function BoutiqueClient({
     <div className="bg-white">
       <BoutiqueHero />
 
-      <BoutiquePromotions promotions={promotions} news={news} />
-
-      <BoutiqueFiltration />
+      <BoutiquePromotions promotions={promotions} showNews={false} />
 
       {/* CATALOGUE */}
       <section id="catalogue" className="py-32 px-6 bg-white">
@@ -151,10 +139,6 @@ export default function BoutiqueClient({
           )}
         </div>
       </section>
-
-      <BoutiqueIndustrial />
-
-      <BoutiqueContact />
     </div>
   );
 }

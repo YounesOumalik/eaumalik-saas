@@ -9,7 +9,9 @@ import { Sparkles, Tag, Clock, Newspaper, ArrowRight } from 'lucide-react';
 
 interface Props {
   promotions: News[];
-  news: News[];
+  news?: News[];
+  /** Affiche l'onglet "Actualités" (désactivé sur la boutique : uniquement promos + articles à vendre). */
+  showNews?: boolean;
 }
 
 const PERCENT = (original: number, promo: number): number => {
@@ -156,7 +158,11 @@ function NewsCard({ item }: { item: News }) {
  * Hydratation-safe : dates / discount calculés côté rendu, mais on évite tout accès
  * à `window` au premier render pour ne pas casser la SSR.
  */
-export default function BoutiquePromotions({ promotions, news }: Props) {
+export default function BoutiquePromotions({
+  promotions,
+  news = [],
+  showNews = true,
+}: Props) {
   // État client uniquement : filtre onglet actifs. Démarre sur "promotions".
   const [tab, setTab] = useState<'promotions' | 'news'>('promotions');
 
@@ -179,7 +185,7 @@ export default function BoutiquePromotions({ promotions, news }: Props) {
   );
 
   // Si aucune donnée : on n'affiche pas la section (au lieu d'une zone vide).
-  if (promoList.length === 0 && newsList.length === 0) return null;
+  if (promoList.length === 0 && (!showNews || newsList.length === 0)) return null;
 
   return (
     <section
@@ -207,33 +213,27 @@ export default function BoutiquePromotions({ promotions, news }: Props) {
         </div>
 
         {/* Onglets */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-10" role="tablist">
           <button
             type="button"
             onClick={() => setTab('promotions')}
-            className={`boutique-cat-btn px-5 py-2.5 rounded-xl text-sm font-semibold border transition-all duration-300 ${
-              tab === 'promotions'
-                ? 'border-brand-600 bg-brand-600 text-white'
-                : 'border-stone-200 bg-white text-stone-600 hover:border-brand-500'
-            }`}
+            className={`btn-chip ${tab === 'promotions' ? 'active btn-chip-fill' : ''}`}
             aria-pressed={tab === 'promotions'}
           >
             <Sparkles className="inline-block w-4 h-4 mr-1.5 -mt-0.5" aria-hidden="true" />
             Promotions ({promoList.length})
           </button>
-          <button
-            type="button"
-            onClick={() => setTab('news')}
-            className={`boutique-cat-btn px-5 py-2.5 rounded-xl text-sm font-semibold border transition-all duration-300 ${
-              tab === 'news'
-                ? 'border-brand-600 bg-brand-600 text-white'
-                : 'border-stone-200 bg-white text-stone-600 hover:border-brand-500'
-            }`}
-            aria-pressed={tab === 'news'}
-          >
-            <Newspaper className="inline-block w-4 h-4 mr-1.5 -mt-0.5" aria-hidden="true" />
-            Actualités ({newsList.length})
-          </button>
+          {showNews && (
+            <button
+              type="button"
+              onClick={() => setTab('news')}
+              className={`btn-chip ${tab === 'news' ? 'active btn-chip-fill' : ''}`}
+              aria-pressed={tab === 'news'}
+            >
+              <Newspaper className="inline-block w-4 h-4 mr-1.5 -mt-0.5" aria-hidden="true" />
+              Actualités ({newsList.length})
+            </button>
+          )}
         </div>
 
         {tab === 'promotions' && promoList.length > 0 && (
@@ -250,7 +250,7 @@ export default function BoutiquePromotions({ promotions, news }: Props) {
           </p>
         )}
 
-        {tab === 'news' && newsList.length > 0 && (
+        {showNews && tab === 'news' && newsList.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {newsList.map(n => (
               <NewsCard key={n.id} item={n} />
@@ -258,7 +258,7 @@ export default function BoutiquePromotions({ promotions, news }: Props) {
           </div>
         )}
 
-        {tab === 'news' && newsList.length === 0 && (
+        {showNews && tab === 'news' && newsList.length === 0 && (
           <p className="text-center text-stone-400 italic">
             Aucune actualité publiée pour le moment.
           </p>

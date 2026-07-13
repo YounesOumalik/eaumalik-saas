@@ -23,7 +23,7 @@ interface Props {
 export default function CategoryFilters({ active, onChange, search, onSearch, resultCount }: Props) {
   return (
     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-12 reveal revealed">
-      <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
+      <div className="flex flex-wrap gap-2 justify-center lg:justify-start" role="tablist">
         {CATEGORIES.map(c => (
           <button
             key={c.key}
@@ -31,11 +31,7 @@ export default function CategoryFilters({ active, onChange, search, onSearch, re
             onClick={() => onChange(c.key)}
             role="tab"
             aria-selected={active === c.key}
-            className={`boutique-cat-btn px-5 py-2.5 rounded-xl text-sm font-semibold border transition-all duration-300 ${
-              active === c.key
-                ? 'active border-brand-600'
-                : 'border-stone-200 bg-white text-stone-600 hover:border-brand-500'
-            }`}
+            className={`btn-chip ${active === c.key ? 'active btn-chip-fill' : ''}`}
           >
             {c.label}
           </button>
