@@ -354,28 +354,83 @@ export default function ClientDashboard({ initialData }: Props) {
                 <p>Aucune actualité disponible pour le moment.</p>
               </div>
             ) : (
-              initialData.news.map(item => (
-                <div key={item.id} className="glass-card p-6 flex flex-col md:flex-row gap-6 items-start" style={{ transform: 'none' }}>
-                  {item.image_url && (
-                    <div className="relative w-full md:w-48 h-32 rounded-xl border border-[color:var(--border)] overflow-hidden flex-shrink-0">
-                      <img
-                        src={item.image_url}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                      />
+              initialData.news.map((item: any) => {
+                const hasPrice = typeof item.price === 'number' && item.price > 0;
+                const hasOriginal = typeof item.original_price === 'number' && item.original_price > 0;
+                const isPromo = item.is_promotion === true || hasPrice || (Array.isArray(item.product_ids) && item.product_ids.length > 0);
+                const discount =
+                  hasPrice && hasOriginal && item.original_price > 0
+                    ? Math.max(0, Math.round((1 - item.price / item.original_price) * 100))
+                    : null;
+                return (
+                  <div
+                    key={item.id}
+                    className={`glass-card p-6 flex flex-col md:flex-row gap-6 items-start ${
+                      isPromo ? 'border-warning/40 ring-1 ring-warning/30' : ''
+                    }`}
+                    style={{ transform: 'none' }}
+                  >
+                    {item.image_url && (
+                      <div className="relative w-full md:w-48 h-32 rounded-xl border border-[color:var(--border)] overflow-hidden flex-shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={item.image_url}
+                          alt={item.title}
+                          className="w-full h-full object-cover"
+                        />
+                        {discount !== null && (
+                          <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-warning text-bg shadow">
+                            -{discount}%
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-primary-400">
+                          Publié le {new Date(item.created_at).toLocaleDateString('fr-FR')}
+                        </span>
+                        {isPromo && (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-warning-soft text-warning">
+                            🔥 PROMOTION
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-display font-bold text-lg mb-2">{item.title}</h3>
+                      <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                        {item.content}
+                      </p>
+
+                      {hasPrice && (
+                        <div className="flex items-end gap-2 mt-3">
+                          <span className="font-display font-extrabold text-xl text-warning">
+                            {formatCurrency(item.price)}
+                          </span>
+                          {hasOriginal && (
+                            <span className="text-xs line-through opacity-60">
+                              {formatCurrency(item.original_price)}
+                            </span>
+                          )}
+                          {discount !== null && (
+                            <span className="text-xs font-bold text-success ml-2">
+                              Vous économisez {formatCurrency(item.original_price - item.price)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="mt-3">
+                        <a
+                          href="/boutique"
+                          className="inline-flex items-center gap-1 text-xs font-bold text-primary-light hover:underline"
+                        >
+                          Voir les produits →
+                        </a>
+                      </div>
                     </div>
-                  )}
-                  <div className="flex-1">
-                    <div className="text-[10px] uppercase font-bold tracking-wider mb-2 text-primary-400">
-                      Publié le {new Date(item.created_at).toLocaleDateString('fr-FR')}
-                    </div>
-                    <h3 className="font-display font-bold text-lg mb-2">{item.title}</h3>
-                    <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                      {item.content}
-                    </p>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

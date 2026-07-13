@@ -2,13 +2,15 @@ import HeroSection from '@/components/landing/HeroSection';
 import FeaturesSection from '@/components/landing/FeaturesSection';
 import ProductsPreview from '@/components/landing/ProductsPreview';
 import TestimonialsSection from '@/components/landing/TestimonialsSection';
-import { listProducts, getCompanyProfile } from '@/data/repositories';
+import PromotionsCarousel from '@/components/landing/PromotionsCarousel';
+import { listProducts, getCompanyProfile, listActivePromotions } from '@/data/repositories';
 import Script from 'next/script';
 
 export default async function HomePage() {
-  const [featured, company] = await Promise.all([
+  const [featured, company, promos] = await Promise.all([
     listProducts({ featured: true }),
     getCompanyProfile(),
+    listActivePromotions(12),
   ]);
 
   return (
@@ -37,6 +39,7 @@ export default async function HomePage() {
         }}
       />
       <HeroSection />
+      <PromotionsCarousel promotions={promos} />
       <FeaturesSection />
       <ProductsPreview products={featured} />
       <TestimonialsSection />

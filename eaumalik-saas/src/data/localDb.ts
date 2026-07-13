@@ -13,6 +13,7 @@ if (!fs.existsSync(DB_DIR)) {
 const PRODUCTS_FILE = path.join(DB_DIR, 'products.json');
 const ORDERS_FILE = path.join(DB_DIR, 'orders.json');
 const USERS_FILE = path.join(DB_DIR, 'users.json');
+const USERS_ARCHIVE_FILE = path.join(DB_DIR, 'users_archive.json');
 const CARTS_FILE = path.join(DB_DIR, 'carts.json');
 const MESSAGES_FILE = path.join(DB_DIR, 'messages.json');
 const NEWS_FILE = path.join(DB_DIR, 'news.json');
@@ -42,6 +43,9 @@ if (!fs.existsSync(USERS_FILE)) {
     }
   ];
   fs.writeFileSync(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
+}
+if (!fs.existsSync(USERS_ARCHIVE_FILE)) {
+  fs.writeFileSync(USERS_ARCHIVE_FILE, JSON.stringify([], null, 2));
 }
 if (!fs.existsSync(CARTS_FILE)) {
   fs.writeFileSync(CARTS_FILE, JSON.stringify({}, null, 2));
@@ -109,6 +113,38 @@ export function readUsers(): any[] {
   } catch (e) {
     return [];
   }
+}
+
+// ---------------------------------------------------------
+// Users archive (comptes personnel supprimés, restaurables)
+// Snapshot complet : id, email, role, permissions, métadonnées
+// + date d'archivage. Le mot de passe n'est PAS archivé :
+// à la restauration, l'admin doit en définir un nouveau.
+// ---------------------------------------------------------
+export interface ArchivedUser {
+  id: string;
+  email: string;
+  full_name: string;
+  phone: string | null;
+  role: string;
+  permissions: Record<string, boolean> | null;
+  original_created_at: string | null;
+  original_updated_at: string | null;
+  archived_at: string;
+  archived_reason: string | null;
+}
+
+export function readArchivedUsers(): ArchivedUser[] {
+  try {
+    const data = fs.readFileSync(USERS_ARCHIVE_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (e) {
+    return [];
+  }
+}
+
+export function writeArchivedUsers(users: ArchivedUser[]) {
+  fs.writeFileSync(USERS_ARCHIVE_FILE, JSON.stringify(users, null, 2));
 }
 
 export function writeUsers(users: any[]) {

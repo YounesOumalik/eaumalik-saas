@@ -183,12 +183,12 @@ function ClientDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-modal-in"
+      className="modal-overlay fixed inset-0 z-[1000] flex items-center justify-center p-4 animate-modal-in"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog" aria-modal="true"
     >
-      <div className="glass-card max-w-2xl w-full max-h-[85vh] overflow-y-auto relative">
-        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-black/30" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }} aria-label="Fermer">
+      <div className="modal-surface max-w-2xl w-full max-h-[85vh] overflow-y-auto relative rounded-3xl">
+        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--modal-text)' }} aria-label="Fermer">
           <X size={14} />
         </button>
         <div className="p-6">

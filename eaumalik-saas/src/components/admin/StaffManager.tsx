@@ -1,9 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, Shield, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Plus, Edit2, Trash2, Shield, X, Archive, RotateCcw, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/shared/ToastProvider';
-import { createStaffUserAction, updateStaffUserAction, deleteStaffUserAction } from '@/app/actions/adminActions';
+import {
+  createStaffUserAction,
+  updateStaffUserAction,
+  deleteStaffUserAction,
+  restoreArchivedStaffAction,
+  purgeArchivedStaffAction,
+} from '@/app/actions/adminActions';
 import { formatCurrency } from '@/lib/utils';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -23,9 +29,22 @@ const DEFAULT_PERMISSIONS = {
   can_view_stocks: false,
 };
 
-export default function StaffManager({ initialStaff }: { initialStaff: any[] }) {
+type Tab = 'active' | 'archived';
+
+export default function StaffManager({
+  initialStaff,
+  initialArchived = [],
+}: {
+  initialStaff: any[];
+  initialArchived?: any[];
+}) {
   const [staffList, setStaffList] = useState<any[]>(initialStaff);
+  const [archivedList, setArchivedList] = useState<any[]>(initialArchived);
+  const [tab, setTab] = useState<Tab>('active');
   const [modalOpen, setModalOpen] = useState(false);
+  const [restoreModal, setRestoreModal] = useState<any | null>(null);
+  const [restorePassword, setRestorePassword] = useState('');
+  const [restoreSubmitting, setRestoreSubmitting] = useState(false);
   const [editingStaff, setEditingStaff] = useState<any | null>(null);
 
   // Form Fields
@@ -173,25 +192,147 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
     setSubmitting(false);
   };
 
-  const handleDelete = async (memberId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce compte de personnel ?')) return;
+  const handleDelete = async (member: any) => {
+    if (!confirm(
+      `Êtes-vous sûr de vouloir archiver le compte de ${member.full_name} ?\n\n`
+      + 'Le compte sera déplacé dans les Archives et pourra y être restauré à tout moment.'
+    )) return;
 
-    const res = await deleteStaffUserAction(memberId);
+    const res = await deleteStaffUserAction(member.id);
     if (res.success) {
-      setStaffList(prev => prev.filter(u => u.id !== memberId));
-      toast('Compte de personnel supprimé.', 'success');
+      setStaffList(prev => prev.filter(u => u.id !== member.id));
+      // Rafraîchit l'archive (ajout optimiste)
+      setArchivedList(prev => [
+        {
+          id: member.id,
+          email: member.email,
+          full_name: member.full_name,
+          phone: member.phone ?? null,
+          role: member.role,
+          permissions: member.permissions ?? null,
+          original_created_at: member.created_at ?? null,
+          original_updated_at: member.updated_at ?? null,
+          archived_at: new Date().toISOString(),
+          archived_reason: 'Suppression manuelle depuis la gestion du personnel',
+        },
+        ...prev,
+      ]);
+      toast('Compte archivé. Récupérable depuis l\'onglet Archives.', 'success');
     } else {
       toast('Erreur : ' + res.error, 'error');
     }
   };
 
+  const openRestore = (member: any) => {
+    setRestoreModal(member);
+    setRestorePassword('');
+  };
+
+  const closeRestore = () => {
+    if (restoreSubmitting) return;
+    setRestoreModal(null);
+    setRestorePassword('');
+  };
+
+  const handleRestore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restoreModal || !restorePassword || restoreSubmitting) return;
+    setRestoreSubmitting(true);
+
+    const res = await restoreArchivedStaffAction({
+      id: restoreModal.id,
+      newPassword: restorePassword,
+    });
+
+    if (res.success) {
+      // Sort le compte de l'archive, l'ajoute aux actifs (état optimiste)
+      const restoredMember = {
+        id: restoreModal.id,
+        email: restoreModal.email,
+        full_name: restoreModal.full_name,
+        phone: restoreModal.phone ?? '',
+        role: restoreModal.role,
+        permissions: restoreModal.permissions ?? DEFAULT_PERMISSIONS,
+        created_at: restoreModal.original_created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      setArchivedList(prev => prev.filter(u => u.id !== restoreModal.id));
+      setStaffList(prev => [restoredMember, ...prev]);
+      toast('Compte restauré avec succès. Le mot de passe choisi est actif immédiatement.', 'success');
+      setRestoreModal(null);
+      setRestorePassword('');
+      setTab('active');
+    } else {
+      toast('Erreur : ' + res.error, 'error');
+    }
+    setRestoreSubmitting(false);
+  };
+
+  const handlePurge = async (member: any) => {
+    if (!confirm(
+      `Supprimer définitivement le compte archivé de ${member.full_name} ?\n\n`
+      + 'Cette action est IRRÉVERSIBLE. Le compte ne pourra plus être récupéré.'
+    )) return;
+
+    const res = await purgeArchivedStaffAction(member.id);
+    if (res.success) {
+      setArchivedList(prev => prev.filter(u => u.id !== member.id));
+      toast('Compte supprimé définitivement.', 'success');
+    } else {
+      toast('Erreur : ' + res.error, 'error');
+    }
+  };
+
+  const counts = useMemo(
+    () => ({
+      active: staffList.length,
+      archived: archivedList.length,
+    }),
+    [staffList.length, archivedList.length]
+  );
+
   return (
     <>
       <div className="flex justify-between items-center mb-6">
         <h2 className="font-display font-extrabold text-xl">Gestion du Personnel & Droits</h2>
-        <button onClick={handleOpenCreate} className="btn-primary flex items-center gap-2">
-          <Plus size={16} /> Ajouter un membre
-        </button>
+        {tab === 'active' && (
+          <button onClick={handleOpenCreate} className="btn-primary flex items-center gap-2">
+            <Plus size={16} /> Ajouter un membre
+          </button>
+        )}
+      </div>
+
+      {/* Onglets Actif / Archives */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="inline-flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+          <button
+            type="button"
+            onClick={() => setTab('active')}
+            className="px-4 py-2 text-sm font-semibold transition-all flex items-center gap-1.5"
+            style={{
+              background: tab === 'active' ? 'var(--primary)' : 'transparent',
+              color: tab === 'active' ? '#fff' : 'var(--text-secondary)',
+            }}
+          >
+            Actifs ({counts.active})
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('archived')}
+            className="px-4 py-2 text-sm font-semibold transition-all flex items-center gap-1.5"
+            style={{
+              background: tab === 'archived' ? 'var(--primary)' : 'transparent',
+              color: tab === 'archived' ? '#fff' : 'var(--text-secondary)',
+            }}
+          >
+            <Archive size={12} /> Archives ({counts.archived})
+          </button>
+        </div>
+        <p className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
+          {tab === 'active'
+            ? 'Supprimer un compte le déplace dans les Archives. Restaurez-le à tout moment.'
+            : 'Les comptes archivés peuvent être restaurés (avec un nouveau mot de passe) ou supprimés définitivement.'}
+        </p>
       </div>
 
       <div className="glass-card overflow-x-auto" style={{ transform: 'none' }}>
@@ -200,14 +341,14 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
             <tr>
               <th>Personnel</th>
               <th>Rôle</th>
-              <th>Téléphone</th>
-              <th>Droits d&apos;accès</th>
+              <th>{tab === 'active' ? 'Téléphone' : 'Archivé le'}</th>
+              <th>{tab === 'active' ? 'Droits d\'accès' : 'Raison'}</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {staffList.map(member => (
-              <tr key={member.id}>
+            {(tab === 'active' ? staffList : archivedList).map(member => (
+              <tr key={member.id} className={tab === 'archived' ? 'opacity-70' : ''}>
                 <td>
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-primary-soft text-primary-light flex items-center justify-center font-bold text-xs">
@@ -226,58 +367,117 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
                     {ROLE_LABELS[member.role] || member.role}
                   </span>
                 </td>
-                <td className="text-sm">{member.phone || '—'}</td>
-                <td>
-                  <div className="flex flex-wrap gap-1 max-w-sm">
-                    {member.permissions?.can_view_products && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-success-soft text-success">Voir Catalogue</span>
-                    )}
-                    {member.permissions?.can_edit_products && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-success-soft text-success">Éditer Catalogue</span>
-                    )}
-                    {member.permissions?.can_validate_orders && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-primary-soft text-primary-light">Valider Commandes</span>
-                    )}
-                    {member.permissions?.can_follow_prospects && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-warning-soft text-warning">Prospection/CRM</span>
-                    )}
-                    {member.permissions?.can_view_stocks && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-500/15 text-purple-400">Voir Stocks</span>
-                    )}
-                    {member.permissions?.can_view_comptabilite && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/15 text-indigo-400">Voir Compta.</span>
-                    )}
-                    {member.role === 'admin' && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-rose-500/15 text-rose-400 font-bold">Tous les Droits</span>
-                    )}
-                  </div>
-                </td>
-                <td>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleOpenEdit(member)} className="btn-outline btn-sm" aria-label="Modifier">
-                      <Edit2 size={12} />
-                    </button>
-                    {member.role !== 'admin' && (
-                      <button onClick={() => handleDelete(member.id)} className="btn-outline btn-sm text-danger hover:bg-danger-soft border-danger" aria-label="Supprimer">
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </div>
-                </td>
+                {tab === 'active' ? (
+                  <>
+                    <td className="text-sm">{member.phone || '—'}</td>
+                    <td>
+                      <div className="flex flex-wrap gap-1 max-w-sm">
+                        {member.permissions?.can_view_products && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-success-soft text-success">Voir Catalogue</span>
+                        )}
+                        {member.permissions?.can_edit_products && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-success-soft text-success">Éditer Catalogue</span>
+                        )}
+                        {member.permissions?.can_validate_orders && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-primary-soft text-primary-light">Valider Commandes</span>
+                        )}
+                        {member.permissions?.can_follow_prospects && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-warning-soft text-warning">Prospection/CRM</span>
+                        )}
+                        {member.permissions?.can_view_stocks && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-500/15 text-purple-400">Voir Stocks</span>
+                        )}
+                        {member.permissions?.can_view_comptabilite && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/15 text-indigo-400">Voir Compta.</span>
+                        )}
+                        {member.role === 'admin' && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-rose-500/15 text-rose-400 font-bold">Tous les Droits</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleOpenEdit(member)} className="btn-outline btn-sm" aria-label="Modifier">
+                          <Edit2 size={12} />
+                        </button>
+                        {member.role !== 'admin' && (
+                          <button
+                            onClick={() => handleDelete(member)}
+                            className="btn-outline btn-sm text-danger hover:bg-danger-soft border-danger"
+                            aria-label="Archiver"
+                            title="Archiver le compte (récupérable)"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="text-xs">
+                      {member.archived_at
+                        ? new Date(member.archived_at).toLocaleString('fr-FR', {
+                            day: '2-digit', month: '2-digit', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit',
+                          })
+                        : '—'}
+                    </td>
+                    <td className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {member.archived_reason || '—'}
+                    </td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openRestore(member)}
+                          className="btn-outline btn-sm"
+                          aria-label="Restaurer"
+                          title="Restaurer ce compte (nouveau mot de passe requis)"
+                          style={{ borderColor: 'var(--success, #10b981)', color: 'var(--success, #10b981)' }}
+                        >
+                          <RotateCcw size={12} />
+                        </button>
+                        <button
+                          onClick={() => handlePurge(member)}
+                          className="btn-outline btn-sm text-danger hover:bg-danger-soft border-danger"
+                          aria-label="Supprimer définitivement"
+                          title="Supprimer définitivement (irréversible)"
+                        >
+                          <AlertTriangle size={12} />
+                        </button>
+                      </div>
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
+            {tab === 'active' && staffList.length === 0 && (
+              <tr>
+                <td colSpan={5} className="text-center text-sm py-8" style={{ color: 'var(--text-muted)' }}>
+                  Aucun membre du personnel enregistré.
+                </td>
+              </tr>
+            )}
+            {tab === 'archived' && archivedList.length === 0 && (
+              <tr>
+                <td colSpan={5} className="text-center text-sm py-8" style={{ color: 'var(--text-muted)' }}>
+                  <Archive size={20} className="inline-block mr-2 opacity-50" />
+                  Aucune archive. Les comptes supprimés apparaîtront ici.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card max-w-xl w-full max-h-[90vh] overflow-y-auto relative">
-            <button onClick={() => setModalOpen(false)} className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-black/30" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+        <div className="modal-overlay fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="modal-surface max-w-xl w-full max-h-[90vh] overflow-y-auto relative rounded-3xl">
+            <button onClick={() => setModalOpen(false)} className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--modal-text)' }}>
               <X size={14} />
             </button>
             <div className="p-6">
-              <h3 className="font-display font-extrabold text-lg mb-4 flex items-center gap-2">
+              <h3 className="font-display font-extrabold text-lg mb-4 flex items-center gap-2" style={{ color: 'var(--modal-text)' }}>
                 <Shield size={18} className="text-primary-light" />
                 {editingStaff ? 'Modifier le membre' : 'Ajouter un membre du personnel'}
               </h3>
@@ -423,6 +623,76 @@ export default function StaffManager({ initialStaff }: { initialStaff: any[] }) 
                     className="btn-primary flex-1 justify-center py-2.5"
                   >
                     {submitting ? 'Envoi...' : (editingStaff ? 'Enregistrer' : 'Créer le compte')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de restauration (nouveau mot de passe obligatoire) */}
+      {restoreModal && (
+        <div className="modal-overlay fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="modal-surface max-w-md w-full relative rounded-3xl">
+            <button
+              type="button"
+              onClick={closeRestore}
+              disabled={restoreSubmitting}
+              className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80 disabled:opacity-30"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--modal-text)' }}
+              aria-label="Fermer"
+            >
+              <X size={14} />
+            </button>
+            <div className="p-6">
+              <h3 className="font-display font-extrabold text-lg mb-1 flex items-center gap-2" style={{ color: 'var(--modal-text)' }}>
+                <RotateCcw size={18} className="text-primary-light" />
+                Restaurer le compte
+              </h3>
+              <p className="text-xs mb-5" style={{ color: 'var(--text-muted)' }}>
+                Le compte de <strong>{restoreModal.full_name}</strong> (
+                <span className="font-mono">{restoreModal.email}</span>) sera réactivé avec un nouveau mot de passe.
+                Rôle restauré : <strong>{ROLE_LABELS[restoreModal.role] || restoreModal.role}</strong>.
+              </p>
+
+              <form onSubmit={handleRestore} className="space-y-4">
+                <div>
+                  <label className="form-label">
+                    Nouveau mot de passe <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={restorePassword}
+                    onChange={e => setRestorePassword(e.target.value)}
+                    placeholder="Min. 8 caractères, 1 majuscule, 1 chiffre"
+                    className="form-input text-sm"
+                    autoFocus
+                    disabled={restoreSubmitting}
+                  />
+                  <p className="text-[10px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                    Le mot de passe d'origine n'est pas conservé pour des raisons de sécurité.
+                    Communiquez-le au membre après la restauration.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2 border-t border-[color:var(--border)]">
+                  <button
+                    type="button"
+                    onClick={closeRestore}
+                    disabled={restoreSubmitting}
+                    className="btn-outline flex-1 justify-center py-2.5"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={restoreSubmitting || restorePassword.length < 8}
+                    className="btn-primary flex-1 justify-center py-2.5"
+                  >
+                    {restoreSubmitting ? 'Restauration...' : 'Restaurer le compte'}
                   </button>
                 </div>
               </form>

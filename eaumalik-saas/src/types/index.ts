@@ -131,3 +131,33 @@ export interface CheckoutFormData {
   client_address: string;
   notes?: string;
 }
+
+// ============================================================================
+// News / Actualités / Promotions
+// Cible : table public.news / eaumalik.news (+ JSON mock data-store/news.json)
+// ============================================================================
+export interface News {
+  id: string;
+  title: string;
+  content: string;
+  image_url: string | null;
+  /** Prix promotionnel (optionnel). Si défini + product_ids non vide OU prix < prix normal ⇒ affichage pub. */
+  price: number | null;
+  /** Prix avant promotion (= somme des unit_price des produits inclus si renseigné). */
+  original_price: number | null;
+  /** Produits du catalogue inclus dans la promotion. */
+  product_ids: string[];
+  /** true ⇒ envoi à TOUS les clients, false ⇒ envoi ciblé selon target_user_ids. */
+  target_all: boolean;
+  /** Liste des clients destinataires (si !target_all). Vide = broadcast admin seul. */
+  target_user_ids: string[];
+  /** Marqueur promotion : true si price OU product_ids non vide. Calculé à la lecture. */
+  is_promotion: boolean;
+  /** Fin de validité (optionnelle). Après cette date, la promotion disparaît des carrousels. */
+  valid_until: string | null;
+  created_at: string;
+}
+
+/** Élément exposé publiquement (landing, carrousel, espace client). */
+export type PublicNews = News;
+

@@ -145,20 +145,20 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
 
   return (
     <div
-      className="fixed inset-0 z-[1100] flex items-center justify-center p-4 animate-modal-in"
-      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
+      className="modal-overlay fixed inset-0 z-[1100] flex items-center justify-center p-4 animate-modal-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="product-dialog-title"
     >
-      <div className="glass-card w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ transform: 'none' }}>
-        <div className="flex items-center justify-between p-5 border-b border-[color:var(--border)] sticky top-0 bg-[color:var(--bg-surface)] z-10">
+      <div className="modal-surface w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl" style={{ transform: 'none' }}>
+        <div className="flex items-center justify-between p-5 border-b border-[color:var(--modal-border)] sticky top-0 z-10"
+          style={{ background: 'var(--modal-surface)' }}>
           <div>
-            <h3 id="product-dialog-title" className="font-display font-extrabold text-lg">
+            <h3 id="product-dialog-title" className="font-display font-extrabold text-lg" style={{ color: 'var(--modal-text)' }}>
               {product ? 'Modifier le produit' : 'Nouveau produit'}
             </h3>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--modal-text-muted)' }}>
               {product ? product.id : 'Renseignez les informations ci-dessous'}
             </p>
           </div>
@@ -167,7 +167,7 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
             onClick={onClose}
             aria-label="Fermer"
             className="w-9 h-9 rounded-lg flex items-center justify-center hover:opacity-80"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--modal-text)' }}
           >
             <X size={16} />
           </button>
@@ -330,12 +330,11 @@ function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmer', dange
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-[1100] flex items-center justify-center p-4 animate-modal-in"
-      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
+      className="modal-overlay fixed inset-0 z-[1100] flex items-center justify-center p-4 animate-modal-in"
       role="dialog"
       aria-modal="true"
     >
-      <div className="glass-card max-w-md w-full p-6" style={{ transform: 'none' }}>
+      <div className="modal-surface max-w-md w-full p-6 rounded-3xl" style={{ transform: 'none' }}>
         <div className="flex items-start gap-3 mb-4">
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"

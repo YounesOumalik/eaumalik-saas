@@ -36,6 +36,26 @@ CREATE TABLE IF NOT EXISTS public.users (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Archive des comptes personnel supprimés (récupérables par l'admin).
+-- Snapshot des métadonnées ; on ne stocke PAS le mot de passe.
+-- À la restauration, l'admin doit en définir un nouveau.
+CREATE TABLE IF NOT EXISTS public.users_archive (
+  id UUID PRIMARY KEY,                                       -- ancien id auth
+  email TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  phone TEXT,
+  role TEXT NOT NULL,
+  permissions JSONB DEFAULT '{}'::jsonb,
+  original_created_at TIMESTAMPTZ,
+  original_updated_at TIMESTAMPTZ,
+  archived_at TIMESTAMPTZ DEFAULT now(),
+  archived_reason TEXT,
+  archived_by UUID REFERENCES public.users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_archive_archived_at ON public.users_archive(archived_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_archive_email ON public.users_archive(email);
+
 -- Produits
 CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

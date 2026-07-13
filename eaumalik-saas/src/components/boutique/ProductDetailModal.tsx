@@ -49,7 +49,7 @@ export default function ProductDetailModal({ product, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-modal-in"
+      className="modal-overlay fixed inset-0 z-[1000] flex items-center justify-center p-4 animate-modal-in"
       onClick={e => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -57,7 +57,7 @@ export default function ProductDetailModal({ product, onClose }: Props) {
       aria-modal="true"
       aria-labelledby={`product-${product.id}-title`}
     >
-      <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
+      <div className="modal-surface rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative">
         <div className="relative">
           {product.image_url ? (
             <Image

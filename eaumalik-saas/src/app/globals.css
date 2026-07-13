@@ -43,6 +43,13 @@
   --bg-nav:         rgba(2, 6, 23, 0.78);
   --bg-nav-border:  rgba(8, 145, 178, 0.18);
   --border:         rgba(8, 145, 178, 0.18);
+  --input-bg:       rgba(8, 145, 178, 0.08);
+  --modal-surface:  #0a0f1e;
+  --modal-overlay:  rgba(0, 0, 0, 0.75);
+  --modal-text:     #f0f9ff;
+  --modal-text-secondary: #7dd3fc;
+  --modal-text-muted: #94a3b8;
+  --modal-border:   rgba(8, 145, 178, 0.18);
 
   --text:           #f0f9ff;
   --text-secondary: #7dd3fc;
@@ -70,6 +77,13 @@
   --bg-nav:         rgba(253, 252, 248, 0.82);
   --bg-nav-border:  rgba(13, 148, 136, 0.16);
   --border:         rgba(13, 148, 136, 0.16);
+  --input-bg:       #ffffff;
+  --modal-surface:  #ffffff;
+  --modal-overlay:  rgba(15, 23, 42, 0.55);
+  --modal-text:     #1c1917;
+  --modal-text-secondary: #0f766e;
+  --modal-text-muted: #78716c;
+  --modal-border:   rgba(13, 148, 136, 0.25);
 
   --text:           #1c1917;
   --text-secondary: #0f766e;
@@ -104,10 +118,11 @@
   input[type="text"], input[type="email"], input[type="tel"], input[type="search"],
   input[type="number"], input[type="password"], select, textarea {
     color: var(--text);
-    background: var(--bg-card);
+    background: var(--input-bg);
     border-color: var(--border);
   }
   input::placeholder, textarea::placeholder { color: var(--text-muted); }
+  select option { background: var(--bg-surface); color: var(--text); }
 }
 
 /* ============================================================================
@@ -208,6 +223,18 @@
     box-shadow: 0 12px 32px var(--primary-glow);
   }
 
+  /* --- MODALES (fond opaque adapte au theme) --- */
+  .modal-surface {
+    background: var(--modal-surface) !important;
+    color: var(--modal-text) !important;
+    border: 1px solid var(--modal-border) !important;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+  }
+  .modal-overlay {
+    background: var(--modal-overlay) !important;
+    backdrop-filter: blur(8px) !important;
+  }
+
   .card-solid {
     background: var(--bg-surface);
     border: 1px solid var(--border);
@@ -257,10 +284,11 @@
   /* --- FORMS --- */
   .form-input {
     @apply w-full px-3.5 py-2.5 rounded-lg text-sm font-body outline-none transition-colors;
-    background: var(--bg-card);
+    background: var(--input-bg);
     border: 1px solid var(--border);
     color: var(--text);
   }
+  .form-input::placeholder { color: var(--text-muted); }
   .form-input:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px var(--primary-glow);
@@ -268,6 +296,21 @@
   .form-label {
     @apply block text-[0.82rem] font-semibold mb-1.5;
     color: var(--text-secondary);
+  }
+
+  /* Force les inputs/selects/textarea a utiliser --text et --input-bg
+     (la regle base n'a pas toujours la priorite sur les styles Tailwind) */
+  .form-input, select.form-input, textarea.form-input {
+    color: var(--text) !important;
+    background: var(--input-bg) !important;
+  }
+  .modal-surface .form-input {
+    background: #f8fafc !important;
+    color: #1c1917 !important;
+    border-color: rgba(13, 148, 136, 0.35) !important;
+  }
+  .modal-surface .form-label {
+    color: var(--brand-700) !important;
   }
 
   /* --- STAT CARDS --- */

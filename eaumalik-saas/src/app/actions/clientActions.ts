@@ -9,6 +9,18 @@ import {
   requireAdmin,
   requireUser,
 } from '@/lib/supabase/server';
+import { readNews, writeNews, readUsers, readProducts } from '@/data/localDb';
+
+// ============================================================================
+// Helpers — bascule mock ↔ Supabase
+// ============================================================================
+function isMockMode(): boolean {
+  return (
+    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+  );
+}
 
 // ============================================================================
 // Schémas Zod (validation stricte des payloads)
@@ -28,9 +40,28 @@ const ProfileUpdateSchema = z.object({
 });
 
 const NewsSchema = z.object({
-  title: z.string().min(3).max(150),
-  content: z.string().min(3).max(2000),
+  title: z.string().min(3, 'Titre trop court.').max(150),
+  content: z.string().min(3, 'Contenu trop court.').max(4000),
   imageUrl: z.string().url().optional().or(z.literal('').transform(() => undefined)),
+  // 1) Ciblage destinataires
+  targetAll: z.boolean().default(true),
+  targetUserIds: z.array(z.string()).default([]),
+  // 2) Promotion (optionnelle)
+  isPromotion: z.boolean().default(false),
+  price: z
+    .number({ invalid_type_error: 'Prix invalide.' })
+    .positive('Le prix doit être strictement positif.')
+    .max(1000000, 'Prix trop élevé.')
+    .optional()
+    .nullable(),
+  originalPrice: z
+    .number({ invalid_type_error: 'Prix original invalide.' })
+    .positive()
+    .max(1000000)
+    .optional()
+    .nullable(),
+  productIds: z.array(z.string()).default([]),
+  validUntil: z.string().optional().nullable(),
 });
 
 const MessageSchema = z.object({
@@ -68,12 +99,55 @@ async function getCurrentUser() {
 export async function getClientDashboardData() {
   const user = await getCurrentUser();
   if (!user) return { success: false as const, error: 'Non authentifié.' };
+
+  // Mock : lit users.json, orders (vide), news.json (avec filtrage par cible utilisateur).
+  if (isMockMode()) {
+    const allUsers = readUsers() as any[];
+    const me = allUsers.find((u: any) => u.id === user.id);
+    const referredUsers: any[] = [];
+    if (me?.referred_by) {
+      const ref = allUsers.find((u: any) => u.id === me.referred_by);
+      if (ref) referredUsers.push({ id: ref.id, name: ref.full_name, email: ref.email });
+    }
+    const nowIso = new Date().toISOString();
+    const newsRows = (readNews() as any[]).filter((n: any) => {
+      const valid = !n.valid_until || n.valid_until > nowIso;
+      const target = n.target_all !== false;
+      const targets = Array.isArray(n.target_user_ids) ? n.target_user_ids : [];
+      return valid && (target || targets.includes(user.id));
+    }).sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+    return {
+      success: true as const,
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        phone: user.phone ?? '',
+        city: user.city ?? '',
+        address: user.address ?? '',
+        referral_code: user.referral_code ?? '',
+        cashback_balance: user.cashback_balance ?? 0,
+      },
+      referredUsers,
+      userOrders: [], // Le mock ne gère pas les commandes client ↔ user ici.
+      userMessages: [],
+      news: newsRows,
+    };
+  }
+
   const supabase = createSupabaseServerClient();
   // Commandes : RLS applique auth.uid() = user_id côté DB.
   const { data: orders } = await supabase
     .from('orders')
     .select('*')
     .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+
+  // News visibles par ce client (filtrage cible en PostgREST via OR).
+  const { data: news } = await supabase
+    .from('news')
+    .select('*')
+    .or(`target_all.eq.true,target_user_ids.cs.{${user.id}}`)
     .order('created_at', { ascending: false });
 
   return {
@@ -91,7 +165,7 @@ export async function getClientDashboardData() {
     referredUsers: [], // Calculé en SQL si besoin (table fille).
     userOrders: orders ?? [],
     userMessages: [], // Voir table dédiée messages.
-    news: [], // Voir table news.
+    news: news ?? [],
   };
 }
 
@@ -170,26 +244,142 @@ export async function sendAdminReplyAction(clientId: string, raw: unknown) {
 }
 
 // ============================================================================
-// News / Actualités
+// News / Actualités / Promotions
 // ============================================================================
+type NewsInsertPayload = {
+  title: string;
+  content: string;
+  image_url: string | null;
+  price: number | null;
+  original_price: number | null;
+  product_ids: string[];
+  target_all: boolean;
+  target_user_ids: string[];
+  is_promotion: boolean;
+  valid_until: string | null;
+};
+
+function buildNewsPayload(input: z.infer<typeof NewsSchema>): NewsInsertPayload {
+  const productIds = Array.isArray(input.productIds) ? input.productIds : [];
+  const targetIds = Array.isArray(input.targetUserIds) ? input.targetUserIds : [];
+  const priceVal = typeof input.price === 'number' && input.price > 0 ? input.price : null;
+  const originalVal =
+    typeof input.originalPrice === 'number' && input.originalPrice > 0 ? input.originalPrice : null;
+  const hasPrice = priceVal !== null;
+  const isPromotion = input.isPromotion === true || hasPrice || productIds.length > 0;
+  return {
+    title: input.title.trim(),
+    content: input.content.trim(),
+    image_url: input.imageUrl ?? null,
+    price: priceVal,
+    original_price: originalVal,
+    product_ids: productIds,
+    target_all: input.targetAll !== false,
+    target_user_ids: input.targetAll ? [] : targetIds,
+    is_promotion: isPromotion,
+    valid_until: input.validUntil ?? null,
+  };
+}
+
 export async function publishNewsAction(raw: unknown) {
   const parsed = NewsSchema.safeParse(raw);
-  if (!parsed.success) return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Validation échouée.' };
-  await requireAdmin();
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Validation échouée.' };
+  }
+  // Garde admin (en mock la session dev est garantie par le middleware).
+  if (!isMockMode()) await requireAdmin();
+  const payload = buildNewsPayload(parsed.data);
+
+  // ---------- MOCK : écrit dans data-store/news.json ----------
+  if (isMockMode()) {
+    const id = `news-${Date.now()}`;
+    const now = new Date().toISOString();
+    const row = { id, created_at: now, ...payload };
+    const rows = readNews();
+    rows.unshift(row);
+    writeNews(rows);
+    revalidatePath('/client');
+    revalidatePath('/');
+    revalidatePath('/crm/news');
+    return { success: true as const, news: row };
+  }
+
+  // ---------- SUPABASE (service role, bypass RLS) ----------
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
     .from('news')
-    .insert({
-      title: parsed.data.title,
-      content: parsed.data.content,
-      image_url: parsed.data.imageUrl ?? null,
-    })
+    .insert(payload)
     .select()
     .single();
   if (error || !data) return { success: false as const, error: 'Publication échouée.' };
   revalidatePath('/client');
   revalidatePath('/');
   return { success: true as const, news: data };
+}
+
+/**
+ * Liste les produits du catalogue disponibles pour le sélecteur de promotion.
+ * Retourne uniquement les produits non archivés, triés par catégorie puis nom.
+ */
+export async function getAvailableProductsForNewsAction() {
+  if (!isMockMode()) await requireAdmin();
+  const now = new Date().toISOString();
+  if (isMockMode()) {
+    const products = readProducts()
+      .filter((p: any) => !p.is_archived)
+      .map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        category: p.category,
+        image_url: p.image_url ?? null,
+        stock: p.stock ?? 0,
+      }));
+    return { success: true as const, products };
+  }
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, name, price, category, image_url, stock')
+    .or('is_archived.is.null,is_archived.eq.false')
+    .order('category', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) return { success: false as const, error: 'Lecture produits impossible.' };
+  return { success: true as const, products: (data ?? []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    price: Number(p.price),
+    category: p.category,
+    image_url: p.image_url ?? null,
+    stock: p.stock ?? 0,
+  })) };
+}
+
+/**
+ * Liste les clients destinataires potentiels pour le ciblage de la publication.
+ * Identité minimale : id, full_name, email, city.
+ */
+export async function getAvailableClientsForNewsAction() {
+  if (!isMockMode()) await requireAdmin();
+  if (isMockMode()) {
+    const clients = (readUsers() as any[])
+      .filter((u: any) => u.role === 'client')
+      .map((u: any) => ({
+        id: u.id,
+        full_name: u.full_name ?? u.email ?? 'Client',
+        email: u.email,
+        city: u.city ?? null,
+      }));
+    return { success: true as const, clients };
+  }
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, full_name, email, city')
+    .eq('role', 'client')
+    .order('full_name', { ascending: true });
+  if (error) return { success: false as const, error: 'Lecture clients impossible.' };
+  return { success: true as const, clients: data ?? [] };
 }
 
 // ============================================================================

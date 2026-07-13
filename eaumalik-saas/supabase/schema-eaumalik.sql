@@ -45,6 +45,23 @@ CREATE TABLE IF NOT EXISTS eaumalik.users (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Archive des comptes personnel supprimés (récupérables par l'admin).
+CREATE TABLE IF NOT EXISTS eaumalik.users_archive (
+  id UUID PRIMARY KEY,
+  email TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  phone TEXT,
+  role TEXT NOT NULL,
+  permissions JSONB DEFAULT '{}'::jsonb,
+  original_created_at TIMESTAMPTZ,
+  original_updated_at TIMESTAMPTZ,
+  archived_at TIMESTAMPTZ DEFAULT now(),
+  archived_reason TEXT,
+  archived_by UUID REFERENCES eaumalik.users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_archive_archived_at ON eaumalik.users_archive(archived_at DESC);
+
 CREATE TABLE IF NOT EXISTS eaumalik.products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
