@@ -8,7 +8,7 @@ export default function CartButton() {
   return (
     <Link
       href="/panier"
-      className="relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:scale-105"
+      className="relative min-w-[44px] min-h-[44px] w-11 h-11 rounded-lg flex items-center justify-center transition-colors hover:scale-105"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
       aria-label={`Panier (${count} article${count > 1 ? 's' : ''})`}
     >

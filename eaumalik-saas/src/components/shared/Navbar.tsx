@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useSupabaseAuth } from './SupabaseAuthProvider';
 import ThemeToggle from './ThemeToggle';
 import CartButton from './CartButton';
@@ -32,7 +33,10 @@ const CRM_LINKS = [
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { session, signOut, isAdmin } = useSupabaseAuth();
+
+  useEffect(() => { setMounted(true); }, []);
 
   const [permissions, setPermissions] = useState<any>(null);
 
@@ -115,58 +119,71 @@ export default function Navbar() {
           <CartButton />
           <button
             onClick={() => setMobileOpen(true)}
-            className="lg:hidden w-9 h-9 rounded-lg flex items-center justify-center"
+            className="lg:hidden min-w-[44px] min-h-[44px] w-11 h-11 rounded-lg flex items-center justify-center"
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
             aria-label="Ouvrir le menu"
           >
-            <i className="fa-solid fa-bars text-sm" aria-hidden="true" />
+            <i className="fa-solid fa-bars text-base" aria-hidden="true" />
           </button>
         </div>
       </div>
 
-      {/* Mobile menu */}
-      <div
-        className={`mobile-menu lg:hidden ${mobileOpen ? 'open' : ''}`}
-        id="mobile-menu"
-        aria-hidden={!mobileOpen}
-      >
-        <button
-          onClick={() => setMobileOpen(false)}
-          className="absolute top-4 right-4 w-10 h-10 rounded-lg flex items-center justify-center"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
-          aria-label="Fermer"
-        >
-          <i className="fa-solid fa-xmark" aria-hidden="true" />
-        </button>
-        {NAV_LINKS.map(l => (
-          <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>{l.label}</Link>
-        ))}
-        {session ? (
-          <>
-            {isStaff ? (
+      {/* Mobile menu rendu via Portal pour échapper au containing block de la nav fixed */}
+      {mounted && createPortal(
+        <>
+          {/* Backdrop sombre derrière le menu */}
+          <div
+            className={`mobile-menu-backdrop lg:hidden ${mobileOpen ? 'open' : ''}`}
+            onClick={() => setMobileOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Panneau latéral */}
+          <div
+            className={`mobile-menu lg:hidden ${mobileOpen ? 'open' : ''}`}
+            id="mobile-menu"
+            aria-hidden={!mobileOpen}
+          >
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-lg flex items-center justify-center"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+              aria-label="Fermer"
+            >
+              <i className="fa-solid fa-xmark" aria-hidden="true" />
+            </button>
+            {NAV_LINKS.map(l => (
+              <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>{l.label}</Link>
+            ))}
+            {session ? (
               <>
-                {allowedAdminLinks.map(l => (
-                  <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>Admin - {l.label}</Link>
-                ))}
-                {allowedCrmLinks.map(l => (
-                  <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>CRM - {l.label}</Link>
-                ))}
+                {isStaff ? (
+                  <>
+                    {allowedAdminLinks.map(l => (
+                      <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>Admin - {l.label}</Link>
+                    ))}
+                    {allowedCrmLinks.map(l => (
+                      <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>CRM - {l.label}</Link>
+                    ))}
+                  </>
+                ) : (
+                  <Link href="/client" className="mobile-link" onClick={() => setMobileOpen(false)}>Mon Espace</Link>
+                )}
+                <button
+                  onClick={async () => { await signOut(); window.location.href = '/'; setMobileOpen(false); }}
+                  className="mobile-link text-left text-red-400 font-semibold cursor-pointer w-full"
+                >
+                  Déconnexion
+                </button>
               </>
             ) : (
-              <Link href="/client" className="mobile-link" onClick={() => setMobileOpen(false)}>Mon Espace</Link>
+              <Link href="/login" className="mobile-link font-semibold text-[color:var(--primary-light)]" onClick={() => setMobileOpen(false)}>Connexion</Link>
             )}
-            <button
-              onClick={async () => { await signOut(); window.location.href = '/'; setMobileOpen(false); }}
-              className="mobile-link text-left text-red-400 font-semibold cursor-pointer w-full"
-            >
-              Déconnexion
-            </button>
-          </>
-        ) : (
-          <Link href="/login" className="mobile-link font-semibold text-[color:var(--primary-light)]" onClick={() => setMobileOpen(false)}>Connexion</Link>
-        )}
-        <Link href="/panier" className="mobile-link" onClick={() => setMobileOpen(false)}>Panier</Link>
-      </div>
+            <Link href="/panier" className="mobile-link" onClick={() => setMobileOpen(false)}>Panier</Link>
+          </div>
+        </>,
+        document.body
+      )}
     </nav>
   );
 }

@@ -1,7 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
-
 const FEATURES = [
   { icon: 'fa-solid fa-award',       title: 'Expertise professionnelle',  desc: "Plusieurs années d'expérience dans le traitement et la purification de l'eau au Maroc." },
   { icon: 'fa-solid fa-shield-halved', title: 'Produits de qualite',        desc: 'Equipements certifies et testes pour garantir une performance optimale et une duree de vie maximale.' },
@@ -11,15 +9,9 @@ const FEATURES = [
   { icon: 'fa-solid fa-leaf',        title: 'Developpement durable',      desc: 'Solutions eco-responsables qui reduisent la consommation de bouteilles en plastique.' },
 ];
 
+// L'animation au scroll (.reveal → .revealed) est gérée globalement par
+// <RevealOnScroll /> dans Providers.tsx, plus par cette section.
 export default function FeaturesSection() {
-  useEffect(() => {
-    const observer = new IntersectionObserver(entries => {
-      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('revealed'); });
-    }, { threshold: 0.1 });
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <section id="features" className="py-24 px-4" style={{ background: 'var(--bg)' }}>
       <div className="max-w-6xl mx-auto">

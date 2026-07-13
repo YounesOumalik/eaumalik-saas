@@ -21,16 +21,27 @@ const nextConfig = {
   },
   async headers() {
     const isProd = process.env.NODE_ENV === 'production';
-    const supabaseHost = (process.env.NEXT_PUBLIC_SUPABASE_URL || '')
+    const supabaseHostRaw = (process.env.NEXT_PUBLIC_SUPABASE_URL || '')
       .replace(/^https?:\/\//, '')
       .replace(/\/$/, '');
+    // Fallback robuste : si l'env est vide ou reste le placeholder Supabase,
+    // on utilise l'hôte réel du déploiement (db-dev.smartefp.com).
+    const supabaseHost =
+      supabaseHostRaw && !supabaseHostRaw.includes('YOUR-PROJECT')
+        ? supabaseHostRaw
+        : 'db-dev.smartefp.com';
     const imgHosts = ['picsum.photos', 'images.unsplash.com'];
     // CDN externes nécessaires au rendu (fonts, icônes)
     const fontHosts = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'];
+    // En dev, Next.js + webpack-hot-middleware utilisent eval() pour le HMR.
+    // En prod, on garde la CSP durcie (F-07 audit sécurité) : 'unsafe-eval' est INTERDIT.
+    const scriptSrc = isProd
+      ? "'self' 'unsafe-inline' https://cdn.jsdelivr.net"
+      : "'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net";
+
     const csp = [
       "default-src 'self'",
-      // 'unsafe-eval' retiré (dev-only, dangereux en prod). 'unsafe-inline' conservé car requis par le SSR Next.js.
-      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+      `script-src ${scriptSrc}`,
       // Styles : Google Fonts + FontAwesome
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
       "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",

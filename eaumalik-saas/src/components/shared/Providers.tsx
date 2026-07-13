@@ -5,6 +5,7 @@ import { CartProvider } from './CartProvider';
 import { ThemeProvider } from './ThemeProvider';
 import { ToastProvider } from './ToastProvider';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
+import RevealOnScroll from './RevealOnScroll';
 
 export default function Providers({ children }: { children: ReactNode }) {
   return (
@@ -12,6 +13,7 @@ export default function Providers({ children }: { children: ReactNode }) {
       <ThemeProvider>
         <ToastProvider>
           <CartProvider>
+            <RevealOnScroll />
             {children}
           </CartProvider>
         </ToastProvider>

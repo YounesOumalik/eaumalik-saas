@@ -127,7 +127,7 @@
   }
   .btn-outline:hover { background: var(--bg-card-hover); border-color: var(--primary-light); }
 
-  .btn-sm { padding: 0.4rem 1rem; font-size: 0.82rem; border-radius: 0.5rem; }
+  .btn-sm { padding: 0.7rem 1rem; font-size: 0.82rem; border-radius: 0.5rem; min-height: 44px; }
   .btn-danger { background: var(--danger); }
   .btn-success { background: var(--success); }
 
@@ -206,8 +206,76 @@
   }
   .animate-float-delay { animation: float-delay 7s ease-in-out infinite 1s; }
 
-  .reveal { opacity: 0; transform: translateY(40px) scale(0.98); transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+  /* Reveal au scroll — approche progressive (no-JS-safe) :
+     Par défaut, .reveal est visible. Le JS (RevealOnScroll) ajoute la classe
+     .reveal-pending sur <html> si l'IntersectionObserver est dispo, ce qui
+     cache les éléments jusqu'à leur entrée dans le viewport. Sans JS, tout
+     reste lisible. */
+  .reveal { transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+  html.reveal-pending .reveal:not(.revealed) {
+    opacity: 0;
+    transform: translateY(40px) scale(0.98);
+  }
   .reveal.revealed { opacity: 1; transform: translateY(0) scale(1); }
+
+  /* ============================================================================
+     MOBILE MENU — slide-in panel depuis la droite
+     ============================================================================ */
+  .mobile-menu {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(85vw, 360px);
+    padding: 5rem 1.5rem 2rem;
+    background: var(--bg-surface);
+    border-left: 1px solid var(--border);
+    box-shadow: -16px 0 48px rgba(0, 0, 0, 0.5);
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    pointer-events: none;
+    visibility: hidden;
+  }
+  .mobile-menu.open {
+    transform: translateX(0);
+    pointer-events: auto;
+    visibility: visible;
+  }
+  /* Backdrop sombre derrière le menu */
+  .mobile-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 55;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .mobile-menu-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .mobile-link {
+    @apply block px-4 py-3 rounded-lg text-base font-medium transition-colors cursor-pointer;
+    color: var(--text);
+    min-height: 44px;
+  }
+  .mobile-link:hover, .mobile-link.active {
+    background: var(--bg-card-hover);
+    color: var(--primary-light);
+  }
+  /* Bouton fermer du menu mobile : bien visible, positionné à l'intérieur du panel */
+  .mobile-menu > button[aria-label="Fermer"] {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+  }
 }
 
 ::-webkit-scrollbar { width: 6px; }

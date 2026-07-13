@@ -343,3 +343,34 @@ CREATE TRIGGER carts_update INSTEAD OF UPDATE ON public.carts FOR EACH ROW EXECU
 --   WHERE n.nspname = 'eaumalik' ORDER BY c.relname;
 -- Toutes les lignes doivent avoir relrowsecurity = true.
 -- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- 6) PRIVILÈGES — requis une fois security_invoker=true est actif.
+--    Avant ce durcissement, les vues étaient possédées par postgres (BYPASSRLS)
+--    et masquaient le besoin de GRANT. Désormais l'invocant (anon/authenticated)
+--    doit disposer des privilèges sur les tables de base ET les vues.
+--    La RLS reste la protection réelle : un GRANT sans politique RLS correspondante
+--    n'ouvre rien.
+-- ----------------------------------------------------------------------------
+GRANT USAGE ON SCHEMA eaumalik TO anon, authenticated;
+GRANT USAGE ON SCHEMA public  TO anon, authenticated;
+
+-- Lectures publiques / client
+GRANT SELECT ON ALL TABLES IN SCHEMA eaumalik TO anon, authenticated;
+GRANT SELECT ON public.products, public.company_profile, public.news,
+              public.maintenance_alerts, public.orders, public.order_items,
+              public.messages, public.users, public.carts TO anon, authenticated;
+
+-- Écritures côté client authentifié (restreintes par RLS admin-only)
+GRANT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA eaumalik TO authenticated;
+GRANT INSERT, UPDATE, DELETE ON public.users, public.orders, public.order_items,
+              public.messages, public.carts TO authenticated;
+
+-- Insertions invité (commande sans compte, messages avec sender_id = auth.uid())
+GRANT INSERT ON eaumalik.orders TO anon;
+GRANT INSERT ON eaumalik.order_items TO anon;
+GRANT INSERT ON eaumalik.messages TO anon;
+GRANT INSERT ON public.orders, public.order_items, public.messages TO anon;
+
+-- Séquences (clés d'auto-incrément éventuelles)
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA eaumalik TO anon, authenticated;
