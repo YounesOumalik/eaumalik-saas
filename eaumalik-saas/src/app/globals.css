@@ -280,6 +280,13 @@
   .badge-a_renouveler  { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
   .badge-expire        { background: rgba(239, 68, 68, 0.15); color: #f87171; }
   .badge-rappel_envoye { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+  /* Statuts du nouveau module de maintenance (programmes) */
+  .badge-actif     { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+  .badge-suspendu  { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+  .badge-resilie   { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+  .badge-pending   { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+  .badge-failed    { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+  .badge-completed { background: rgba(16, 185, 129, 0.15); color: #34d399; }
 
   /* --- FORMS --- */
   .form-input {
@@ -342,14 +349,126 @@
   .data-table tbody tr { transition: background 0.2s ease; }
   .data-table tbody tr:hover { background: var(--bg-card-hover); }
 
-  /* --- SIDEBAR --- */
+  /* --- SIDEBAR (repliable / déployable) --- */
+  .admin-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 1rem 0.75rem;
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border);
+    transition: width 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-x: hidden;
+  }
+  .admin-sidebar.is-collapsed {
+    width: 64px;
+  }
+  .admin-sidebar__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0 0.75rem 0.75rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .admin-sidebar.is-collapsed .admin-sidebar__header {
+    padding: 0 0.25rem 0.75rem;
+    justify-content: center;
+  }
+  .admin-sidebar__title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .admin-sidebar__toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 0.375rem;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease, transform 150ms ease;
+  }
+  .admin-sidebar__toggle:hover {
+    background: var(--bg-card-hover);
+    color: var(--primary-light);
+  }
+  .admin-sidebar__toggle:active {
+    transform: scale(0.92);
+  }
+  .admin-sidebar__toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  .admin-sidebar__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1 1 auto;
+  }
+  .admin-sidebar__footer {
+    margin-top: auto;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+
   .sidebar-link {
     @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium cursor-pointer transition-all;
     color: var(--text-secondary);
+    text-align: left;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
-  .sidebar-link:hover { background: var(--bg-card-hover); color: var(--primary-light); }
-  .sidebar-link.active { background: var(--primary-glow); color: var(--primary-light); }
-  .sidebar-link i { @apply text-center; width: 20px; }
+  .sidebar-link:hover {
+    background: var(--bg-card-hover);
+    color: var(--primary-light);
+    transform: translateX(2px);
+  }
+  .sidebar-link:active {
+    transform: translateX(2px) scale(0.98);
+  }
+  .sidebar-link:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+  }
+  .sidebar-link.active {
+    background: var(--primary-glow);
+    color: var(--primary-light);
+    box-shadow: inset 3px 0 0 var(--primary);
+  }
+  .admin-sidebar.is-collapsed .sidebar-link {
+    justify-content: center;
+    padding: 0.625rem;
+  }
+  .admin-sidebar.is-collapsed .sidebar-link:hover {
+    transform: none;
+  }
+  .sidebar-link__label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 1;
+    transition: opacity 150ms ease;
+  }
+  .admin-sidebar.is-collapsed .sidebar-link__label {
+    opacity: 0;
+    width: 0;
+  }
 
   /* --- PILLES (boutons filtre boutique) --- */
   .boutique-cat-btn {

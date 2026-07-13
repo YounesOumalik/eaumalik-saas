@@ -8,6 +8,7 @@ import {
   createSupabaseServiceRoleClient,
   requireAdmin,
   requireUser,
+  getOptionalUser,
 } from '@/lib/supabase/server';
 import { readNews, writeNews, readUsers, readProducts } from '@/data/localDb';
 
@@ -72,13 +73,21 @@ const MessageSchema = z.object({
 // Helpers
 // ============================================================================
 async function getCurrentUser() {
+  const auth = await getOptionalUser();
+  if (!auth) return null;
+
+  // Mode mock : le profil complet vient de users.json (le cookie dev porte l'id).
+  if (isMockMode()) {
+    const allUsers = readUsers() as any[];
+    const me = allUsers.find((u: any) => u.id === auth.id);
+    return me ?? null;
+  }
+
   const supabase = createSupabaseServerClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return null;
   const { data: profile } = await supabase
     .from('users')
     .select('id, email, full_name, phone, city, address, referral_code, cashback_balance, role')
-    .eq('id', data.user.id)
+    .eq('id', auth.id)
     .single();
   return profile as {
     id: string;

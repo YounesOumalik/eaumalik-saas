@@ -5,14 +5,25 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Formatte un prix en MAD (fr-MA style) */
+/** Formatte un prix en MAD (fr-MA style, arrondi à 2 décimales) */
 export function formatCurrency(price: number): string {
-  return price.toLocaleString('fr-MA') + ' DH';
+  return price.toLocaleString('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' DH';
 }
 
 /** Formatte une date ISO en fr-FR */
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR');
+}
+
+/** Formatte une date + heure ISO en fr-FR (ex: 13 juil. 2026, 14:32) */
+export function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 /** Jours restants avant une date (négatif = en retard) */

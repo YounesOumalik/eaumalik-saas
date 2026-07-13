@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { Product, Order, User, MaintenanceAlert } from '@/types';
+import type { Product, Order, User, MaintenanceAlert, MaintenanceRecord, MaintenanceIntervention } from '@/types';
 import { MOCK_PRODUCTS } from './mock';
 
 const DB_DIR = path.join(process.cwd(), 'data-store');
@@ -17,6 +17,7 @@ const USERS_ARCHIVE_FILE = path.join(DB_DIR, 'users_archive.json');
 const CARTS_FILE = path.join(DB_DIR, 'carts.json');
 const MESSAGES_FILE = path.join(DB_DIR, 'messages.json');
 const NEWS_FILE = path.join(DB_DIR, 'news.json');
+const MAINTENANCE_FILE = path.join(DB_DIR, 'maintenance.json');
 
 // Initialize with mock data if files don't exist
 if (!fs.existsSync(PRODUCTS_FILE)) {
@@ -197,4 +198,33 @@ export function readNews(): any[] {
 
 export function writeNews(news: any[]) {
   fs.writeFileSync(NEWS_FILE, JSON.stringify(news, null, 2));
+}
+
+// ---------------------------------------------------------
+// Maintenance — fiches programmes + interventions
+// Format JSON : { records: MaintenanceRecord[], interventions: MaintenanceIntervention[] }
+// ---------------------------------------------------------
+export interface MaintenanceBundle {
+  records: MaintenanceRecord[];
+  interventions: MaintenanceIntervention[];
+}
+
+export function readMaintenance(): MaintenanceBundle {
+  try {
+    const data = fs.readFileSync(MAINTENANCE_FILE, 'utf-8');
+    const parsed = JSON.parse(data);
+    if (!parsed || typeof parsed !== 'object') {
+      return { records: [], interventions: [] };
+    }
+    return {
+      records: Array.isArray(parsed.records) ? parsed.records : [],
+      interventions: Array.isArray(parsed.interventions) ? parsed.interventions : [],
+    };
+  } catch (e) {
+    return { records: [], interventions: [] };
+  }
+}
+
+export function writeMaintenance(bundle: MaintenanceBundle) {
+  fs.writeFileSync(MAINTENANCE_FILE, JSON.stringify(bundle, null, 2));
 }

@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus, Edit2, Trash2, Shield, X, Archive, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Shield, Archive, RotateCcw, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/shared/ToastProvider';
+import Dialog from '@/components/ui/Dialog';
 import {
   createStaffUserAction,
   updateStaffUserAction,
@@ -470,19 +471,33 @@ export default function StaffManager({
         </table>
       </div>
 
-      {modalOpen && (
-        <div className="modal-overlay fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <div className="modal-surface max-w-xl w-full max-h-[90vh] overflow-y-auto relative rounded-3xl">
-            <button onClick={() => setModalOpen(false)} className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--modal-text)' }}>
-              <X size={14} />
+      <Dialog
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingStaff ? 'Modifier le membre' : 'Ajouter un membre du personnel'}
+        icon={<Shield size={18} />}
+        size="md"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setModalOpen(false)}
+              className="btn-outline flex-1 justify-center py-2.5"
+            >
+              Annuler
             </button>
-            <div className="p-6">
-              <h3 className="font-display font-extrabold text-lg mb-4 flex items-center gap-2" style={{ color: 'var(--modal-text)' }}>
-                <Shield size={18} className="text-primary-light" />
-                {editingStaff ? 'Modifier le membre' : 'Ajouter un membre du personnel'}
-              </h3>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
+            <button
+              type="submit"
+              form="staff-form"
+              disabled={submitting}
+              className="btn-primary flex-1 justify-center py-2.5"
+            >
+              {submitting ? 'Envoi...' : (editingStaff ? 'Enregistrer' : 'Créer le compte')}
+            </button>
+          </>
+        }
+      >
+              <form id="staff-form" onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="form-label">Nom complet *</label>
                   <input
@@ -608,98 +623,62 @@ export default function StaffManager({
                     </div>
                   </div>
                 )}
-
-                <div className="flex gap-3 pt-4 border-t border-[color:var(--border)]">
-                  <button
-                    type="button"
-                    onClick={() => setModalOpen(false)}
-                    className="btn-outline flex-1 justify-center py-2.5"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="btn-primary flex-1 justify-center py-2.5"
-                  >
-                    {submitting ? 'Envoi...' : (editingStaff ? 'Enregistrer' : 'Créer le compte')}
-                  </button>
-                </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
+      </Dialog>
 
       {/* Modal de restauration (nouveau mot de passe obligatoire) */}
-      {restoreModal && (
-        <div className="modal-overlay fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <div className="modal-surface max-w-md w-full relative rounded-3xl">
+      <Dialog
+        open={!!restoreModal}
+        onClose={closeRestore}
+        title="Restaurer le compte"
+        subtitle={restoreModal ? `Le compte de ${restoreModal.full_name} (${restoreModal.email}) sera réactivé avec un nouveau mot de passe. Rôle restauré : ${ROLE_LABELS[restoreModal.role] || restoreModal.role}.` : undefined}
+        icon={<RotateCcw size={18} />}
+        size="sm"
+        dismissible={!restoreSubmitting}
+        footer={
+          <>
             <button
               type="button"
               onClick={closeRestore}
               disabled={restoreSubmitting}
-              className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80 disabled:opacity-30"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--modal-text)' }}
-              aria-label="Fermer"
+              className="btn-outline flex-1 justify-center py-2.5"
             >
-              <X size={14} />
+              Annuler
             </button>
-            <div className="p-6">
-              <h3 className="font-display font-extrabold text-lg mb-1 flex items-center gap-2" style={{ color: 'var(--modal-text)' }}>
-                <RotateCcw size={18} className="text-primary-light" />
-                Restaurer le compte
-              </h3>
-              <p className="text-xs mb-5" style={{ color: 'var(--text-muted)' }}>
-                Le compte de <strong>{restoreModal.full_name}</strong> (
-                <span className="font-mono">{restoreModal.email}</span>) sera réactivé avec un nouveau mot de passe.
-                Rôle restauré : <strong>{ROLE_LABELS[restoreModal.role] || restoreModal.role}</strong>.
-              </p>
-
-              <form onSubmit={handleRestore} className="space-y-4">
-                <div>
-                  <label className="form-label">
-                    Nouveau mot de passe <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    minLength={8}
-                    value={restorePassword}
-                    onChange={e => setRestorePassword(e.target.value)}
-                    placeholder="Min. 8 caractères, 1 majuscule, 1 chiffre"
-                    className="form-input text-sm"
-                    autoFocus
-                    disabled={restoreSubmitting}
-                  />
-                  <p className="text-[10px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
-                    Le mot de passe d'origine n'est pas conservé pour des raisons de sécurité.
-                    Communiquez-le au membre après la restauration.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 pt-2 border-t border-[color:var(--border)]">
-                  <button
-                    type="button"
-                    onClick={closeRestore}
-                    disabled={restoreSubmitting}
-                    className="btn-outline flex-1 justify-center py-2.5"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={restoreSubmitting || restorePassword.length < 8}
-                    className="btn-primary flex-1 justify-center py-2.5"
-                  >
-                    {restoreSubmitting ? 'Restauration...' : 'Restaurer le compte'}
-                  </button>
-                </div>
-              </form>
-            </div>
+            <button
+              type="submit"
+              form="restore-form"
+              disabled={restoreSubmitting || restorePassword.length < 8}
+              className="btn-primary flex-1 justify-center py-2.5"
+            >
+              {restoreSubmitting ? 'Restauration...' : 'Restaurer le compte'}
+            </button>
+          </>
+        }
+      >
+        <form id="restore-form" onSubmit={handleRestore} className="space-y-4">
+          <div>
+            <label className="form-label">
+              Nouveau mot de passe <span className="text-danger">*</span>
+            </label>
+            <input
+              type="password"
+              required
+              minLength={8}
+              value={restorePassword}
+              onChange={e => setRestorePassword(e.target.value)}
+              placeholder="Min. 8 caractères, 1 majuscule, 1 chiffre"
+              className="form-input text-sm"
+              autoFocus
+              disabled={restoreSubmitting}
+            />
+            <p className="text-[10px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
+              Le mot de passe d'origine n'est pas conservé pour des raisons de sécurité.
+              Communiquez-le au membre après la restauration.
+            </p>
           </div>
-        </div>
-      )}
+        </form>
+      </Dialog>
     </>
   );
 }

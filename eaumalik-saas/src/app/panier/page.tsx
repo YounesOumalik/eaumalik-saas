@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Trash2, Plus, Minus, CheckCircle2, ShoppingCart, Lock, ArrowLeft, Truck } from 'lucide-react';
+import { Trash2, Plus, Minus, CheckCircle2, ShoppingCart, Lock, ArrowLeft, Truck, UserPlus } from 'lucide-react';
 import { useCart } from '@/components/shared/CartProvider';
 import { useToast } from '@/components/shared/ToastProvider';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
@@ -62,6 +62,18 @@ export default function CartPage() {
       notes: String(fd.get('notes') ?? '') || undefined,
     };
 
+    // Checkout invité : création de compte à la volée (email + mot de passe).
+    let account: { email: string; password: string; full_name: string } | undefined;
+    if (!session) {
+      const email = String(fd.get('account_email') ?? '').trim();
+      const password = String(fd.get('account_password') ?? '');
+      const confirm = String(fd.get('account_confirm') ?? '');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('Email invalide pour la création du compte.', 'error');
+      if (password.length < 8) return toast('Le mot de passe doit contenir au moins 8 caractères.', 'error');
+      if (password !== confirm) return toast('Les mots de passe ne correspondent pas.', 'error');
+      account = { email, password, full_name: data.client_name };
+    }
+
     if (data.client_name.length < 3) return toast('Nom complet requis (min. 3 caractères)', 'error');
     if (!PHONE_MA_REGEX.test(data.client_phone)) return toast('Téléphone invalide (format 06XXXXXXXX)', 'error');
     if (!data.client_city) return toast('Veuillez choisir une ville', 'error');
@@ -74,6 +86,7 @@ export default function CartPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...data,
+          ...(account ? { account } : {}),
           items: items.map(i => ({
             product_id: i.product_id,
             product_name: i.name,
@@ -85,6 +98,13 @@ export default function CartPage() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error ?? 'Erreur inconnue');
       setSuccess({ orderNumber: result.order_number });
+      // Connexion automatique de l'invité (mode mock : sessionStorage lu par le provider).
+      if (result.createdUser) {
+        try {
+          sessionStorage.setItem('eaumalik_dev_session', JSON.stringify(result.createdUser));
+          window.dispatchEvent(new Event('eaumalik:dev-session-change'));
+        } catch { /* noop */ }
+      }
       clear();
       toast(`Commande ${result.order_number} créée avec succès !`, 'success');
     } catch (err: any) {
@@ -196,14 +216,7 @@ export default function CartPage() {
                 </div>
               </dl>
               <button
-                onClick={() => {
-                  if (!session) {
-                    toast('Vous devez vous connecter ou créer un compte pour passer la commande.', 'info');
-                    router.push('/login?callbackUrl=/panier');
-                  } else {
-                    setCheckout(true);
-                  }
-                }}
+                onClick={() => setCheckout(true)}
                 className="btn-primary w-full justify-center mt-6"
               >
                 <Lock size={14} aria-hidden="true" /> Passer la commande
@@ -214,17 +227,6 @@ export default function CartPage() {
             </div>
           </aside>
         </div>
-      ) : !session ? (
-        <div className="max-w-md mx-auto text-center py-12 space-y-4">
-          <Lock className="mx-auto text-amber-500" size={48} />
-          <h2 className="font-display font-bold text-xl">Connexion requise</h2>
-          <p style={{ color: 'var(--text-muted)' }} className="text-sm">
-            Vous devez posséder un compte client pour finaliser votre commande.
-          </p>
-          <Link href="/login?callbackUrl=/panier" className="btn-primary w-full justify-center">
-            Se connecter / Créer un compte
-          </Link>
-        </div>
       ) : (
         <div className="lg:flex gap-8">
           <div className="flex-1">
@@ -233,6 +235,32 @@ export default function CartPage() {
             </button>
             <form onSubmit={handleCheckout} className="glass-card p-6 space-y-4" style={{ transform: 'none' }} noValidate>
               <h3 className="font-display font-bold text-lg mb-2">Informations de livraison</h3>
+              {!session && (
+                <div className="p-4 rounded-xl border border-brand-200 bg-brand-50/60 space-y-4">
+                  <div>
+                    <h4 className="font-display font-semibold text-sm text-brand-800 flex items-center gap-2">
+                      <UserPlus size={15} aria-hidden="true" /> Créez votre compte
+                    </h4>
+                    <p className="text-xs text-brand-700/80 mt-1">
+                      Un compte client sera créé automatiquement pour suivre votre commande et vos alertes de maintenance.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="form-label" htmlFor="account_email">Email (identifiant du compte) *</label>
+                    <input id="account_email" name="account_email" type="email" required className="form-input" placeholder="votre@email.com" />
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label" htmlFor="account_password">Mot de passe *</label>
+                      <input id="account_password" name="account_password" type="password" required minLength={8} className="form-input" placeholder="8+ caractères" />
+                    </div>
+                    <div>
+                      <label className="form-label" htmlFor="account_confirm">Confirmer *</label>
+                      <input id="account_confirm" name="account_confirm" type="password" required minLength={8} className="form-input" placeholder="Confirmer le mot de passe" />
+                    </div>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="form-label" htmlFor="client_name">Nom complet *</label>
                 <input

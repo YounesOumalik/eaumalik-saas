@@ -191,7 +191,7 @@ function ClientDetailModal({
         <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--modal-text)' }} aria-label="Fermer">
           <X size={14} />
         </button>
-        <div className="p-6">
+        <div className="p-6 pr-14">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-full flex items-center justify-center font-display font-extrabold text-lg text-white" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-dark))' }}>

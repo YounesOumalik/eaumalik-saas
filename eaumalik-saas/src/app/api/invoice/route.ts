@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
     doc.fontSize(10).fillColor('#666')
       .text(company.address ?? '')
       .text(`Tél. : ${company.phone ?? ''}  Email : ${company.email ?? ''}`)
-      .text(`Capital : ${Number(company.capital ?? 0).toLocaleString('fr-MA')} MAD`);
+      .text(`Capital : ${Number(company.capital ?? 0).toLocaleString('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MAD`);
 
     doc.moveDown(2);
     doc.fontSize(22).fillColor('#0f172a').text('FACTURE', { align: 'right' });
@@ -92,6 +92,9 @@ export async function GET(req: NextRequest) {
     doc.moveDown();
     const tableTop = doc.y;
     const cols = { name: 50, qty: 320, price: 380, total: 470 };
+    // Helper : formater un montant en DH avec 2 décimales
+    const fmt = (n: number) => n.toLocaleString('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
     doc.fillColor('#0891b2').fontSize(11).text('Description', cols.name, tableTop)
       .text('Qté', cols.qty, tableTop)
       .text('Prix U.', cols.price, tableTop)
@@ -102,31 +105,32 @@ export async function GET(req: NextRequest) {
       doc.fillColor('#0f172a').fontSize(10)
         .text(String(i.product_name ?? '').substring(0, 45), cols.name, y)
         .text(String(i.quantity ?? 0), cols.qty, y)
-        .text(`${Number(i.unit_price ?? 0).toLocaleString('fr-MA')} DH`, cols.price, y)
-        .text(`${Number(i.line_total ?? 0).toLocaleString('fr-MA')} DH`, cols.total, y);
+        .text(`${fmt(Number(i.unit_price ?? 0))} DH`, cols.price, y)
+        .text(`${fmt(Number(i.line_total ?? 0))} DH`, cols.total, y);
       y += 22;
     });
 
     doc.moveTo(50, y).lineTo(550, y).strokeColor('#ccc').stroke();
     y += 12;
     doc.fontSize(10).fillColor('#666').text('Sous-total (TTC)', cols.price, y);
-    doc.fillColor('#0f172a').text(`${Number(order.subtotal ?? 0).toLocaleString('fr-MA')} DH`, cols.total, y);
+    doc.fillColor('#0f172a').text(`${fmt(Number(order.subtotal ?? 0))} DH`, cols.total, y);
     y += 15;
-    const tva = Math.round((Number(order.subtotal ?? 0) * 20) / 120);
-    const ht = Number(order.subtotal ?? 0) - tva;
+    const subtotalVal = Number(order.subtotal ?? 0);
+    const tva = Math.round((subtotalVal * 20) / 120 * 100) / 100;
+    const ht = Math.round((subtotalVal - tva) * 100) / 100;
     doc.fillColor('#666').text('dont TVA (20 %)', cols.price, y);
-    doc.fillColor('#0f172a').text(`${tva.toLocaleString('fr-MA')} DH`, cols.total, y);
+    doc.fillColor('#0f172a').text(`${fmt(tva)} DH`, cols.total, y);
     y += 15;
     doc.fillColor('#666').text('Montant HT', cols.price, y);
-    doc.fillColor('#0f172a').text(`${ht.toLocaleString('fr-MA')} DH`, cols.total, y);
+    doc.fillColor('#0f172a').text(`${fmt(ht)} DH`, cols.total, y);
     y += 18;
     doc.fillColor('#666').text('Livraison', cols.price, y);
-    doc.fillColor('#0f172a').text(order.delivery_fee === 0 ? 'Gratuite' : `${Number(order.delivery_fee).toLocaleString('fr-MA')} DH`, cols.total, y);
+    doc.fillColor('#0f172a').text(order.delivery_fee === 0 ? 'Gratuite' : `${fmt(Number(order.delivery_fee))} DH`, cols.total, y);
     y += 22;
     doc.moveTo(380, y).lineTo(550, y).strokeColor('#0891b2').lineWidth(1).stroke();
     y += 10;
     doc.fontSize(14).fillColor('#0891b2').text('TOTAL', cols.price, y);
-    doc.text(`${Number(order.total ?? 0).toLocaleString('fr-MA')} DH`, cols.total, y);
+    doc.text(`${fmt(Number(order.total ?? 0))} DH`, cols.total, y);
 
     doc.moveDown(4);
     doc.fontSize(9).fillColor('#888')

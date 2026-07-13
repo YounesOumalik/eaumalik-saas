@@ -6,12 +6,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  Plus, Pencil, Trash2, Star, X, Save, LayoutGrid, List,
+  Plus, Pencil, Trash2, Star, Save, LayoutGrid, List,
   Search, Archive, RotateCcw, AlertTriangle, Upload,
 } from 'lucide-react';
 import type { Product, ProductCategory } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/shared/ToastProvider';
+import Dialog from '@/components/ui/Dialog';
 import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 import {
   createProductAction,
@@ -141,39 +142,35 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div
-      className="modal-overlay fixed inset-0 z-[1100] flex items-center justify-center p-4 animate-modal-in"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="product-dialog-title"
-    >
-      <div className="modal-surface w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl" style={{ transform: 'none' }}>
-        <div className="flex items-center justify-between p-5 border-b border-[color:var(--modal-border)] sticky top-0 z-10"
-          style={{ background: 'var(--modal-surface)' }}>
-          <div>
-            <h3 id="product-dialog-title" className="font-display font-extrabold text-lg" style={{ color: 'var(--modal-text)' }}>
-              {product ? 'Modifier le produit' : 'Nouveau produit'}
-            </h3>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--modal-text-muted)' }}>
-              {product ? product.id : 'Renseignez les informations ci-dessous'}
-            </p>
-          </div>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={product ? 'Modifier le produit' : 'Nouveau produit'}
+      subtitle={product ? product.id : 'Renseignez les informations ci-dessous'}
+      zIndex={1100}
+      size="lg"
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fermer"
-            className="w-9 h-9 rounded-lg flex items-center justify-center hover:opacity-80"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--modal-text)' }}
+            className="btn-outline flex-1 justify-center py-2.5"
           >
-            <X size={16} />
+            Annuler
           </button>
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="p-5 space-y-4">
+          <button
+            type="submit"
+            form="product-form"
+            disabled={isSubmitting}
+            className="btn-primary flex-1 justify-center py-2.5"
+          >
+            <Save size={14} /> {isSubmitting ? 'Enregistrement...' : (product ? 'Enregistrer' : 'Créer')}
+          </button>
+        </>
+      }
+    >
+        <form id="product-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="form-label">Nom *</label>
@@ -293,26 +290,8 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
               </label>
             </div>
           </div>
-
-          <div className="flex gap-3 pt-2 border-t border-[color:var(--border)]">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="btn-primary disabled:opacity-50"
-            >
-              <Save size={14} /> {isSubmitting ? 'Enregistrement...' : (product ? 'Enregistrer' : 'Créer')}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-outline"
-            >
-              Annuler
-            </button>
-          </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -327,42 +306,32 @@ interface ConfirmDialogProps {
 }
 
 function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmer', danger, onConfirm, onCancel }: ConfirmDialogProps) {
-  if (!open) return null;
   return (
-    <div
-      className="modal-overlay fixed inset-0 z-[1100] flex items-center justify-center p-4 animate-modal-in"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="modal-surface max-w-md w-full p-6 rounded-3xl" style={{ transform: 'none' }}>
-        <div className="flex items-start gap-3 mb-4">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: danger ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)' }}
-          >
-            <AlertTriangle size={18} className={danger ? 'text-danger' : 'text-warning'} />
-          </div>
-          <div>
-            <h3 className="font-display font-bold text-base">{title}</h3>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-              {message}
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-3 justify-end">
-          <button type="button" onClick={onCancel} className="btn-outline">
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      title={title}
+      subtitle={message}
+      icon={<AlertTriangle size={18} className={danger ? 'text-danger' : 'text-warning'} />}
+      zIndex={1100}
+      size="sm"
+      footer={
+        <>
+          <button type="button" onClick={onCancel} className="btn-outline flex-1 justify-center py-2.5">
             Annuler
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className={danger ? 'btn-primary btn-danger' : 'btn-primary'}
+            className={(danger ? 'btn-primary btn-danger' : 'btn-primary') + ' flex-1 justify-center py-2.5'}
           >
             {confirmLabel}
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {/* Le contenu est intégré dans le Dialog via title/subtitle. Slot vide intentionnel. */}
+    </Dialog>
   );
 }
 

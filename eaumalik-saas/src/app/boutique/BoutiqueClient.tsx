@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import type { Product, ProductCategory } from '@/types';
 import ProductCard from '@/components/boutique/ProductCard';
 import CategoryFilters from '@/components/boutique/CategoryFilters';
@@ -8,18 +9,32 @@ import BoutiqueHero from '@/components/boutique/BoutiqueHero';
 import BoutiqueFiltration from '@/components/boutique/BoutiqueFiltration';
 import BoutiqueIndustrial from '@/components/boutique/BoutiqueIndustrial';
 import BoutiqueContact from '@/components/boutique/BoutiqueContact';
+import BoutiquePromotions from '@/components/boutique/BoutiquePromotions';
 import { useToast } from '@/components/shared/ToastProvider';
+import type { News } from '@/types';
 
 /**
  * Page boutique du nouveau design :
  *  - Hero (Catalog Produits + navbar local)
+ *  - Promotions & Actualités (issues du CRM)
  *  - 5 etapes de filtration
  *  - Catalogue filtres + recherche + grille de cartes
  *  - Section industrielle (6 secteurs)
  *  - Contact / devis
  * Toutes les fonctions existantes (panier, toast, modal) sont preservees.
  */
-export default function BoutiqueClient({ initialProducts }: { initialProducts: Product[] }) {
+export default function BoutiqueClient({
+  initialProducts,
+  promotions = [],
+  news = [],
+  featuredOnly = false,
+}: {
+  initialProducts: Product[];
+  promotions?: News[];
+  news?: News[];
+  /** Landing page : n'affiche que les produits phares (is_featured). */
+  featuredOnly?: boolean;
+}) {
   const [category, setCategory] = useState<'all' | ProductCategory>('all');
   const [search, setSearch] = useState('');
   const toast = useToast();
@@ -33,9 +48,10 @@ export default function BoutiqueClient({ initialProducts }: { initialProducts: P
         p.name.toLowerCase().includes(q) ||
         (p.description ?? '').toLowerCase().includes(q);
       const notArchived = !p.is_archived;
-      return catOk && searchOk && notArchived;
+      const featuredOk = !featuredOnly || p.is_featured;
+      return catOk && searchOk && notArchived && featuredOk;
     });
-  }, [initialProducts, category, search]);
+  }, [initialProducts, category, search, featuredOnly]);
 
   // Smooth-scroll vers la grille de catalogue depuis le hero / navbar local.
   useEffect(() => {
@@ -60,6 +76,8 @@ export default function BoutiqueClient({ initialProducts }: { initialProducts: P
     <div className="bg-white">
       <BoutiqueHero />
 
+      <BoutiquePromotions promotions={promotions} news={news} />
+
       <BoutiqueFiltration />
 
       {/* CATALOGUE */}
@@ -67,24 +85,31 @@ export default function BoutiqueClient({ initialProducts }: { initialProducts: P
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16 reveal revealed">
             <span className="text-xs font-bold uppercase tracking-[0.3em] text-brand-600 mb-4 block">
-              Notre catalogue
+              {featuredOnly ? 'Nos coups de cœur' : 'Notre catalogue'}
             </span>
             <h2 className="font-serif text-4xl md:text-6xl font-normal leading-[0.85] tracking-tighter mb-6 text-stone-900">
-              Explorez nos<br />
-              <em className="text-brand-700">produits</em>
+              {featuredOnly ? (
+                <>Nos produits<br /><em className="text-brand-700">phares</em></>
+              ) : (
+                <>Explorez nos<br /><em className="text-brand-700">produits</em></>
+              )}
             </h2>
             <p className="text-lg text-stone-500 font-light max-w-xl mx-auto">
-              Des solutions completes pour chaque besoin de purification d&apos;eau.
+              {featuredOnly
+                ? 'Une selection de nos meilleures solutions de purification d\'eau. Decouvrez tout le catalogue dans la boutique.'
+                : 'Des solutions completes pour chaque besoin de purification d\'eau.'}
             </p>
           </div>
 
-          <CategoryFilters
-            active={category}
-            onChange={setCategory}
-            search={search}
-            onSearch={setSearch}
-            resultCount={filtered.length}
-          />
+          {!featuredOnly && (
+            <CategoryFilters
+              active={category}
+              onChange={setCategory}
+              search={search}
+              onSearch={setSearch}
+              resultCount={filtered.length}
+            />
+          )}
 
           {filtered.length === 0 ? (
             <div className="text-center py-20">
@@ -110,6 +135,18 @@ export default function BoutiqueClient({ initialProducts }: { initialProducts: P
               {filtered.map(p => (
                 <ProductCard key={p.id} product={p} />
               ))}
+            </div>
+          )}
+
+          {featuredOnly && (
+            <div className="text-center mt-14">
+              <Link
+                href="/boutique"
+                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-lg shadow-brand-600/20"
+              >
+                Voir toute la boutique
+                <i className="fa-solid fa-arrow-right" aria-hidden="true" />
+              </Link>
             </div>
           )}
         </div>

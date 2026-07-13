@@ -34,6 +34,8 @@ export type OrderStatus =
 export interface Order {
   id: string;
   order_number: string;
+  tracking_number?: string | null;
+  carrier?: string | null;
   user_id: string | null;
   client_name: string;
   client_phone: string;
@@ -46,9 +48,30 @@ export interface Order {
   notes: string | null;
   payment_method: 'cash_on_delivery';
   invoice_generated: boolean;
+  /** Date de passage en "Traitée" */
+  processed_at?: string | null;
+  /** Date de passage en "En livraison" */
+  shipped_at?: string | null;
+  /** Date de passage en "Livrée" */
+  delivered_at?: string | null;
+  /** Date prévue de livraison (optionnelle — peut être définie manuellement ou par défaut J+2) */
+  estimated_delivery?: string | null;
   created_at: string;
   updated_at: string;
   items?: OrderItem[];
+}
+
+/** Étape individuelle d'une timeline de suivi de commande (vue) */
+export interface OrderTimelineStep {
+  key: OrderStatus | 'commande';
+  label: string;
+  description: string;
+  /** Date ISO réelle si l'étape est franchie, sinon `null` */
+  at: string | null;
+  /** Étape franchie / en cours / à venir */
+  state: 'done' | 'current' | 'upcoming' | 'cancelled';
+  /** Icône lucide-react (utilisée par le composant) */
+  iconName: 'Package' | 'CheckCircle2' | 'Truck' | 'Home' | 'ShieldCheck' | 'X' | 'Clock' | 'ClipboardCheck';
 }
 
 export interface OrderItem {
@@ -97,6 +120,63 @@ export interface MaintenanceAlert {
   last_reminder_sent: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ============================================================================
+// Module Maintenance : suivi long-terme + historique d'interventions
+// ============================================================================
+
+export type MaintenanceProgramStatus = 'actif' | 'a_renouveler' | 'suspendu' | 'resilie';
+
+export interface MaintenanceRecord {
+  id: string;
+  client_name: string;
+  client_phone: string | null;
+  client_city: string | null;
+  client_address: string | null;
+  user_id: string | null;
+  order_id: string | null;
+  product_id: string | null;
+  product_name: string;
+  install_date: string;        // ISO date (YYYY-MM-DD)
+  next_service_date: string | null;
+  service_interval_months: number;
+  status: MaintenanceProgramStatus;
+  notes: string | null;
+  filter_types: string[];
+  last_service_date: string | null;
+  last_reminder_sent: string | null;
+  total_cost: number;
+  intervention_count: number;
+  created_at: string;
+  updated_at: string;
+  /** Eager-loaded interventions (optionnel, dépend du endpoint) */
+  interventions?: MaintenanceIntervention[];
+}
+
+export type InterventionType =
+  | 'filter_change'
+  | 'inspection'
+  | 'repair'
+  | 'replacement'
+  | 'cleaning'
+  | 'diagnostic'
+  | 'other';
+
+export type InterventionOutcome = 'completed' | 'pending' | 'failed';
+
+export interface MaintenanceIntervention {
+  id: string;
+  record_id: string;
+  intervention_type: InterventionType;
+  performed_at: string;
+  technician_name: string | null;
+  description: string;
+  parts_used: string[];
+  cost: number;
+  next_service_date: string | null;
+  outcome: InterventionOutcome;
+  created_at: string;
 }
 
 export interface CompanyProfile {

@@ -1,17 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Order, OrderStatus, OrderItem } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Eye, ArrowRight, FileText } from 'lucide-react';
+import { Eye, ArrowRight, FileText, ShoppingBag, Wrench, Package } from 'lucide-react';
 import { useToast } from '@/components/shared/ToastProvider';
+import Dialog from '@/components/ui/Dialog';
 import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
+import { OrderTimeline, OrderProgressBar } from '@/components/admin/OrderTracker';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   en_attente:   'En attente',
   traitee:      'Traitée',
   en_livraison: 'En livraison',
-  livree:       'Livreee',
+  livree:       'Livrée',
   annulee:      'Annulée',
 };
 const STATUS_CYCLE: OrderStatus[] = ['en_attente', 'traitee', 'en_livraison', 'livree'];
@@ -21,6 +24,7 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
   const [filter, setFilter] = useState<'all' | OrderStatus>('all');
   const [detail, setDetail] = useState<Order | null>(null);
   const toast = useToast();
+  const router = useRouter();
 
   const [permissions, setPermissions] = useState<any>(null);
   const [role, setRole] = useState<string>('');
@@ -49,12 +53,17 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
     const nextStatus = STATUS_CYCLE[idx + 1];
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: nextStatus } : o));
     try {
-      await fetch(`/api/orders/${id}`, {
+      const res = await fetch(`/api/orders/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),
       });
-      toast(`${id} -> ${STATUS_LABELS[nextStatus]}`, 'info');
+      const data = await res.json().catch(() => ({}));
+      if (data.maintenance_created > 0) {
+        toast(`${id} -> ${STATUS_LABELS[nextStatus]} (+${data.maintenance_created} maintenance)`, 'info');
+      } else {
+        toast(`${id} -> ${STATUS_LABELS[nextStatus]}`, 'info');
+      }
     } catch {
       toast('Erreur réseau (modifié localement)', 'error');
     }
@@ -118,7 +127,7 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
         <table className="data-table">
           <thead>
             <tr>
-              <th>Commande</th><th>Client</th><th>Date</th><th>Montant</th><th>Statut</th><th>Actions</th>
+              <th>Commande</th><th>Client</th><th>Date</th><th>Montant</th><th>Progression</th><th>Statut</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -131,13 +140,16 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
                 </td>
                 <td className="text-sm">{formatDate(o.created_at)}</td>
                 <td className="font-semibold text-sm">{formatCurrency(o.total)}</td>
+                <td>
+                  <OrderProgressBar order={o} compact />
+                </td>
                 <td><span className={`badge badge-${o.status}`}><span className="pulse-dot" style={{ width: 6, height: 6, background: o.status === 'en_attente' ? '#fbbf24' : o.status === 'en_livraison' ? '#22d3ee' : 'transparent' }} /> {STATUS_LABELS[o.status]}</span></td>
                 <td>
                   <div className="flex gap-1.5">
                     {STATUS_CYCLE.includes(o.status) && canValidate && (
                       <button onClick={() => advance(o.id)} className="btn-primary btn-sm" title="Avancer le statut"><ArrowRight size={12} /></button>
                     )}
-                    <button onClick={() => setDetail(o)} className="btn-outline btn-sm" title="Details"><Eye size={12} /></button>
+                    <button onClick={() => setDetail(o)} className="btn-outline btn-sm" title="Détails & suivi"><Eye size={12} /></button>
                     {o.status === 'livree' && (
                       <button onClick={() => generateInvoice(o.id)} className="btn-sm btn-success inline-flex items-center gap-1" title="Facture PDF">
                         <FileText size={12} />
@@ -152,44 +164,64 @@ export default function OrdersTable({ initialOrders }: { initialOrders: Order[] 
         {filtered.length === 0 && <div className="text-center py-10" style={{ color: 'var(--text-muted)' }}>Aucune commande pour ce filtre.</div>}
       </div>
 
-      {detail && <OrderDetailModal order={detail} onClose={() => setDetail(null)} />}
+      {detail && <OrderDetailModal order={detail} onClose={() => setDetail(null)} onOpenMaintenance={() => router.push('/admin/maintenance')} />}
     </>
   );
 }
 
-function OrderDetailModal({ order, onClose }: { order: Order; onClose: () => void }) {
+function OrderDetailModal({ order, onClose, onOpenMaintenance }: { order: Order; onClose: () => void; onOpenMaintenance: () => void }) {
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-[color:var(--bg-base)] animate-modal-in"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog" aria-modal="true">
-      <div className="glass-card max-w-2xl w-full max-h-[85vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="font-display font-extrabold text-lg">{order.order_number}</h2>
-            <span className={`badge badge-${order.status}`}>{STATUS_LABELS[order.status]}</span>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4 mb-6">
-            <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Client</div><div className="font-semibold text-sm">{order.client_name}</div></div>
-            <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Téléphone</div><div className="font-semibold text-sm">{order.client_phone}</div></div>
-            <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Adresse</div><div className="text-sm">{order.client_address}, {order.client_city}</div></div>
-            <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Date</div><div className="text-sm">{formatDate(order.created_at)}</div></div>
-          </div>
-          <h3 className="font-display font-semibold text-sm mb-3">Articles commandes</h3>
-          <div className="space-y-2 mb-4">
-            {order.items?.map((i: OrderItem) => (
-              <div key={i.id} className="flex justify-between text-sm p-3 rounded-lg" style={{ background: 'var(--bg-card)' }}>
-                <span>{i.product_name} <span style={{ color: 'var(--text-muted)' }}>x{i.quantity}</span></span>
-                <span className="font-semibold">{formatCurrency(i.line_total)}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between font-display font-extrabold text-lg pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-            <span>Total</span><span className="gradient-text">{formatCurrency(order.total)}</span>
-          </div>
-          {order.notes && <div className="mt-4 text-sm" style={{ color: 'var(--text-muted)' }}>Notes : {order.notes}</div>}
-          <button onClick={onClose} className="btn-outline w-full justify-center mt-6">Fermer</button>
+    <Dialog
+      open={true}
+      onClose={onClose}
+      title={order.order_number}
+      icon={<ShoppingBag size={18} />}
+      size="lg"
+      footer={
+        <div className="flex flex-col sm:flex-row gap-2 w-full">
+          {order.status === 'livree' && (
+            <button onClick={onOpenMaintenance} className="btn-outline flex-1 justify-center py-2.5 inline-flex items-center gap-1.5">
+              <Wrench size={14} /> Suivi maintenance
+            </button>
+          )}
+          <button onClick={onClose} className="btn-primary flex-1 justify-center py-2.5 sm:flex-none sm:min-w-[160px]">
+            Fermer
+          </button>
         </div>
+      }
+    >
+      <div className="flex items-center justify-between mb-6 -mt-2">
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Détails de la commande</span>
+        <span className={`badge badge-${order.status}`}>{STATUS_LABELS[order.status]}</span>
       </div>
-    </div>
+
+      {/* Timeline de suivi visuel */}
+      <div className="mb-6">
+        <h3 className="font-display font-semibold text-sm mb-3 flex items-center gap-2">
+          <Package size={14} /> Suivi de la livraison
+        </h3>
+        <OrderTimeline order={order} />
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
+        <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Client</div><div className="font-semibold text-sm">{order.client_name}</div></div>
+        <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Téléphone</div><div className="font-semibold text-sm">{order.client_phone}</div></div>
+        <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Adresse</div><div className="text-sm">{order.client_address}, {order.client_city}</div></div>
+        <div className="stat-card"><div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Date</div><div className="text-sm">{formatDate(order.created_at)}</div></div>
+      </div>
+      <h3 className="font-display font-semibold text-sm mb-3">Articles commandes</h3>
+      <div className="space-y-2 mb-4">
+        {order.items?.map((i: OrderItem) => (
+          <div key={i.id} className="flex justify-between text-sm p-3 rounded-lg" style={{ background: 'var(--bg-card)' }}>
+            <span>{i.product_name} <span style={{ color: 'var(--text-muted)' }}>x{i.quantity}</span></span>
+            <span className="font-semibold">{formatCurrency(i.line_total)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between font-display font-extrabold text-lg pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+        <span>Total</span><span className="gradient-text">{formatCurrency(order.total)}</span>
+      </div>
+      {order.notes && <div className="mt-4 text-sm" style={{ color: 'var(--text-muted)' }}>Notes : {order.notes}</div>}
+    </Dialog>
   );
 }

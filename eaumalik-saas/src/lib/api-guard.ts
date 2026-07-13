@@ -41,3 +41,13 @@ export function sanitizePostgREST(input: string): string {
   // on supprime tout ce qui n'est pas alphanumérique / espace / tiret / apostrophe basic.
   return input.replace(/[%_(),."'\\]/g, '').slice(0, 100);
 }
+
+/**
+ * Indique si l'application tourne en mode "mocks" (dev local sans Supabase).
+ * Utilisé pour court-circuiter l'authentification Supabase dans les route handlers
+ * lors des tests / démos en local.
+ */
+export function isMockMode(): boolean {
+  if (process.env.NEXT_PUBLIC_USE_MOCKS === 'true') return true;
+  return !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+}

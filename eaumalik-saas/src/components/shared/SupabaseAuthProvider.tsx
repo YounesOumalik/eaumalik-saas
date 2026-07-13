@@ -24,6 +24,19 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [displayName, setDisplayName] = useState('');
 
+  // Mode dev (sans Supabase) : session factice écrite par /api/auth/dev-login
+  // ou par le checkout invité, lue depuis sessionStorage. On la garde en état
+  // pour pouvoir la mettre à jour sans reload (événement custom ci-dessous).
+  const [devUser, setDevUser] = useState<any>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem('eaumalik_dev_session');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const supabase = maybeSupabaseBrowserClient();
 
   const fetchProfile = useCallback(async (uid: string) => {
@@ -77,14 +90,25 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [supabase, fetchProfile]);
 
+  // Mode dev : on écoute la création/mise à jour de session (ex: checkout invité)
+  // pour reconnecter l'utilisateur sans recharger la page.
+  useEffect(() => {
+    if (supabase) return;
+    const onDevSession = () => {
+      try {
+        const raw = sessionStorage.getItem('eaumalik_dev_session');
+        setDevUser(raw ? JSON.parse(raw) : null);
+      } catch {
+        setDevUser(null);
+      }
+    };
+    window.addEventListener('eaumalik:dev-session-change', onDevSession);
+    return () => window.removeEventListener('eaumalik:dev-session-change', onDevSession);
+  }, [supabase]);
+
   // Mode dev (sans Supabase) : on lit la session factice ecrite par
-  // /api/auth/dev-login dans sessionStorage.
+  // /api/auth/dev-login (ou le checkout invité) dans sessionStorage.
   if (!supabase) {
-    let devUser: any = null;
-    try {
-      const raw = typeof window !== 'undefined' ? sessionStorage.getItem('eaumalik_dev_session') : null;
-      if (raw) devUser = JSON.parse(raw);
-    } catch {}
     return (
       <AuthContext.Provider
         value={{
@@ -92,9 +116,17 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
           session: devUser ? ({ user: { id: devUser.id, email: devUser.email } } as any) : null,
           loading: false,
           isAdmin: devUser?.role === 'admin',
-          refresh: async () => {},
+          refresh: async () => {
+            try {
+              const raw = sessionStorage.getItem('eaumalik_dev_session');
+              setDevUser(raw ? JSON.parse(raw) : null);
+            } catch {
+              setDevUser(null);
+            }
+          },
           async signOut() {
             try { sessionStorage.removeItem('eaumalik_dev_session'); } catch {}
+            setDevUser(null);
             window.location.href = '/';
           },
           displayName: devUser?.full_name || devUser?.email || '',

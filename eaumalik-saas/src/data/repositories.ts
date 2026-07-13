@@ -3,6 +3,7 @@
 import 'server-only';
 import type {
   Product, Order, OrderItem, User, MaintenanceAlert, CompanyProfile, News,
+  MaintenanceRecord, MaintenanceIntervention, InterventionType, MaintenanceProgramStatus,
 } from '@/types';
 import {
   MOCK_PRODUCTS, MOCK_USERS, MOCK_ORDERS, MOCK_ORDER_ITEMS,
@@ -19,6 +20,8 @@ import {
   writeArchivedUsers,
   readNews,
   writeNews,
+  readMaintenance,
+  writeMaintenance,
 } from '@/data/localDb';
 import { sanitizePostgREST } from '@/lib/api-guard';
 
@@ -170,7 +173,34 @@ export async function updateOrderStatus(orderId: string, status: Order['status']
     const o = list.find(x => x.id === orderId);
     if (o) {
       o.status = status;
+      const now = new Date().toISOString();
+      o.updated_at = now;
+      if (status === 'traitee') {
+        o.processed_at = now;
+        o.tracking_number = o.tracking_number || o.order_number;
+      }
+      if (status === 'en_livraison') {
+        o.shipped_at = now;
+        if (!o.estimated_delivery) {
+          const eta = new Date();
+          eta.setDate(eta.getDate() + 2);
+          o.estimated_delivery = eta.toISOString();
+        }
+      }
+      if (status === 'livree') {
+        o.delivered_at = now;
+      }
       writeOrders(list);
+      // Effet de bord : si la commande passe à "livrée", créer les fiches maintenance
+      if (status === 'livree') {
+        try {
+          // import dynamique pour éviter cycle
+          const { ensureMaintenanceForOrder } = await import('@/data/repositories');
+          await ensureMaintenanceForOrder(o);
+        } catch {
+          /* no-op */
+        }
+      }
     }
     return;
   }
@@ -395,14 +425,22 @@ export async function listMaintenance(): Promise<MaintenanceAlert[]> {
   return (data ?? []) as MaintenanceAlert[];
 }
 
-export async function updateMaintenanceStatus(id: string, status: MaintenanceAlert['status']): Promise<void> {
+export async function updateMaintenanceStatus(id: string, status: MaintenanceProgramStatus): Promise<void> {
   if (shouldUseMocks()) {
-    const m = MOCK_MAINTENANCE.find(x => x.id === id);
-    if (m) { m.status = status; m.updated_at = new Date().toISOString(); }
+    const bundle = readMaintenance();
+    const r = bundle.records.find(x => x.id === id);
+    if (r) {
+      r.status = status;
+      r.updated_at = new Date().toISOString();
+      writeMaintenance(bundle);
+    }
     return;
   }
   const supabase = await getSupabase();
-  await supabase.from('maintenance_alerts').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+  await supabase
+    .from('maintenance_records')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id);
 }
 
 // ============================================================================
@@ -530,4 +568,266 @@ export async function createNews(input: Omit<News, 'id' | 'created_at' | 'is_pro
   const { data, error } = await supabase.from('news').insert(record).select().single();
   if (error) throw error;
   return normalizeNews(data as RawNews);
+}
+
+// ============================================================================
+// MAINTENANCE (records + interventions)
+// ============================================================================
+
+/** Convertit une date ISO en "YYYY-MM-DD" sans heure. */
+function isoDateOnly(input: string): string {
+  const d = new Date(input);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Ajoute N mois à une date, retourne "YYYY-MM-DD". */
+function addMonths(input: string, months: number): string {
+  const d = new Date(input);
+  d.setMonth(d.getMonth() + months);
+  return isoDateOnly(d.toISOString());
+}
+
+interface MaintenanceRecordFilters {
+  status?: MaintenanceProgramStatus;
+  search?: string;
+  /** Filtrer par date de prochaine intervention <= X. */
+  dueBefore?: string;
+  /** Si défini, ne retourne que les records de cette commande. */
+  orderId?: string;
+}
+
+function hydrateRecordInterventions(records: MaintenanceRecord[], interventions: MaintenanceIntervention[]) {
+  const byRecord = new Map<string, MaintenanceIntervention[]>();
+  interventions.forEach(it => {
+    const arr = byRecord.get(it.record_id) ?? [];
+    arr.push(it);
+    byRecord.set(it.record_id, arr);
+  });
+  records.forEach(r => {
+    r.interventions = (byRecord.get(r.id) ?? []).sort((a, b) => b.performed_at.localeCompare(a.performed_at));
+  });
+}
+
+/** Liste les fiches de maintenance avec filtres optionnels. */
+export async function listMaintenanceRecords(filters: MaintenanceRecordFilters = {}): Promise<MaintenanceRecord[]> {
+  if (shouldUseMocks()) {
+    const bundle = readMaintenance();
+    let records = [...bundle.records];
+    if (filters.status) records = records.filter(r => r.status === filters.status);
+    if (filters.orderId) records = records.filter(r => r.order_id === filters.orderId);
+    if (filters.dueBefore) records = records.filter(r => r.next_service_date && r.next_service_date <= filters.dueBefore!);
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      records = records.filter(r =>
+        r.client_name.toLowerCase().includes(q) ||
+        r.product_name.toLowerCase().includes(q) ||
+        (r.client_city ?? '').toLowerCase().includes(q)
+      );
+    }
+    records.sort((a, b) => (b.next_service_date || '').localeCompare(a.next_service_date || ''));
+    hydrateRecordInterventions(records, bundle.interventions);
+    return records;
+  }
+
+  const supabase = await getSupabase();
+  let query = supabase
+    .from('maintenance_records')
+    .select('*, interventions:maintenance_interventions(*)')
+    .order('next_service_date', { ascending: true });
+  if (filters.status) query = query.eq('status', filters.status);
+  if (filters.orderId) query = query.eq('order_id', filters.orderId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as MaintenanceRecord[];
+}
+
+/** Récupère une fiche par ID. */
+export async function getMaintenanceRecord(id: string): Promise<MaintenanceRecord | null> {
+  if (shouldUseMocks()) {
+    const bundle = readMaintenance();
+    const found = bundle.records.find(r => r.id === id) ?? null;
+    if (found) hydrateRecordInterventions([found], bundle.interventions);
+    return found;
+  }
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('maintenance_records')
+    .select('*, interventions:maintenance_interventions(*)')
+    .eq('id', id)
+    .single();
+  if (error) return null;
+  return data as MaintenanceRecord;
+}
+
+/**
+ * Crée (si manquant) un programme de maintenance par ligne de produit,
+ * à partir d'une commande passée à "livrée".
+ */
+export async function ensureMaintenanceForOrder(order: Order): Promise<MaintenanceRecord[]> {
+  const createdOrExisting: MaintenanceRecord[] = [];
+  const items = order.items ?? [];
+  if (items.length === 0) return createdOrExisting;
+
+  if (shouldUseMocks()) {
+    const bundle = readMaintenance();
+    const now = new Date().toISOString();
+    for (const item of items) {
+      const exists = bundle.records.find(r => r.order_id === order.id && r.product_id === item.product_id);
+      if (exists) {
+        createdOrExisting.push(exists);
+        continue;
+      }
+      // Récupérer durée filtre produit si possible
+      const products = readProducts();
+      const product = products.find(p => p.id === item.product_id);
+      const lifespan = product?.filter_lifespan_months && product.filter_lifespan_months > 0
+        ? product.filter_lifespan_months
+        : 6;
+      const record: MaintenanceRecord = {
+        id: `mr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        client_name: order.client_name,
+        client_phone: order.client_phone,
+        client_city: order.client_city,
+        client_address: order.client_address,
+        user_id: order.user_id,
+        order_id: order.id,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        install_date: isoDateOnly(order.delivered_at || order.updated_at || now),
+        next_service_date: addMonths(
+          isoDateOnly(order.delivered_at || order.updated_at || now),
+          lifespan
+        ),
+        service_interval_months: lifespan,
+        status: 'actif',
+        notes: `Programme de maintenance créé suite à la livraison de la commande ${order.order_number}.`,
+        filter_types:
+          item.product_name.toLowerCase().includes('ro') || item.product_name.toLowerCase().includes('osmose')
+            ? ['Sediment', 'Carbon', 'RO Membrane', 'Post-Carbon']
+            : ['Sediment', 'Carbon', 'Mineral'],
+        last_service_date: isoDateOnly(order.delivered_at || order.updated_at || now),
+        last_reminder_sent: null,
+        total_cost: 0,
+        intervention_count: 0,
+        created_at: now,
+        updated_at: now,
+      };
+      bundle.records.push(record);
+      createdOrExisting.push(record);
+
+      // Intervention initiale automatique = installation
+      bundle.interventions.push({
+        id: `mi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        record_id: record.id,
+        intervention_type: 'inspection',
+        performed_at: now,
+        technician_name: 'Équipe EAUMALIK',
+        description: `Installation et mise en service suite à la commande ${order.order_number}.`,
+        parts_used: [],
+        cost: 0,
+        next_service_date: record.next_service_date,
+        outcome: 'completed',
+        created_at: now,
+      });
+    }
+    writeMaintenance(bundle);
+    return createdOrExisting;
+  }
+
+  const supabase = await getSupabase();
+  // En prod, c'est le trigger SQL `ensure_maintenance_on_delivery` qui fait ce travail.
+  const { data } = await supabase
+    .from('maintenance_records')
+    .select('*, interventions:maintenance_interventions(*)')
+    .eq('order_id', order.id);
+  return (data ?? []) as MaintenanceRecord[];
+}
+
+/** Met à jour le statut d'une fiche de maintenance (programme). */
+export async function updateMaintenanceRecordStatus(
+  id: string,
+  status: MaintenanceProgramStatus
+): Promise<void> {
+  if (shouldUseMocks()) {
+    const bundle = readMaintenance();
+    const r = bundle.records.find(x => x.id === id);
+    if (r) {
+      r.status = status;
+      r.updated_at = new Date().toISOString();
+      writeMaintenance(bundle);
+    }
+    return;
+  }
+  const supabase = await getSupabase();
+  await supabase
+    .from('maintenance_records')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id);
+}
+
+/** Ajoute une intervention à une fiche. Met à jour les compteurs en cascade. */
+export async function addMaintenanceIntervention(input: {
+  record_id: string;
+  intervention_type: InterventionType;
+  description: string;
+  performed_at?: string;
+  technician_name?: string;
+  parts_used?: string[];
+  cost?: number;
+  next_service_date?: string;
+  outcome?: 'completed' | 'pending' | 'failed';
+}): Promise<MaintenanceIntervention> {
+  const now = new Date().toISOString();
+  const intervention: MaintenanceIntervention = {
+    id: `mi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    record_id: input.record_id,
+    intervention_type: input.intervention_type,
+    performed_at: input.performed_at || now,
+    technician_name: input.technician_name ?? null,
+    description: input.description,
+    parts_used: input.parts_used ?? [],
+    cost: input.cost ?? 0,
+    next_service_date: input.next_service_date ?? null,
+    outcome: input.outcome ?? 'completed',
+    created_at: now,
+  };
+
+  if (shouldUseMocks()) {
+    const bundle = readMaintenance();
+    bundle.interventions.push(intervention);
+    const record = bundle.records.find(r => r.id === input.record_id);
+    if (record) {
+      record.last_service_date = isoDateOnly(intervention.performed_at);
+      if (intervention.next_service_date) record.next_service_date = intervention.next_service_date;
+      record.total_cost = (record.total_cost ?? 0) + (intervention.cost ?? 0);
+      if (intervention.outcome === 'completed') {
+        record.intervention_count = (record.intervention_count ?? 0) + 1;
+        record.status = record.next_service_date && record.next_service_date < isoDateOnly(now)
+          ? 'a_renouveler'
+          : 'actif';
+      } else if (intervention.outcome === 'failed') {
+        record.status = 'a_renouveler';
+      }
+      record.updated_at = now;
+    }
+    writeMaintenance(bundle);
+    return intervention;
+  }
+
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('maintenance_interventions').insert(intervention).select().single();
+  if (error) throw error;
+  return data as MaintenanceIntervention;
+}
+
+/** Met à jour les notes globales d'une fiche. */
+export async function updateMaintenanceNotes(id: string, notes: string): Promise<void> {
+  if (shouldUseMocks()) {
+    const bundle = readMaintenance();
+    const r = bundle.records.find(x => x.id === id);
+    if (r) { r.notes = notes; r.updated_at = new Date().toISOString(); writeMaintenance(bundle); }
+    return;
+  }
+  const supabase = await getSupabase();
+  await supabase.from('maintenance_records').update({ notes, updated_at: new Date().toISOString() }).eq('id', id);
 }
