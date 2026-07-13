@@ -64,8 +64,36 @@ function LoginInner() {
     setSuccess('');
 
     if (isDevMode) {
-      setError("Authentification indisponible : variables d'environnement Supabase non configurées.");
-      setLoading(false);
+      // Mode mock : on authentifie l'utilisateur contre src/data/mock.ts
+      // via l'API /api/auth/dev-login.
+      try {
+        const res = await fetch('/api/auth/dev-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, isSignUp, profile: {
+            full_name: fullName, phone, city, address, referred_by: referralCode,
+          } }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setError(json.error || 'Identifiants invalides.');
+          setLoading(false);
+          return;
+        }
+        if (json.created) {
+          setSuccess('Compte créé avec succès. Vous pouvez maintenant vous connecter.');
+          setIsSignUp(false);
+          setLoading(false);
+          return;
+        }
+        // Login OK : on stocke la session factice et on redirige
+        sessionStorage.setItem('eaumalik_dev_session', JSON.stringify(json.user));
+        router.push(callbackUrl);
+        router.refresh();
+      } catch (err) {
+        setError('Erreur de connexion au mode dev.');
+        setLoading(false);
+      }
       return;
     }
 

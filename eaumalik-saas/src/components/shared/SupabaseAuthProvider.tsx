@@ -77,18 +77,27 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [supabase, fetchProfile]);
 
-  // Si pas de client Supabase (env manquante), on ne casse rien : on rend sans auth.
+  // Mode dev (sans Supabase) : on lit la session factice ecrite par
+  // /api/auth/dev-login dans sessionStorage.
   if (!supabase) {
+    let devUser: any = null;
+    try {
+      const raw = typeof window !== 'undefined' ? sessionStorage.getItem('eaumalik_dev_session') : null;
+      if (raw) devUser = JSON.parse(raw);
+    } catch {}
     return (
       <AuthContext.Provider
         value={{
-          user: null,
-          session: null,
+          user: devUser ? ({ id: devUser.id, email: devUser.email, user_metadata: { full_name: devUser.full_name } } as any) : null,
+          session: devUser ? ({ user: { id: devUser.id, email: devUser.email } } as any) : null,
           loading: false,
-          isAdmin: false,
+          isAdmin: devUser?.role === 'admin',
           refresh: async () => {},
-          signOut: async () => {},
-          displayName: '',
+          async signOut() {
+            try { sessionStorage.removeItem('eaumalik_dev_session'); } catch {}
+            window.location.href = '/';
+          },
+          displayName: devUser?.full_name || devUser?.email || '',
         }}
       >
         {children}

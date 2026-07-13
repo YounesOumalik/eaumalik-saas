@@ -8,7 +8,7 @@ export function createSupabaseBrowserClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !key) {
+  if (!url || !key || url.trim() === '' || key.trim() === '') {
     throw new Error(
       'Variables Supabase manquantes. Copiez .env.local.example vers .env.local et renseignez NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY.'
     );
@@ -21,6 +21,6 @@ export function createSupabaseBrowserClient() {
 export function maybeSupabaseBrowserClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
+  if (!url || !key || url.trim() === '' || key.trim() === '') return null;
   return createBrowserClient(url, key);
 }

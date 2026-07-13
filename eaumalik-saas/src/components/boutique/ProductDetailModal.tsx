@@ -12,9 +12,15 @@ interface Props {
   onClose: () => void;
 }
 
+/**
+ * Modale detail produit du nouveau design : image hero en haut, specifications
+ * dans un tableau arrondi, CTA principal "Demander un devis" + "Ajouter au panier".
+ */
 export default function ProductDetailModal({ product, onClose }: Props) {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     return () => {
@@ -23,70 +29,113 @@ export default function ProductDetailModal({ product, onClose }: Props) {
     };
   }, [onClose]);
 
+  // Construction des lignes de specs : on tente de parser "Label: valeur".
+  const specRows: { label: string; value: string }[] = (() => {
+    if (!product.specs || product.specs.length === 0) {
+      return [
+        { label: 'Categorie', value: product.category },
+        { label: 'Reference', value: product.slug },
+        { label: 'Stock disponible', value: `${product.stock} unites` },
+      ];
+    }
+    return product.specs.map((line, i) => {
+      const idx = line.indexOf(':');
+      if (idx > 0 && idx < line.length - 1) {
+        return { label: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() };
+      }
+      return { label: `Caracteristique ${i + 1}`, value: line };
+    });
+  })();
+
   return (
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-modal-in"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby={`product-${product.id}-title`}
     >
-      <div className="glass-card max-w-2xl w-full max-h-[85vh] overflow-y-auto">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center z-10 hover:bg-black/30 transition-colors"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
-          aria-label="Fermer"
-        >
-          <X size={14} aria-hidden="true" />
-        </button>
-        <div className="md:flex">
-          <div className="md:w-1/2">
-            {product.image_url && (
-              <Image
-                src={product.image_url}
-                alt={product.name}
-                width={500}
-                height={500}
-                className="w-full aspect-square object-cover"
-                style={{ borderRadius: '1rem 0 0 1rem' }}
-                unoptimized
-              />
-            )}
-          </div>
-          <div className="md:w-1/2 p-6">
-            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--primary-light)' }}>
+      <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
+        <div className="relative">
+          {product.image_url ? (
+            <Image
+              src={product.image_url}
+              alt={product.name}
+              width={800}
+              height={500}
+              className="w-full h-64 md:h-80 object-cover rounded-t-3xl"
+              unoptimized
+            />
+          ) : (
+            <div className="w-full h-64 md:h-80 rounded-t-3xl bg-gradient-to-br from-brand-100 to-cyan-100 flex items-center justify-center">
+              <i className="fa-solid fa-droplet text-8xl text-brand-400" aria-hidden="true" />
+            </div>
+          )}
+
+          <button
+            onClick={onClose}
+            aria-label="Fermer"
+            className="absolute top-4 right-4 w-10 h-10 rounded-xl bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white transition shadow-lg"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+
+          <div className="absolute bottom-4 left-4 px-4 py-2 rounded-xl bg-white/90 backdrop-blur-sm">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-700">
               {product.category}
             </span>
-            <h2 id={`product-${product.id}-title`} className="font-display font-extrabold text-xl mt-2 mb-3">
+          </div>
+        </div>
+
+        <div className="p-8">
+          <div className="flex items-start justify-between mb-4 gap-4">
+            <h2
+              id={`product-${product.id}-title`}
+              className="font-serif text-2xl md:text-3xl font-semibold leading-tight text-stone-900"
+            >
               {product.name}
             </h2>
-            <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--text-secondary)' }}>
-              {product.description}
-            </p>
-            {product.specs && product.specs.length > 0 && (
-              <div className="space-y-2 mb-5">
-                {product.specs.map(s => (
-                  <div key={s} className="flex items-center gap-2 text-sm">
-                    <i className="fa-solid fa-check text-xs" style={{ color: 'var(--success)' }} aria-hidden="true" /> {s}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-2xl font-display font-extrabold gradient-text">{formatCurrency(product.price)}</span>
-              <span
-                className="text-sm font-semibold"
-                style={{
-                  color: (product.stock > 5 && !product.is_out_of_stock) ? 'var(--success)'
-                       : (product.stock > 0 && !product.is_out_of_stock) ? 'var(--warning)'
-                       : 'var(--danger)',
-                }}
+            <span className="text-2xl font-bold text-brand-700 whitespace-nowrap">
+              {formatCurrency(product.price)}
+            </span>
+          </div>
+
+          <p className="text-stone-500 leading-relaxed mb-8">
+            {product.description ?? ''}
+          </p>
+
+          <h4 className="font-semibold text-sm uppercase tracking-wider text-stone-500 mb-3">
+            Caracteristiques techniques
+          </h4>
+          <div className="bg-stone-50 rounded-2xl p-5">
+            {specRows.map((row, idx) => (
+              <div
+                key={`${row.label}-${idx}`}
+                className="flex justify-between py-3 border-b border-stone-100 last:border-b-0 gap-4"
               >
-                {(product.stock > 0 && !product.is_out_of_stock) ? `${product.stock} en stock` : 'Rupture de stock'}
-              </span>
-            </div>
-            <AddToCartButton product={product} size="lg" className="w-full justify-center" />
+                <span className="text-sm text-stone-500">{row.label}</span>
+                <span className="text-sm font-medium text-right max-w-[60%] text-stone-900">
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-col sm:flex-row gap-4">
+            <a
+              href="#contact"
+              onClick={e => {
+                e.preventDefault();
+                onClose();
+                document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex-1 py-4 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-bold uppercase tracking-wide text-center transition"
+            >
+              Demander un devis
+            </a>
+            <AddToCartButton product={product} size="lg" className="flex-1 justify-center" />
           </div>
         </div>
       </div>

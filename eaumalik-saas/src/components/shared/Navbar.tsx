@@ -75,10 +75,19 @@ export default function Navbar() {
   return (
     <nav className="nav-glass fixed top-0 left-0 right-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-        <Link href="/" className="flex items-center" aria-label="EAUMALIK Accueil">
-          <div className="h-14 w-40 sm:w-48 relative">
-            <Image src="/logo.png" alt="EAUMALIK Logo" fill className="object-contain" unoptimized />
-          </div>
+        <Link href="/" className="flex items-center gap-2.5 group" aria-label="EAUMALIK Accueil">
+          <span className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-105"
+            style={{ background: 'linear-gradient(135deg, var(--brand-500), var(--brand-700))' }}>
+            <i className="fa-solid fa-droplet text-base" aria-hidden="true" />
+          </span>
+          <span className="hidden sm:flex flex-col leading-tight">
+            <span className="font-display font-extrabold text-base tracking-tight" style={{ color: 'var(--text)' }}>
+              EAUMALIK
+            </span>
+            <span className="text-[0.65rem] font-medium uppercase tracking-[0.18em]" style={{ color: 'var(--primary-light)' }}>
+              L&apos;eau pure
+            </span>
+          </span>
         </Link>
 
         <div className="hidden lg:flex items-center gap-6">
@@ -108,7 +117,15 @@ export default function Navbar() {
               </button>
             </>
           ) : (
-            <Link href="/login" className="nav-link font-semibold text-[color:var(--primary-light)]">
+            <Link
+              href="/login"
+              className="px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:-translate-y-0.5 hover:shadow-lg"
+              style={{
+                background: 'linear-gradient(135deg, var(--brand-500), var(--brand-700))',
+                color: '#fff',
+                boxShadow: '0 2px 8px var(--primary-glow)',
+              }}
+            >
               Connexion
             </Link>
           )}
@@ -119,7 +136,7 @@ export default function Navbar() {
           <CartButton />
           <button
             onClick={() => setMobileOpen(true)}
-            className="lg:hidden min-w-[44px] min-h-[44px] w-11 h-11 rounded-lg flex items-center justify-center"
+            className="lg:hidden min-w-[44px] min-h-[44px] w-11 h-11 rounded-xl flex items-center justify-center transition-colors"
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
             aria-label="Ouvrir le menu"
           >

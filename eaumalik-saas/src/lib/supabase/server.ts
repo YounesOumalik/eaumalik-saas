@@ -14,7 +14,7 @@ export function createSupabaseServerClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !key) {
+  if (!url || !key || url.trim() === '' || key.trim() === '') {
     throw new Error('Supabase env manquante côté serveur.');
   }
 
@@ -49,7 +49,7 @@ export function createSupabaseServiceRoleClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !key) {
+  if (!url || !key || url.trim() === '' || key.trim() === '') {
     throw new Error('Service Role key manquante.');
   }
 
@@ -77,9 +77,41 @@ export interface AuthUser {
 }
 
 /**
- * Renvoie l'utilisateur authentifié via Supabase Auth, ou jette AuthError(401).
+ * Lit la session dev (mode mock) depuis le cookie httpOnly pose par
+ * /api/auth/dev-login, ou retourne null si pas en mode dev.
+ */
+async function getDevUserFromCookie(): Promise<AuthUser | null> {
+  if (process.env.NEXT_PUBLIC_USE_MOCKS !== 'true') return null;
+  const hasEnv =
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (hasEnv) return null; // mode Supabase reel : on ne court-circuite pas
+
+  try {
+    const { cookies } = await import('next/headers');
+    const store = cookies();
+    const raw = store.get('eaumalik_dev_session')?.value;
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    return {
+      id: u.id,
+      email: u.email,
+      role: u.role === 'admin' ? 'admin' : 'client',
+      full_name: u.full_name ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Renvoie l'utilisateur authentifie via Supabase Auth (ou session dev en mode mock),
+ * ou jette AuthError(401).
  */
 export async function requireUser(): Promise<AuthUser> {
+  const dev = await getDevUserFromCookie();
+  if (dev) return dev;
+
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
@@ -99,7 +131,7 @@ export async function requireUser(): Promise<AuthUser> {
   };
 }
 
-/** Renvoie l'utilisateur authentifié OU null (sans throw). */
+/** Renvoie l'utilisateur authentifie OU null (sans throw). */
 export async function getOptionalUser(): Promise<AuthUser | null> {
   try {
     return await requireUser();
@@ -108,7 +140,7 @@ export async function getOptionalUser(): Promise<AuthUser | null> {
   }
 }
 
-/** Renvoie l'utilisateur authentifié si admin, sinon throw AuthError(403). */
+/** Renvoie l'utilisateur authentifie si admin, sinon throw AuthError(403). */
 export async function requireAdmin(): Promise<AuthUser> {
   const user = await requireUser();
   if (user.role !== 'admin') {
