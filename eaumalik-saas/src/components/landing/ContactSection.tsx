@@ -146,7 +146,7 @@ export default function ContactSection() {
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold border-soft surface-savor hover:opacity-90 transition-colors"
               style={{ color: 'var(--primary)' }}
             >
-              <i className="fa-solid fa-route" /> Obtenir l'itinéraire
+              <i className="fa-solid fa-route" /> Obtenir l&apos;itinéraire
             </a>
             <a
               href="https://www.google.com/maps/search/?api=1&query=33.6021644,-7.5832744"
