@@ -15,6 +15,7 @@ import { ADMIN_NAV_ITEMS, filterAdminNavItems } from '@/lib/adminNav';
 const NAV_LINKS = [
   { href: '/#accueil', label: 'Accueil' },
   { href: '/#filtration', label: 'Filtration' },
+  { href: '/#offres', label: 'Promotion' },
   { href: '/#catalogue', label: 'Catalogue' },
   { href: '/#industriel', label: 'Professionnels' },
   { href: '/boutique', label: 'Boutique' },
@@ -76,7 +77,7 @@ export default function Navbar() {
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'nav-glass shadow-sm' : 'nav-glass'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-20">
         <Link href="/" className="flex items-center gap-2 group" aria-label="EauMalik Accueil">
-          <BrandLogo size="md" tone="auto" priority className="group-hover:opacity-90 transition-opacity" />
+          <BrandLogo size="md" priority className="group-hover:opacity-90 transition-opacity" />
         </Link>
 
         <div className="hidden lg:flex items-center gap-1">

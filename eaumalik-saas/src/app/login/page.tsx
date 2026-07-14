@@ -201,7 +201,7 @@ function LoginInner() {
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
       <div className="glass-card p-8 max-w-md w-full" style={{ transform: 'none' }}>
         <div className="mb-6 flex justify-center">
-          <BrandLogo size="lg" tone="light" priority />
+          <BrandLogo size="lg" priority />
         </div>
         <h1 className="font-display font-extrabold text-2xl mb-2 text-center">
           {isSignUp ? <>Créer un <span className="gradient-text">Compte</span></> : <>Connexion <span className="gradient-text">EAUMALIK</span></>}

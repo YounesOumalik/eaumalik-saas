@@ -25,7 +25,7 @@ export default async function Footer() {
   const socials = [
     { icon: 'fa-facebook-f', label: 'Facebook', href: '#' },
     { icon: 'fa-instagram', label: 'Instagram', href: '#' },
-    { icon: 'fa-whatsapp', label: 'WhatsApp', href: 'https://wa.me/212600000000' },
+    { icon: 'fa-whatsapp', label: 'WhatsApp', href: 'https://wa.me/212661463194' },
   ];
 
   return (
@@ -37,7 +37,7 @@ export default async function Footer() {
           {/* Bloc marque */}
           <div>
             <Link href="/" className="flex items-center gap-2.5 mb-4 group" aria-label="EauMalik">
-              <BrandLogo size="md" tone="dark" className="group-hover:opacity-90 transition-opacity" />
+              <BrandLogo size="md" className="group-hover:opacity-90 transition-opacity" />
             </Link>
             <p className="text-sm leading-relaxed mb-5 footer-muted">
               L&apos;eau pure, notre engagement. Captage, traitement et distribution d&apos;eau pour les foyers et les professionnels.

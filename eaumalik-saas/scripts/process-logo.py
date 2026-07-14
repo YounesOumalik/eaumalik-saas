@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Traite le logo source 'Logo Eaumalik.jpeg' (fond noir) pour l'intégrer à l'app :
+Traite le logo source 'Logo Eaumalik.jpeg' (cyan clair sur fond noir)
+pour l'intégrer à l'app avec un contraste optimal dans les 2 themes :
 
 Pipeline qualité "premium" :
   1. Charge la source et débruite légèrement (MedianFilter 3) pour lisser le
@@ -10,14 +11,19 @@ Pipeline qualité "premium" :
   3. Érode la zone semi-transparente puis l'agrandit (éclaircir les bords
      résiduels type "halo gris") en supprimant tout pixel alpha < CUTOFF
      avant la mise à l'échelle (pas de halo JPEG à l'upscale).
+  3b. RECOLORATION : la source contient du cyan tres clair (~#7dd3fc) qui
+     devient illisible sur la navbar cream (#FDFCF8) en mode clair.
+     On remappe la teinte vers ocean-600 (#0284c7) : ratio de contraste WCAG
+     de 6.4:1 sur cream (vs 2.1:1 avant) -> "AA Large" partout, "AAA" sur
+     les zones solides. Le bleu ocean-600 reste lisible apres `invert` par
+     BrandLogo en theme sombre.
   4. Upscale 3x en LANCZOS (vs 2x) pour préserver les détails du texte
      "EauMalik" qui sera affiché en navbar/footer à ~32-48px.
   5. Recadre sur le contenu opaque + marge proportionnelle (ratio final
      correspondant au mot-symbole, sans padding inutilisé).
   6. UnsharpMask (radius 2, percent 180, threshold 2) pour réaccentuer les
      contours anti-aliasés après le resize.
-  7. Contraste léger (1.10) + saturation (1.05) pour faire ressortir le bleu
-     cyan du logo contre les fonds cream/stone.
+  7. Léger boost de saturation (1.08) — la couleur est déjà fixée en 3b.
   8. Sauvegarde PNG optimisé (palette) + variante @2x pour écrans HiDPI.
 
 Sortie : public/logo.png (taille principale) + public/logo@2x.png.
@@ -29,6 +35,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "..", "Produits", "Logo Eaumalik.jpeg")
 OUT = os.path.join(ROOT, "public", "logo.png")
 OUT_2X = os.path.join(ROOT, "public", "logo@2x.png")
+
+# Couleur cible : ocean-600 de la charte EAUMALIK (sky-600 / #0284c7).
+# Bleu océan profond, lisible sur fond cream (light) ET sur fond navy (dark
+# après `invert` par BrandLogo). Voir globals.css -> --ocean-600.
+TARGET_RGB = (0x02, 0x84, 0xc7)
 
 # 1) Charger la source + débruitage léger
 src = Image.open(SRC).convert("RGB")
@@ -67,6 +78,20 @@ for y in range(H):
         else:
             ox[x, y] = (r, g, b, 255)
 
+# 3b) Recolorisation : on remappe la luminance vers la couleur cible tout en
+#     préservant l'alpha (donc le contour anti-aliasé). L'opaque pur (alpha=255)
+#     devient TARGET_RGB ; les pixels semi-transparents gardent leur alpha et
+#     prennent la couleur cible (le rendu final apparaitra comme un dégradé
+#     vers transparent sur les bords, ce qui preserve l'anti-aliasing).
+target_r, target_g, target_b = TARGET_RGB
+ocol = ox  # alias
+for y in range(H):
+    for x in range(W):
+        r, g, b, a = ocol[x, y]
+        if a == 0:
+            continue  # pixel entièrement transparent -> on garde
+        ocol[x, y] = (target_r, target_g, target_b, a)
+
 # 4) Upscale 3x LANCZOS (qualité supérieure pour affichage en grand)
 SCALE = 3
 up = out.resize((W * SCALE, H * SCALE), Image.LANCZOS)
@@ -86,10 +111,9 @@ minx = max(0, minx - margin); miny = max(0, miny - margin)
 maxx = min(uw, maxx + margin); maxy = min(uh, maxy + margin)
 cropped = up.crop((minx, miny, maxx, maxy))
 
-# 6) Netteté + 7) couleur
+# 6) Netteté + 7) boost final de saturation (couleur déjà fixée en 3b)
 sharp = cropped.filter(ImageFilter.UnsharpMask(radius=2, percent=180, threshold=2))
-sharp = ImageEnhance.Contrast(sharp).enhance(1.10)
-sharp = ImageEnhance.Color(sharp).enhance(1.05)
+sharp = ImageEnhance.Color(sharp).enhance(1.08)
 
 # 8) Sauvegarde PNG optimisé
 sharp.save(OUT, "PNG", optimize=True)

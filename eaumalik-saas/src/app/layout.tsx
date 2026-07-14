@@ -38,9 +38,9 @@ export const metadata: Metadata = {
     images: [
       {
         url: '/logo.png',
-        width: 2986,
-        height: 1423,
-        alt: 'EAUMALIK SARL — Purification et osmose inverse',
+        width: 1440,
+        height: 1440,
+        alt: 'EAUMALIK SARL — Captage, traitement et distribution d\'eau',
       },
     ],
   },

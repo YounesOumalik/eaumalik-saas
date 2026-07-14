@@ -1,35 +1,33 @@
 /**
  * BrandLogo — rendu de l'identité visuelle d'EAUMALIK.
  *
- * Source unique : `/public/logo.png` (transparent, généré par
- * `scripts/process-logo.py` depuis `Produits/Logo Eaumalik.jpeg`).
+ * Source unique : `/public/logo.png` (1440×1440, version brute du JPEG
+ * `Produits/Logo Eaumalik.jpeg` — fond noir + goutte bleue + mot-symbole
+ * "EauMalik"). Variante HiDPI : `/public/logo@2x.png` (2880×2880).
  *
- * Variantes :
- *   - `tone="light"`  : couleur d'origine (cyan sur fond clair)
- *   - `tone="dark"`   : blanc via `brightness-0 invert` pour fonds sombres
- *   - `tone="auto"`   : suit `data-theme` (Navbar) — cyan en clair, blanc en sombre
+ * Le logo est utilisé TEL QUEL : pas de recolorisation, pas d'invert en
+ * thème sombre (le fond noir est partie intégrante de l'identité).
+ * On adapte uniquement les dimensions d'affichage via les classes
+ * `h-*`/`max-w-*` (le ratio 1:1 est préservé par `object-contain`).
  *
- * `height` est fixe en `h-*` pour préserver le ratio du PNG ; `maxWidth` est
- * appliqué en `max-w-*` pour éviter de déformer sur les viewports étroits.
+ * `height` est fixe en `h-*` ; `maxWidth` limite la largeur pour ne pas
+ * déborder sur les viewports étroits.
  * `priority` passe en `loading="eager"` (LCP-friendly pour le hero/nav).
  */
 import Image from 'next/image';
 
-type Tone = 'light' | 'dark' | 'auto';
 type Size = 'sm' | 'md' | 'lg' | 'xl';
 
 const SIZE_CLASS: Record<Size, { h: string; max: string }> = {
-  sm: { h: 'h-7',  max: 'max-w-[140px]' },
-  md: { h: 'h-9',  max: 'max-w-[180px]' },
-  lg: { h: 'h-12', max: 'max-w-[240px]' },
-  xl: { h: 'h-16', max: 'max-w-[320px]' },
+  sm: { h: 'h-7',  max: 'max-w-[28px]' },
+  md: { h: 'h-9',  max: 'max-w-[36px]' },
+  lg: { h: 'h-12', max: 'max-w-[48px]' },
+  xl: { h: 'h-16', max: 'max-w-[64px]' },
 };
 
 export interface BrandLogoProps {
-  /** Hauteur du logo (largeur dérivée du ratio 2986/1423 ≈ 2.1:1). */
+  /** Hauteur du logo (carré 1:1, largeur dérivée). */
   size?: Size;
-  /** Mode d'affichage : 'light' (couleurs d'origine), 'dark' (blanc), 'auto' (thème). */
-  tone?: Tone;
   /** Affichage prioritaire (LCP) — désactive le lazy load. */
   priority?: boolean;
   /** Texte alternatif pour l'accessibilité. */
@@ -39,31 +37,22 @@ export interface BrandLogoProps {
 
 export default function BrandLogo({
   size = 'md',
-  tone = 'light',
   priority = false,
-  alt = 'EauMalik — Purification et osmose inverse',
+  alt = "EauMalik — Captage, traitement et distribution d'eau",
   className = '',
 }: BrandLogoProps) {
   const sz = SIZE_CLASS[size];
-  // `auto` : cyan en light, blanc en dark via media query CSS.
-  // Implémenté avec deux classes data-theme : on cible l'attribut racine.
-  const toneClass =
-    tone === 'dark'
-      ? 'brightness-0 invert'
-      : tone === 'auto'
-        ? 'dark-mode:invert dark-mode:brightness-0'
-        : '';
 
   return (
     <span className={`inline-flex items-center ${sz.h} ${sz.max} ${className}`}>
       <Image
         src="/logo.png"
         alt={alt}
-        width={2986}
-        height={1423}
+        width={1440}
+        height={1440}
         priority={priority}
-        sizes="(max-width: 768px) 140px, 240px"
-        className={`${sz.h} w-auto object-contain select-none ${toneClass}`}
+        sizes="(max-width: 768px) 36px, 48px"
+        className={`${sz.h} w-auto aspect-square object-contain select-none`}
         draggable={false}
       />
     </span>

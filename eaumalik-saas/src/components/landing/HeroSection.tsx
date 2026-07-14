@@ -80,13 +80,13 @@ export default function HeroSection() {
 
         {/* === Bloc logo géant === */}
         <div className="order-1 md:order-2 flex items-center justify-center">
-          <div className="relative w-full max-w-[560px] aspect-[2986/1423]" style={{ filter: 'drop-shadow(0 30px 60px rgba(2, 132, 199, 0.18))' }}>
+          <div className="relative w-full max-w-[440px] aspect-square" style={{ filter: 'drop-shadow(0 30px 60px rgba(2, 132, 199, 0.18))' }}>
             <Image
               src="/logo.png"
-              alt="EAUMALIK SARL — Purification, traitement et osmose inverse"
+              alt="EAUMALIK SARL — Captage, traitement et distribution d'eau"
               fill
               priority
-              sizes="(max-width: 768px) 90vw, 560px"
+              sizes="(max-width: 768px) 80vw, 440px"
               className="object-contain select-none"
               draggable={false}
             />

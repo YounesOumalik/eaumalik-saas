@@ -115,11 +115,11 @@ export default function AdminShell({ title, children }: { title: string; childre
           <div className="admin-sidebar__header">
             {!collapsed ? (
               <Link href="/" className="admin-sidebar__brand" aria-label="EauMalik Accueil">
-                <BrandLogo size="sm" tone="dark" className="admin-sidebar__logo" />
+                <BrandLogo size="sm" className="admin-sidebar__logo" />
               </Link>
             ) : (
               <Link href="/" className="admin-sidebar__brand admin-sidebar__brand--collapsed" aria-label="EauMalik Accueil">
-                <BrandLogo size="sm" tone="dark" className="admin-sidebar__logo" />
+                <BrandLogo size="sm" className="admin-sidebar__logo" />
               </Link>
             )}
             <button
