@@ -17,6 +17,33 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Next.js incline `process.env.NEXT_PUBLIC_*` dans le
+# bundle CLIENT au moment du build (webpack DefinePlugin).
+# Si ces variables ne sont pas présentes ici, le bundle
+# client contient `undefined` à la place, et même un
+# `--env-file` côté runtime ne peut plus les fournir
+# (elles sont codées en dur dans le JS).
+#
+# Solution : on charge le fichier .env.prod dans le
+# contexte du build via COPY. Next.js lit automatiquement
+# .env.prod en NODE_ENV=production (cf. next.config.mjs /
+# @next/env). C'est la voie la plus fiable — pas de
+# risque de désynchro entre le local et le serveur CI.
+COPY .env.prod* ./
+
+# Fallback ARG/ENV pour les déploiements CI qui passent
+# les secrets via `docker build --build-arg` plutôt que
+# par fichier. Si COPY .env.prod a déjà posé les vars,
+# ces ENV sont sans effet (équivalence).
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_USE_MOCKS
+ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ENV NEXT_PUBLIC_USE_MOCKS=${NEXT_PUBLIC_USE_MOCKS}
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
