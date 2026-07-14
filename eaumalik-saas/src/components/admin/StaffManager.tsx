@@ -673,7 +673,7 @@ export default function StaffManager({
               disabled={restoreSubmitting}
             />
             <p className="text-[10px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
-              Le mot de passe d'origine n'est pas conservé pour des raisons de sécurité.
+              Le mot de passe d&apos;origine n&apos;est pas conservé pour des raisons de sécurité.
               Communiquez-le au membre après la restauration.
             </p>
           </div>

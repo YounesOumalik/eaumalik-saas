@@ -32,9 +32,6 @@ export default function PromotionsCarousel({ promotions }: Props) {
   const [paused, setPaused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // Si on n'a aucune promotion, on n'affiche rien (la section reste cachée).
-  if (!promotions || promotions.length === 0) return null;
-
   // -----------------------------------------------------------------
   // Auto-scroll : translateX progressif via rAF, accéléré au survol off
   // -----------------------------------------------------------------
@@ -89,6 +86,10 @@ export default function PromotionsCarousel({ promotions }: Props) {
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
   }, [promotions.length]);
+
+  // Si on n'a aucune promotion, on n'affiche rien (la section reste cachée).
+  // Placé APRÈS les hooks pour respecter react-hooks/rules-of-hooks.
+  if (!promotions || promotions.length === 0) return null;
 
   // -----------------------------------------------------------------
   // Rendu d'une carte promotion
