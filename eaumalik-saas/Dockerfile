@@ -17,6 +17,13 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Cache buster : incrémenter ce compteur force la re-
+# copie des .env.* + le rebuild de @next/env. Sans ça,
+# Docker réutilise le layer caché de la dernière image
+# et les éventuelles mises à jour de .env.prod sont
+# silencieusement ignorées.
+ARG CACHE_BUST=1
+
 # Next.js incline `process.env.NEXT_PUBLIC_*` dans le
 # bundle CLIENT au moment du build (webpack DefinePlugin).
 # Si ces variables ne sont pas présentes ici, le bundle
