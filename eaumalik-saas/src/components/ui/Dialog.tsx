@@ -23,11 +23,11 @@ import type { ReactNode } from 'react';
  *   - `footer`  : optionnel. Bandeau d'actions en bas (boutons `btn-outline` + `btn-primary`).
  *
  * Tailles :
- *   - `sm`  : max-w-md   (~ 28rem) — confirmations, formulaires legers
- *   - `md`  : max-w-xl   (~ 36rem) — formulaire membre (defaut)
- *   - `lg`  : max-w-2xl  (~ 42rem) — detail commande / client
- *   - `xl`  : max-w-3xl  (~ 48rem) — boutique produit
- *   - `full`: max-w-5xl  (~ 64rem) — formulaires complexes
+ *   - `sm`  : max-w-md       (~ 28rem)   — confirmations, formulaires legers
+ *   - `md`  : max-w-xl       (~ 36rem)   — formulaire membre (defaut)
+ *   - `lg`  : max-w-2xl      (~ 42rem)   — detail commande / client
+ *   - `xl`  : max-w-3xl      (~ 48rem)   — boutique produit
+ *   - `full`: max-w-[1400px] (~ 87.5rem) — formulaires et contenus volumineux (etalage pleine page)
  */
 export type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 
@@ -45,7 +45,7 @@ const SIZE_CLASS: Record<DialogSize, string> = {
   md:   'max-w-xl',
   lg:   'max-w-2xl',
   xl:   'max-w-3xl',
-  full: 'max-w-5xl',
+  full: 'max-w-[1400px]',
 };
 
 export interface DialogProps {

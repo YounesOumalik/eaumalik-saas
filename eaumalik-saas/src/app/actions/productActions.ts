@@ -42,7 +42,7 @@ const ProductInputSchema = z.object({
 });
 
 /** Verifie que l'utilisateur est admin (ou bypasse en mode mock + superadmin cookie). */
-async function ensureAdminOrMock(): Promise<{ ok: boolean; error?: string }> {
+async function ensureAdminOrMock(): Promise<{ ok: boolean; error?: string; role?: 'admin' | 'client' }> {
   const useMocks =
     process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
     !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
@@ -56,7 +56,44 @@ async function ensureAdminOrMock(): Promise<{ ok: boolean; error?: string }> {
   const user = await getOptionalUser();
   if (!user) return { ok: false, error: 'Authentification requise.' };
   if (user.role !== 'admin') return { ok: false, error: 'Droits admin requis.' };
-  return { ok: true };
+  return { ok: true, role: user.role };
+}
+
+/** Recupere le role effectif de l'appelant (mode mock : via cookie dev-login). */
+async function getCallerRole(): Promise<'admin' | 'client' | null> {
+  const useMocks =
+    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+
+  if (useMocks) {
+    try {
+      const { cookies } = await import('next/headers');
+      const raw = cookies().get('eaumalik_dev_session')?.value;
+      if (!raw) return null;
+      const u = JSON.parse(raw);
+      return u.role === 'admin' ? 'admin' : 'client';
+    } catch {
+      return null;
+    }
+  }
+  const user = await getOptionalUser();
+  return user?.role ?? null;
+}
+
+/**
+ * Filtre le payload pour ne garder que les champs autorisés pour l'appelant.
+ * Le prix d'achat en gros est reserve au super admin : si l'appelant n'est pas admin,
+ * on retire le champ du payload pour eviter toute modification via l'API.
+ */
+function sanitizeProductPayloadForRole<T extends Record<string, any>>(
+  payload: T,
+  role: 'admin' | 'client' | null,
+): T {
+  if (role === 'admin') return payload;
+  const { wholesale_price, ...rest } = payload;
+  void wholesale_price;
+  return rest as T;
 }
 
 export async function createProductAction(raw: unknown) {
@@ -69,29 +106,32 @@ export async function createProductAction(raw: unknown) {
 
   try {
     const data = parsed.data;
+    const callerRole = await getCallerRole();
+    // Defense en profondeur : un appelant non-admin ne peut pas fixer wholesale_price.
+    const safeData = sanitizeProductPayloadForRole(data, callerRole);
     // En mock on accepte les data: URLs comme image_url_local
     const imageUrl =
-      data.image_url_local ||
-      data.image_url ||
+      safeData.image_url_local ||
+      safeData.image_url ||
       (process.env.NEXT_PUBLIC_USE_MOCKS === 'true'
         ? `/products/product-${Math.floor(Math.random() * 14) + 1}.jpeg`
         : null);
 
     const created = await createProduct({
-      name: data.name,
-      slug: data.slug || data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 100),
-      description: data.description ?? null,
-      price: data.price,
-      category: data.category,
+      name: safeData.name,
+      slug: safeData.slug || safeData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 100),
+      description: safeData.description ?? null,
+      price: safeData.price,
+      category: safeData.category,
       image_url: imageUrl,
-      specs: data.specs ?? [],
-      is_featured: data.is_featured,
-      stock: data.stock,
-      stock_alert_threshold: data.stock_alert_threshold ?? 5,
-      filter_lifespan_months: data.filter_lifespan_months ?? null,
-      wholesale_price: data.wholesale_price ?? 0,
-      is_out_of_stock: data.is_out_of_stock ?? false,
-      is_archived: data.is_archived ?? false,
+      specs: safeData.specs ?? [],
+      is_featured: safeData.is_featured,
+      stock: safeData.stock,
+      stock_alert_threshold: safeData.stock_alert_threshold ?? 5,
+      filter_lifespan_months: safeData.filter_lifespan_months ?? null,
+      wholesale_price: safeData.wholesale_price ?? 0,
+      is_out_of_stock: safeData.is_out_of_stock ?? false,
+      is_archived: safeData.is_archived ?? false,
     });
     revalidatePath('/boutique');
     revalidatePath('/admin/catalogue');
@@ -111,9 +151,12 @@ export async function updateProductAction(id: string, raw: unknown) {
 
   try {
     const data = parsed.data;
+    const callerRole = await getCallerRole();
+    // Defense en profondeur : un appelant non-admin ne peut pas modifier wholesale_price.
+    const safeData = sanitizeProductPayloadForRole(data, callerRole);
     const updated = await updateProduct(id, {
-      ...data,
-      image_url: data.image_url_local || data.image_url || undefined,
+      ...safeData,
+      image_url: safeData.image_url_local || safeData.image_url || undefined,
     });
     revalidatePath('/boutique');
     revalidatePath('/admin/catalogue');

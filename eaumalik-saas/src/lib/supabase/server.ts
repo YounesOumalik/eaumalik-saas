@@ -9,6 +9,7 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { getDevUserFromCookie } from '@/lib/auth/devSession';
 
 export function createSupabaseServerClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -76,41 +77,21 @@ export interface AuthUser {
   full_name: string | null;
 }
 
-/**
- * Lit la session dev (mode mock) depuis le cookie httpOnly pose par
- * /api/auth/dev-login, ou retourne null si pas en mode dev.
- */
-async function getDevUserFromCookie(): Promise<AuthUser | null> {
-  if (process.env.NEXT_PUBLIC_USE_MOCKS !== 'true') return null;
-  const hasEnv =
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (hasEnv) return null; // mode Supabase reel : on ne court-circuite pas
-
-  try {
-    const { cookies } = await import('next/headers');
-    const store = cookies();
-    const raw = store.get('eaumalik_dev_session')?.value;
-    if (!raw) return null;
-    const u = JSON.parse(raw);
-    return {
-      id: u.id,
-      email: u.email,
-      role: u.role === 'admin' ? 'admin' : 'client',
-      full_name: u.full_name ?? null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Renvoie l'utilisateur authentifie via Supabase Auth (ou session dev en mode mock),
+/**Renvoie l'utilisateur authentifie via Supabase Auth (ou session dev en mode mock),
  * ou jette AuthError(401).
  */
 export async function requireUser(): Promise<AuthUser> {
   const dev = await getDevUserFromCookie();
-  if (dev) return dev;
+  if (dev) {
+    // Le helper dev préserve le rôle métier réel ; on le normalise ici en
+    // 'admin' | 'client' pour l'API d'autorisation (requireAdmin, etc.).
+    return {
+      id: dev.id,
+      email: dev.email,
+      role: dev.role === 'admin' ? 'admin' : 'client',
+      full_name: dev.full_name,
+    };
+  }
 
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();

@@ -45,9 +45,11 @@ interface ProductFormDialogProps {
   product: Product | null;
   onClose: () => void;
   onSaved: (p: Product) => void;
+  /** Réservé au super admin : affichage + édition du prix d'achat en gros. */
+  canEditWholesalePrice: boolean;
 }
 
-function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialogProps) {
+function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePrice }: ProductFormDialogProps) {
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [imageUrl, setImageUrl] = useState<string>('');
@@ -110,7 +112,13 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
       const payload = {
         name: data.name,
         price: data.price,
-        wholesale_price: data.wholesale_price || 0,
+        // Prix d'achat en gros : champ réservé au super admin.
+        // On conserve la valeur existante pour les non-admins (undefined = non touché).
+        ...(canEditWholesalePrice
+          ? { wholesale_price: data.wholesale_price || 0 }
+          : product?.wholesale_price !== undefined
+            ? { wholesale_price: product.wholesale_price }
+            : {}),
         stock: data.stock,
         category: data.category,
         description: data.description ?? null,
@@ -149,7 +157,8 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
       title={product ? 'Modifier le produit' : 'Nouveau produit'}
       subtitle={product ? product.id : 'Renseignez les informations ci-dessous'}
       zIndex={1100}
-      size="lg"
+      size="full"
+      maxHeight="tall"
       footer={
         <>
           <button
@@ -170,9 +179,9 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
         </>
       }
     >
-        <form id="product-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
+        <form id="product-form" onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="sm:col-span-2 xl:col-span-3">
               <label className="form-label">Nom *</label>
               <input
                 className="form-input"
@@ -214,27 +223,32 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
               />
               {errors.price && <p className="text-xs text-danger mt-1">{errors.price.message}</p>}
             </div>
-            <div>
-              <label className="form-label">Prix d&apos;achat en gros (DH)</label>
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                className="form-input"
-                placeholder="0"
-                {...register('wholesale_price')}
-              />
-            </div>
-            <div className="sm:col-span-2">
+            {canEditWholesalePrice && (
+              <div>
+                <label className="form-label">Prix d&apos;achat en gros (DH)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  className="form-input"
+                  placeholder="0"
+                  {...register('wholesale_price')}
+                />
+                <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                  Réservé au super admin.
+                </p>
+              </div>
+            )}
+            <div className="sm:col-span-2 xl:col-span-3">
               <label className="form-label">Description</label>
               <textarea
                 className="form-input"
-                rows={3}
+                rows={6}
                 placeholder="Description courte du produit..."
                 {...register('description')}
               />
             </div>
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 xl:col-span-3">
               <label className="form-label">Photo du produit</label>
               <div className="flex items-center gap-4 mt-1">
                 <div
@@ -271,7 +285,7 @@ function ProductFormDialog({ open, product, onClose, onSaved }: ProductFormDialo
                 </div>
               </div>
             </div>
-            <div className="sm:col-span-2 flex flex-wrap gap-4 mt-2">
+            <div className="sm:col-span-2 xl:col-span-3 flex flex-wrap gap-4 mt-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" {...register('is_featured')} />
                 <span className="text-sm flex items-center gap-1">
@@ -365,6 +379,8 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
   }, []);
 
   const canEdit = !permissions || role === 'admin' || permissions.can_edit_products;
+  // Seul le super admin peut voir / modifier le prix d'achat en gros.
+  const isSuperAdmin = role === 'admin';
 
   // Filtrage local
   const visibleProducts = useMemo(() => {
@@ -603,7 +619,7 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                 <th>Produit</th>
                 <th>Catégorie</th>
                 <th>Prix Vente</th>
-                <th>Prix Gros</th>
+                {isSuperAdmin && <th>Prix Gros</th>}
                 <th>Stock</th>
                 <th>Statuts</th>
                 {canEdit && <th>Actions</th>}
@@ -631,9 +647,11 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                     {p.category === 'purificateurs' ? 'Purificateur' : p.category === 'industriel' ? 'Industriel' : 'Consommable'}
                   </td>
                   <td className="font-semibold text-sm">{formatCurrency(p.price)}</td>
-                  <td className="font-semibold text-sm" style={{ color: 'var(--primary-light)' }}>
-                    {p.wholesale_price ? formatCurrency(p.wholesale_price) : '—'}
-                  </td>
+                  {isSuperAdmin && (
+                    <td className="font-semibold text-sm" style={{ color: 'var(--primary-light)' }}>
+                      {p.wholesale_price ? formatCurrency(p.wholesale_price) : '—'}
+                    </td>
+                  )}
                   <td className="text-sm">{p.stock}</td>
                   <td>
                     <div className="flex flex-wrap gap-1">
@@ -809,6 +827,7 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
         product={editing}
         onClose={() => setDialogOpen(false)}
         onSaved={onSaved}
+        canEditWholesalePrice={isSuperAdmin}
       />
 
       {/* Confirmation */}

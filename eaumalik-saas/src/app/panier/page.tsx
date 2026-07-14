@@ -101,7 +101,8 @@ export default function CartPage() {
       // Connexion automatique de l'invité (mode mock : sessionStorage lu par le provider).
       if (result.createdUser) {
         try {
-          sessionStorage.setItem('eaumalik_dev_session', JSON.stringify(result.createdUser));
+          // Le cookie de session est posé par l'API ; on notifie le provider
+          // (même onglet) pour rafraîchir la navbar.
           window.dispatchEvent(new Event('eaumalik:dev-session-change'));
         } catch { /* noop */ }
       }

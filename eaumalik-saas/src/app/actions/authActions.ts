@@ -3,6 +3,7 @@
 import 'server-only';
 import { z } from 'zod';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getDevUserFromCookie } from '@/lib/auth/devSession';
 
 const RegisterSchema = z.object({
   email: z.string().email('Email invalide.'),
@@ -63,6 +64,28 @@ export async function registerUserAction(input: RegisterInput) {
 
 /** Renvoie les permissions effectives de l'utilisateur courant. */
 export async function getCurrentUserPermissionsAction() {
+  // Mode dev/mock : lit la session depuis le cookie httpOnly posé par
+  // /api/auth/dev-login. Préserve le rôle métier réel (technician, sales…)
+  // et ses permissions, afin que l'UI affiche le menu CRM en conséquence.
+  const dev = await getDevUserFromCookie();
+  if (dev) {
+    const role = dev.role;
+    const isAdmin = role === 'admin';
+    const p = dev.permissions ?? {};
+    return {
+      success: true as const,
+      role,
+      permissions: {
+        can_view_products: p.can_view_products ?? isAdmin,
+        can_edit_products: p.can_edit_products ?? isAdmin,
+        can_validate_orders: p.can_validate_orders ?? isAdmin,
+        can_follow_prospects: p.can_follow_prospects ?? isAdmin,
+        can_view_comptabilite: p.can_view_comptabilite ?? isAdmin,
+        can_view_stocks: p.can_view_stocks ?? isAdmin,
+      },
+    };
+  }
+
   try {
     const supabase = createSupabaseServerClient();
     const { data: userRes } = await supabase.auth.getUser();

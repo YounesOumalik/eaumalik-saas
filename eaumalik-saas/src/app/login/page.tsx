@@ -86,8 +86,9 @@ function LoginInner() {
           setLoading(false);
           return;
         }
-        // Login OK : on stocke la session factice et on redirige
-        sessionStorage.setItem('eaumalik_dev_session', JSON.stringify(json.user));
+        // Login OK : le cookie de session est posé par /api/auth/dev-login.
+        // On notifie le provider (même onglet) pour rafraîchir la navbar.
+        window.dispatchEvent(new Event('eaumalik:dev-session-change'));
         const role = json.user?.role;
         if (role === 'admin' || role === 'staff') {
           router.push('/admin');

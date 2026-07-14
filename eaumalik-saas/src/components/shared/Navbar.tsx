@@ -39,12 +39,14 @@ export default function Navbar() {
   useEffect(() => { setMounted(true); }, []);
 
   const [permissions, setPermissions] = useState<any>(null);
+  const [role, setRole] = useState<string>('');
 
   useEffect(() => {
     if (!session) return;
     getCurrentUserPermissionsAction().then(res => {
       if (res.success) {
         setPermissions(res.permissions);
+        setRole(res.role || '');
       }
     });
   }, [session]);
@@ -54,8 +56,12 @@ export default function Navbar() {
     return pathname.startsWith(href.split('?')[0]);
   };
 
-  const userRole = isAdmin ? 'admin' : 'client';
-  const isStaff = userRole !== 'client';
+  // Rôle réel (admin, client, technician, sales…) prioritaire sur isAdmin.
+  const userRole = role || (isAdmin ? 'admin' : 'client');
+  // Personnel = tout rôle non-client disposant d'au moins une permission
+  // (ou admin). Pilote l'affichage des menus Administration + CRM.
+  const hasAnyPermission = !!permissions && Object.values(permissions).some(Boolean);
+  const isStaff = userRole !== 'client' && (userRole === 'admin' || hasAnyPermission);
 
   const allowedAdminLinks = ADMIN_LINKS.filter(l => {
     if (l.id === 'personnels') return userRole === 'admin';

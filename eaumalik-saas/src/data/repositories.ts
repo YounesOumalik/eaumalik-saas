@@ -495,6 +495,7 @@ function normalizeNews(row: RawNews): News {
 /** Liste toutes les actualités (admin / carrousel). Triées du plus récent au plus ancien. */
 export async function listNews(options?: {
   includeArchived?: boolean;
+  includeExpired?: boolean;
   promotionOnly?: boolean;
   forUserId?: string;
 }): Promise<News[]> {
@@ -517,7 +518,9 @@ export async function listNews(options?: {
         return tAll || tIds.includes(uid);
       });
     }
-    filtered = filtered.filter(r => !r.valid_until || r.valid_until > nowIso);
+    if (!options?.includeExpired) {
+      filtered = filtered.filter(r => !r.valid_until || r.valid_until > nowIso);
+    }
     const sorted = filtered.sort((a, b) => b.created_at.localeCompare(a.created_at));
     return sorted.map(normalizeNews);
   }
@@ -529,9 +532,9 @@ export async function listNews(options?: {
   }
   const { data, error } = await query;
   if (error) throw error;
-  return ((data ?? []) as RawNews[])
-    .map(normalizeNews)
-    .filter(n => !n.valid_until || n.valid_until > nowIso);
+  const normalized = ((data ?? []) as RawNews[]).map(normalizeNews);
+  if (options?.includeExpired) return normalized;
+  return normalized.filter(n => !n.valid_until || n.valid_until > nowIso);
 }
 
 /** Promotions actuellement visibles par un visiteur anonyme (carrousel landing). */
@@ -544,13 +547,14 @@ export async function listActivePromotions(limit = 12): Promise<News[]> {
  * Crée une actualité / promotion. Utilisée en dernier recours côté repository.
  * Les Server Actions appellent en général Supabase directement (RLS bypass via service role).
  */
-export async function createNews(input: Omit<News, 'id' | 'created_at' | 'is_promotion'>): Promise<News> {
+export async function createNews(input: Omit<News, 'id' | 'created_at'>): Promise<News> {
   const id = `news-${Date.now()}`;
   const now = new Date().toISOString();
   const record: RawNews = {
     ...input,
     id,
     created_at: now,
+    is_promotion: input.is_promotion === true,
     product_ids: input.product_ids ?? [],
     target_user_ids: input.target_user_ids ?? [],
     target_all: input.target_all !== false,
@@ -568,6 +572,37 @@ export async function createNews(input: Omit<News, 'id' | 'created_at' | 'is_pro
   const { data, error } = await supabase.from('news').insert(record).select().single();
   if (error) throw error;
   return normalizeNews(data as RawNews);
+}
+
+/** Met à jour une actualité / promotion existante (patch partiel). */
+export async function updateNews(id: string, patch: Partial<Omit<News, 'id' | 'created_at'>>): Promise<News> {
+  if (shouldUseMocks()) {
+    const rows = readNews() as RawNews[];
+    const idx = rows.findIndex(r => r.id === id);
+    if (idx === -1) throw new Error('Actualité introuvable.');
+    const updated: RawNews = { ...rows[idx], ...patch, id };
+    rows[idx] = updated;
+    writeNews(rows);
+    return normalizeNews(updated);
+  }
+
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('news').update(patch).eq('id', id).select().single();
+  if (error) throw error;
+  return normalizeNews(data as RawNews);
+}
+
+/** Supprime définitivement une actualité / promotion. */
+export async function deleteNews(id: string): Promise<void> {
+  if (shouldUseMocks()) {
+    const rows = readNews() as RawNews[];
+    writeNews(rows.filter(r => r.id !== id));
+    return;
+  }
+
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('news').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // ============================================================================

@@ -1,27 +1,29 @@
+import HeroSection from '@/components/landing/HeroSection';
+import FeaturesSection from '@/components/landing/FeaturesSection';
+import ProductsPreview from '@/components/landing/ProductsPreview';
+import TestimonialsSection from '@/components/landing/TestimonialsSection';
+import PromotionsCarousel from '@/components/landing/PromotionsCarousel';
 import { listProducts, listActivePromotions } from '@/data/repositories';
-import BoutiqueClient from './boutique/BoutiqueClient';
 
-// La page d'accueil affiche désormais la même version boutique que /boutique
-// (source unique de vérité). L'ancienne version "landing" (HeroSection,
-// FeaturesSection, ProductsPreview, TestimonialsSection, PromotionsCarousel)
-// n'est plus importée par cette route — ses composants restent sur disque
-// mais ne sont plus rendus publiquement (ils sont toujours disponibles si tu
-// veux les réutiliser ailleurs).
-//
-// Avantage : une seule URL canonique du nouveau design, promos & actualités
-// toujours visibles sur "/", aucun 307 inutile.
+// Modèle de page d'accueil "landing" (utilisé avant le refactor du 2026-07-14) :
+//   - HeroSection         : message d'accueil (logo animé, titre, CTAs)
+//   - FeaturesSection     : "Pourquoi choisir EAUMALIK ?" (6 cartes)
+//   - ProductsPreview     : "Nos produits phares" (produits is_featured)
+//   - TestimonialsSection : "Ce que disent nos clients" (3 avis)
+//   - PromotionsCarousel  : carrousel des promotions actives
 export default async function HomePage() {
   const [products, promotions] = await Promise.all([
     listProducts(),
     listActivePromotions(12),
   ]);
-  // La landing page ne montre que les produits phares (is_featured) + les promos.
-  const featuredOnly = true;
+  const featured = products.filter(p => p.is_featured && !p.is_archived);
   return (
-    <BoutiqueClient
-      initialProducts={products}
-      promotions={promotions}
-      featuredOnly={featuredOnly}
-    />
+    <>
+      <HeroSection />
+      <FeaturesSection />
+      <ProductsPreview products={featured} />
+      <TestimonialsSection />
+      <PromotionsCarousel promotions={promotions} />
+    </>
   );
 }

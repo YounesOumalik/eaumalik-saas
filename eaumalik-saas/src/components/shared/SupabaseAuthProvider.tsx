@@ -27,15 +27,11 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   // Mode dev (sans Supabase) : session factice écrite par /api/auth/dev-login
   // ou par le checkout invité, lue depuis sessionStorage. On la garde en état
   // pour pouvoir la mettre à jour sans reload (événement custom ci-dessous).
-  const [devUser, setDevUser] = useState<any>(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const raw = sessionStorage.getItem('eaumalik_dev_session');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  // Mode dev (sans Supabase) : la session est lue depuis le cookie httpOnly
+  // `eaumalik_dev_session` via l'endpoint /api/auth/dev-session (partagé entre
+  // onglets et après refresh). On garde l'état pour pouvoir le mettre à jour
+  // sans reload (événement custom + re-fetch).
+  const [devUser, setDevUser] = useState<any>(null);
 
   const supabase = maybeSupabaseBrowserClient();
 
@@ -90,44 +86,65 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [supabase, fetchProfile]);
 
-  // Mode dev : on écoute la création/mise à jour de session (ex: checkout invité)
-  // pour reconnecter l'utilisateur sans recharger la page.
+  // Mode dev : on lit la session depuis le cookie httpOnly via l'endpoint
+  // /api/auth/dev-session (partagé entre onglets + survit au refresh). On
+  // recharge aussi à chaque événement custom (login, checkout invité) émis
+  // dans le même onglet.
   useEffect(() => {
     if (supabase) return;
-    const onDevSession = () => {
+    let cancelled = false;
+    const loadDevSession = async () => {
       try {
-        const raw = sessionStorage.getItem('eaumalik_dev_session');
-        setDevUser(raw ? JSON.parse(raw) : null);
+        const res = await fetch('/api/auth/dev-session', { cache: 'no-store' });
+        if (cancelled) return;
+        if (res.ok) {
+          const json = await res.json();
+          setDevUser(json.user ?? null);
+        } else {
+          setDevUser(null);
+        }
       } catch {
-        setDevUser(null);
+        if (!cancelled) setDevUser(null);
       }
     };
+    void loadDevSession();
+    const onDevSession = () => { void loadDevSession(); };
     window.addEventListener('eaumalik:dev-session-change', onDevSession);
-    return () => window.removeEventListener('eaumalik:dev-session-change', onDevSession);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('eaumalik:dev-session-change', onDevSession);
+    };
   }, [supabase]);
 
-  // Mode dev (sans Supabase) : on lit la session factice ecrite par
-  // /api/auth/dev-login (ou le checkout invité) dans sessionStorage.
+  // la session factice est portée par le cookie
+  // httpOnly `eaumalik_dev_session`, lue via /api/auth/dev-session.
   if (!supabase) {
     return (
       <AuthContext.Provider
         value={{
           user: devUser ? ({ id: devUser.id, email: devUser.email, user_metadata: { full_name: devUser.full_name } } as any) : null,
           session: devUser ? ({ user: { id: devUser.id, email: devUser.email } } as any) : null,
-          loading: false,
+          loading,
           isAdmin: devUser?.role === 'admin',
           refresh: async () => {
             try {
-              const raw = sessionStorage.getItem('eaumalik_dev_session');
-              setDevUser(raw ? JSON.parse(raw) : null);
+              const res = await fetch('/api/auth/dev-session', { cache: 'no-store' });
+              if (res.ok) {
+                const json = await res.json();
+                setDevUser(json.user ?? null);
+              } else {
+                setDevUser(null);
+              }
             } catch {
               setDevUser(null);
             }
           },
           async signOut() {
-            try { sessionStorage.removeItem('eaumalik_dev_session'); } catch {}
-            setDevUser(null);
-            window.location.href = '/';
+            try {
+              await fetch('/api/auth/dev-session', { method: 'DELETE' });
+            } catch {
+              /* noop */
+            }
           },
           displayName: devUser?.full_name || devUser?.email || '',
         }}

@@ -11,26 +11,34 @@ const FEATURES = [
 
 // L'animation au scroll (.reveal → .revealed) est gérée globalement par
 // <RevealOnScroll /> dans Providers.tsx, plus par cette section.
+// Design aligné sur la page boutique (font-serif, brand-*, stone-*).
 export default function FeaturesSection() {
   return (
-    <section id="features" className="py-24 px-4" style={{ background: 'var(--bg)' }}>
-      <div className="max-w-6xl mx-auto">
+    <section id="features" className="py-32 px-6 bg-white">
+      <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16 reveal">
-          <h2 className="text-3xl sm:text-4xl font-display font-extrabold mb-4">
-            Pourquoi choisir <span className="gradient-text">EAUMALIK</span> ?
+          <span className="text-xs font-bold uppercase tracking-[0.3em] text-brand-600 mb-4 block">
+            Notre engagement
+          </span>
+          <h2 className="font-serif text-4xl md:text-6xl font-normal leading-[0.85] tracking-tighter mb-6 text-stone-900">
+            Pourquoi choisir <em className="text-brand-700">EAUMALIK</em> ?
           </h2>
-          <p className="max-w-xl mx-auto" style={{ color: 'var(--text-secondary)' }}>
+          <p className="text-lg text-stone-500 font-light max-w-xl mx-auto">
             Notre engagement, votre confiance. Des solutions sur mesure pour chaque besoin en traitement de l&apos;eau.
           </p>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {FEATURES.map((f, i) => (
-            <div key={f.title} className="glass-card p-6 reveal" style={{ transitionDelay: `${i * 80}ms` }}>
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-dark))' }}>
-                <i className={`${f.icon} text-white`} aria-hidden="true" />
+            <div
+              key={f.title}
+              className="bg-white rounded-3xl border border-stone-100 p-8 reveal hover:shadow-xl hover:-translate-y-1 transition-all duration-500"
+              style={{ transitionDelay: `${i * 80}ms` }}
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 bg-brand-50">
+                <i className={`${f.icon} text-brand-600`} aria-hidden="true" />
               </div>
-              <h3 className="font-display font-bold text-lg mb-2">{f.title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{f.desc}</p>
+              <h3 className="font-serif font-semibold text-xl mb-2 text-stone-900">{f.title}</h3>
+              <p className="text-sm leading-relaxed text-stone-500">{f.desc}</p>
             </div>
           ))}
         </div>

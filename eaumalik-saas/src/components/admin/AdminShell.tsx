@@ -9,12 +9,15 @@ import {
   Tags,
   TrendingUp,
   LogIn,
+  LogOut,
   Users,
   Wrench,
+  Megaphone,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
 import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
+import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
 
 const TABS = [
   { id: 'commandes',    label: 'Commandes',     href: '/admin',                  icon: Box },
@@ -23,6 +26,7 @@ const TABS = [
   { id: 'comptabilite', label: 'Comptabilité',  href: '/admin/comptabilite',     icon: TrendingUp },
   { id: 'maintenance',  label: 'Maintenance',   href: '/admin/maintenance',      icon: Wrench },
   { id: 'personnels',   label: 'Personnels',    href: '/admin/personnels',       icon: Users },
+  { id: 'actualites',   label: 'Actualités / Promotions', href: '/admin/actualites', icon: Megaphone },
 ];
 
 const STORAGE_KEY = 'eaumalik.admin.sidebar.collapsed';
@@ -30,6 +34,7 @@ const STORAGE_KEY = 'eaumalik.admin.sidebar.collapsed';
 export default function AdminShell({ title, children }: { title: string; children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { session, signOut } = useSupabaseAuth();
 
   const [permissions, setPermissions] = useState<any>(null);
   const [role, setRole] = useState<string>('');
@@ -76,6 +81,7 @@ export default function AdminShell({ title, children }: { title: string; childre
     if (tab.id === 'catalogue') return permissions.can_view_products;
     if (tab.id === 'comptabilite') return permissions.can_view_comptabilite;
     if (tab.id === 'maintenance') return permissions.can_view_comptabilite || role === 'admin';
+    if (tab.id === 'actualites') return role === 'admin';
     if (tab.id === 'personnels') return role === 'admin';
 
     return true;
@@ -137,14 +143,26 @@ export default function AdminShell({ title, children }: { title: string; childre
           </nav>
 
           <div className="admin-sidebar__footer">
-            <Link
-              href="/login"
-              className="sidebar-link"
-              title={collapsed ? 'Connexion admin' : undefined}
-            >
-              <LogIn size={16} aria-hidden="true" className="shrink-0" />
-              {!collapsed && <span className="sidebar-link__label">Connexion admin</span>}
-            </Link>
+            {session ? (
+              <button
+                type="button"
+                onClick={async () => { await signOut(); }}
+                className="sidebar-link w-full text-left"
+                title={collapsed ? 'Déconnexion' : undefined}
+              >
+                <LogOut size={16} aria-hidden="true" className="shrink-0" />
+                {!collapsed && <span className="sidebar-link__label">Déconnexion</span>}
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="sidebar-link"
+                title={collapsed ? 'Connexion admin' : undefined}
+              >
+                <LogIn size={16} aria-hidden="true" className="shrink-0" />
+                {!collapsed && <span className="sidebar-link__label">Connexion admin</span>}
+              </Link>
+            )}
           </div>
         </aside>
 
