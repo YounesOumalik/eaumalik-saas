@@ -108,9 +108,9 @@ export function generateCaptchaSvg(answer?: string, opts: RenderOpts = {}): { sv
     const ch = finalAnswer[i];
     const cx = cellWidth * i + cellWidth / 2 + (rng() - 0.5) * 6;
     const cy = height / 2 + (rng() - 0.5) * 8;
-    const rot = (rng() - 0.5) * 50; // ±25°
-    const fontSize = 30 + Math.floor(rng() * 8);
-    const skewX = (rng() - 0.5) * 12;
+    const rot = (rng() - 0.5) * 30; // ±15° (avant ±25° : trop déformé)
+    const fontSize = 30 + Math.floor(rng() * 6);
+    const skewX = (rng() - 0.5) * 8; // skew plus doux (avant ±12°)
     const fill = pickInk(rng);
     chars += `<text x="${cx.toFixed(2)}" y="${cy.toFixed(2)}" `
       + `font-family="'Space Grotesk', 'Courier New', monospace" `
@@ -120,26 +120,25 @@ export function generateCaptchaSvg(answer?: string, opts: RenderOpts = {}): { sv
       + `style="user-select:none">${escapeXml(ch)}</text>`;
   }
 
-  // Lignes croisées : 4 segments, mixées sur toute la surface.
+  // Lignes croisées : 2 segments ondulés, opacité réduite pour ne pas masquer
+  // les caractères. Avant : 4 lignes opaques -> lisibilité trop dégradée.
   let lines = '';
-  for (let i = 0; i < 4; i++) {
-    const x1 = rng() * width;
-    const y1 = rng() * height;
-    const x2 = rng() * width;
-    const y2 = rng() * height;
-    const stroke = pickInk(rng, 0.35);
-    lines += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" `
-      + `stroke="${stroke}" stroke-width="1.2" opacity="0.55" />`;
+  for (let i = 0; i < 2; i++) {
+    const y1 = height * (0.3 + rng() * 0.4);
+    const y2 = height * (0.3 + rng() * 0.4);
+    const stroke = pickInk(rng, 0.18);
+    lines += `<path d="M0 ${y1.toFixed(1)} Q ${(width * 0.5).toFixed(1)} ${(y1 - 8).toFixed(1)} ${width.toFixed(1)} ${y2.toFixed(1)}" `
+      + `stroke="${stroke}" stroke-width="1" fill="none" opacity="0.5" />`;
   }
 
-  // Bruit : ~40 petits points semi-transparents.
+  // Bruit : 12 petits points discrets (avant : 40 -> saturation visuelle).
   let dots = '';
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 12; i++) {
     const x = rng() * width;
     const y = rng() * height;
-    const r = 0.5 + rng() * 1.1;
-    const fill = pickInk(rng, 0.4);
-    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(2)}" fill="${fill}" opacity="0.6" />`;
+    const r = 0.4 + rng() * 0.6;
+    const fill = pickInk(rng, 0.25);
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(2)}" fill="${fill}" opacity="0.5" />`;
   }
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="CAPTCHA : retapez les ${finalAnswer.length} caractères affichés">`
@@ -164,15 +163,14 @@ function escapeXml(s: string): string {
   });
 }
 
-/** Couleur d'encre légèrement variable (autour du teal-700 brand) pour le bruit. */
+/** Couleur d'encre : un seul teal foncé pour rester lisible. Avant : palette
+ *  de 5 couleurs sombres qui se confondaient avec le fond et le bruit. */
 function pickInk(rng: () => number, alpha = 1): string {
-  const palette = ['#0f766e', '#115e59', '#134e4a', '#1c1917', '#0e7490'];
-  const c = palette[Math.floor(rng() * palette.length)];
+  // Avant : palette de 5 hex sombres. Maintenant : teal-700 (#0f766e) qui contraste
+  // bien sur le fond cream (#f3efe0) du SVG, ratio WCAG ~7:1.
+  const c = '#0f766e';
   if (alpha >= 1) return c;
-  // Convertit #rrggbb en rgba(r,g,b,alpha).
-  const r = parseInt(c.slice(1, 3), 16);
-  const g = parseInt(c.slice(3, 5), 16);
-  const b = parseInt(c.slice(5, 7), 16);
+  const r = 0x0f, g = 0x76, b = 0x6e;
   return `rgba(${r},${g},${b},${alpha.toFixed(2)})`;
 }
 
