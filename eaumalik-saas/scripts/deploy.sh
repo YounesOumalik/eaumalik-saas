@@ -100,11 +100,13 @@ ssh "$SERVER_HOST" "
   [[ -f .env ]] || { echo 'ERREUR: /opt/${APP_NAME}/.env absent — copier .env.prod → .env'; exit 1; }
 
   docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
+  PORT=\$(grep '^PORT=' .env | cut -d= -f2 | tr -d '[:space:]' || echo 3000)
   docker run -d \
     --name ${CONTAINER_NAME} \
     --restart unless-stopped \
     --network ${NETWORK_NAME} \
     --env-file .env \
+    -p 127.0.0.1:\${PORT}:\${PORT} \
     --log-driver json-file \
     --log-opt max-size=20m \
     --log-opt max-file=5 \
@@ -128,9 +130,9 @@ for i in {1..30}; do
   sleep 2
 done
 
-CONTAINER_IP=$(ssh "$SERVER_HOST" "docker inspect --format '{{.NetworkSettings.Networks.${NETWORK_NAME}.IPAddress}}' ${CONTAINER_NAME}")
+CONTAINER_IP=$(ssh "$SERVER_HOST" "docker inspect --format '{{index .NetworkSettings.Networks \"${NETWORK_NAME}\" \"IPAddress\"}}' ${CONTAINER_NAME}")
 log "Container IP : ${CONTAINER_IP}"
-log "Test local : curl -sI http://${CONTAINER_IP}:3000/"
+log "Test local : curl -sI http://127.0.0.1:3100/"
 
 rm -f "$TMP_TAR"
 log "✅ Déploiement ${IMAGE_REF} terminé"

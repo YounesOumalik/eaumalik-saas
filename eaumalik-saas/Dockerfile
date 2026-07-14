@@ -29,7 +29,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV PORT=3000
+ENV PORT=3100
 ENV HOSTNAME=0.0.0.0
 
 RUN apk add --no-cache libc6-compat tini && \
@@ -46,7 +46,7 @@ COPY --from=builder /app/next.config.mjs ./next.config.mjs
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 USER nextjs
-EXPOSE 3000
+EXPOSE 3100
 
 # tini = init propre (PID 1, gestion signaux, zombies)
 ENTRYPOINT ["/sbin/tini", "--"]
@@ -54,4 +54,4 @@ CMD ["npm", "start"]
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1
+  CMD wget -qO- "http://127.0.0.1:${PORT:-3000}/" >/dev/null || exit 1
