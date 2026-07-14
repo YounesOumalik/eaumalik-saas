@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseServiceRoleClient, createSupabaseServerClient, AuthError } from '@/lib/supabase/server';
 import { badRequest, forbidden, safeErrorResponse, unauthorized } from '@/lib/api-guard';
-import { readOrders, writeOrders, readUsers, writeUsers } from '@/data/localDb';
+import { readOrdersRaw, writeOrdersRaw, readUsersRaw, writeUsersRaw } from '@/data/repositories';
 import { Order } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -180,7 +180,7 @@ async function createOrderMock({
   // Checkout invité → création de compte à la volée (cohérent avec /api/auth/dev-login).
   if (!callerId && account?.email && account?.password) {
     const email = String(account.email).trim().toLowerCase();
-    const users = readUsers();
+    const users = await readUsersRaw();
     const existing = users.find((u: any) => u.email?.toLowerCase() === email);
     if (existing) {
       // Compte déjà existant : on lie la commande et on connecte l'utilisateur.
@@ -211,7 +211,7 @@ async function createOrderMock({
         updated_at: new Date().toISOString(),
       };
       users.push(newUser);
-      writeUsers(users);
+      await writeUsersRaw(users);
       userId = newUser.id;
     }
   }
@@ -247,9 +247,9 @@ async function createOrderMock({
     items: itemsPayload,
   };
 
-  const orders = readOrders();
+  const orders = await readOrdersRaw();
   orders.unshift(order);
-  writeOrders(orders);
+  await writeOrdersRaw(orders);
 
   const res = NextResponse.json(
     { ...order, createdUser: newUser ? sanitizeUser(newUser) : undefined },

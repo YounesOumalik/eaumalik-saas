@@ -831,3 +831,74 @@ export async function updateMaintenanceNotes(id: string, notes: string): Promise
   const supabase = await getSupabase();
   await supabase.from('maintenance_records').update({ notes, updated_at: new Date().toISOString() }).eq('id', id);
 }
+
+// ============================================================================
+// RAW READ/WRITE — frontière unique (mock JSON ↔ Supabase)
+// Remplace les imports directs de '@/data/localDb' dans les Server Actions et
+// Route Handlers. Centralise l'accès aux données : en mode mock on lit/écrit le
+// JSON FS (data-store/), en prod on interroge Supabase (service role pour les
+// lectures admin, client public pour les produits).
+// En prod, les ÉCRITURES ne vont JAMAIS dans le JSON FS (elles lèvent) — les
+// appelants les gardent déjà sous `isMockMode()` / `shouldUseMocks()`.
+// ============================================================================
+
+/** Client admin (service role, bypass RLS) — lazy pour éviter l'instanciation côté client. */
+async function getSupabaseAdmin() {
+  const { createSupabaseServiceRoleClient } = await import('@/lib/supabase/server');
+  return createSupabaseServiceRoleClient();
+}
+
+export async function readUsersRaw(): Promise<any[]> {
+  if (shouldUseMocks()) return readUsers();
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase.from('users').select('*');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function writeUsersRaw(users: any[]): Promise<void> {
+  if (shouldUseMocks()) { writeUsers(users); return; }
+  throw new Error('writeUsersRaw: écriture JSON FS interdite en prod (utilisez Supabase Auth).');
+}
+
+export async function readArchivedUsersRaw(): Promise<any[]> {
+  if (shouldUseMocks()) return readArchivedUsers();
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase.from('users_archive').select('*');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function readOrdersRaw(): Promise<any[]> {
+  if (shouldUseMocks()) return readOrders();
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase.from('orders').select('*, items:order_items(*)');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function writeOrdersRaw(orders: any[]): Promise<void> {
+  if (shouldUseMocks()) { writeOrders(orders); return; }
+  throw new Error('writeOrdersRaw: écriture JSON FS interdite en prod.');
+}
+
+export async function readNewsRaw(): Promise<any[]> {
+  if (shouldUseMocks()) return readNews();
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase.from('news').select('*');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function writeNewsRaw(news: any[]): Promise<void> {
+  if (shouldUseMocks()) { writeNews(news); return; }
+  throw new Error('writeNewsRaw: écriture JSON FS interdite en prod.');
+}
+
+export async function readProductsRaw(): Promise<any[]> {
+  if (shouldUseMocks()) return readProducts();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('products').select('*');
+  if (error) throw error;
+  return data ?? [];
+}

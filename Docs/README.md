@@ -9,7 +9,7 @@ Plateforme e-commerce + CRM + admin pour **EAUMALIK SARL** (solutions de traitem
 | Front + Back | Next.js 14 (App Router) + TypeScript |
 | UI           | Tailwind CSS + composants maison (style shadcn) |
 | BDD          | Supabase / PostgreSQL (PostgREST + RLS) |
-| Auth         | NextAuth.js + Google OAuth |
+| Auth         | Supabase Auth (email + session) + login dev/mock |
 | Charts       | Chart.js (chargement dynamique côté client) |
 | PDF          | pdfkit (génération facture) |
 | Icons        | lucide-react + Font Awesome |
@@ -19,7 +19,7 @@ Plateforme e-commerce + CRM + admin pour **EAUMALIK SARL** (solutions de traitem
 
 ```bash
 cd eaumalik-saas
-cp .env.local.example .env.local    # Renseigner Supabase + Google
+cp .env.local.example .env.local    # Renseigner l'URL + clé Supabase
 npm install
 npm run dev                         # http://localhost:3000
 ```
@@ -38,9 +38,9 @@ eaumalik-saas/
 │   │   ├── panier/page.tsx               # Panier + checkout
 │   │   ├── admin/                        # /admin, /admin/stocks, ...
 │   │   ├── crm/                          # /crm (maintenance), /crm/clients
-│   │   ├── login/page.tsx                # Connexion Google (NextAuth)
+│   │   ├── login/page.tsx                # Connexion (Supabase Auth / dev mock)
 │   │   └── api/
-│   │       ├── auth/[...nextauth]/       # NextAuth handler
+│   │       ├── auth/dev-login/           # Auth dev/mock (mode mocks uniquement)
 │   │       ├── orders/, [id]/            # POST create, GET list, PATCH status
 │   │       ├── products/, [id]/stock/    # GET catalogue, PATCH stock delta
 │   │       ├── maintenance/[id]/         # PATCH statut alerte
@@ -52,7 +52,8 @@ eaumalik-saas/
 │   │   ├── admin/                        # OrdersTable, StockTable, CatalogueManager, ...
 │   │   └── crm/                          # ClientList, MaintenanceAlerts
 │   ├── data/
-│   │   ├── repositories.ts               # Abstraction Supabase ↔ mocks
+│   │   ├── repositories.ts               # Abstraction Supabase ↔ mocks (point d'entrée unique)
+│   │   ├── localDb.ts                    # Lecture/écriture JSON FS (mode mock uniquement)
 │   │   └── mock.ts                       # Données seed (catalogue, commandes, clients...)
 │   ├── lib/
 │   │   ├── utils.ts                      # cn(), formatCurrency, daysUntil, ...
@@ -82,30 +83,9 @@ Tables : `company_profile`, `users`, `products`, `orders`, `order_items`, `maint
 - `orders` : lecture user_id = auth.uid() OU admin
 - `maintenance_alerts` : lecture user_id = auth.uid() OU admin
 
-### Pour activer `auth.jwt() ->> 'role' = 'admin'`
+### Rôle admin dans les policies RLS
 
-Créer un hook Supabase qui ajoute `role` aux claims JWT. Exemple : `supabase/migrations/role_claim.sql` :
-
-```sql
-CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
-RETURNS jsonb
-LANGUAGE plpgsql
-STABLE
-AS $$
-DECLARE
-  claims jsonb;
-  user_role text;
-BEGIN
-  claims := event->'claims';
-  SELECT role INTO user_role FROM public.users WHERE id = (event->>'user_id')::uuid;
-  IF user_role IS NOT NULL THEN
-    claims := jsonb_set(claims, '{role}', to_jsonb(user_role));
-  END IF;
-  RETURN jsonb_set(event, '{claims}', claims);
-END;
-$$;
--- Enregistrer le hook dans Supabase Dashboard > Auth > Hooks
-```
+Les policies RLS utilisent la fonction `eaumalik.is_admin()` (définie dans `supabase/schema-eaumalik.sql` et `supabase/security-hardening.sql`), qui lit `eaumalik.users.role`. Aucun hook JWT custom n'est requis : `is_admin()` est la source de vérité côté SQL (contrairement à `auth.jwt() ->> 'role'` qui ne fonctionne pas sans custom claims).
 
 ## Scripts
 
@@ -124,9 +104,6 @@ $$;
 | `NEXT_PUBLIC_SUPABASE_URL`           | URL du projet Supabase                   |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`      | Anon key                                 |
 | `SUPABASE_SERVICE_ROLE_KEY`          | Service role (admin, BYPASS RLS)         |
-| `NEXTAUTH_SECRET`                    | Secret NextAuth (32+ caractères)         |
-| `NEXTAUTH_URL`                       | URL de l'app (http://localhost:3000)     |
-| `GOOGLE_CLIENT_ID` / `_SECRET`       | OAuth Google                             |
 | `NEXT_PUBLIC_USE_MOCKS`              | `true` = pas besoin de Supabase          |
 
 ## Pages
@@ -139,7 +116,7 @@ $$;
 | `/login`                    | Connexion Google                           |
 | `/admin`                    | Tableau de bord admin (commandes)          |
 | `/admin/stocks`             | Gestion des stocks                         |
-| `/admin/catalogue`          | CRUD produits                              |
+| `/admin/catalogue`          | CRUD produ(Supabase Auth / dev mock)       |
 | `/admin/comptabilite`       | KPIs + graphique revenus mensuels          |
 | `/crm`                      | Alertes maintenance filtres                |
 | `/crm/clients`              | Fiches clients (NPS, total dépensé...)     |
@@ -155,10 +132,9 @@ $$;
 | `PATCH /api/orders/{id}`                     | `{ status: '...' }`                |
 | `PATCH /api/maintenance/{id}`                | `{ status: '...' }`                |
 | `GET /api/invoice?order_id=xxx`              | Télécharge le PDF                  |
-| `GET/POST /api/auth/*`                       | NextAuth                           |
+| `POST /api/auth/dev-login`                   | Auth dev/mock (mocks uniquement)     |
 
 Toutes les routes valident les entrées avec **Zod**.
-
 ## Sécurité
 
 - Middleware refresh de session Supabase automatique (`src/middleware.ts`)
@@ -185,4 +161,4 @@ Toutes les variables CSS sont dans `src/app/globals.css` + dupliquées dans `tai
 - [ ] Upload images vers Supabase Storage (au lieu de picsum.photos)
 - [ ] Emails transactionnels (confirmation commande, rappel filtre)
 - [ ] Tests E2E (Playwright)
-- [ ] Déploiement Vercel + domaine personnalisé
+- [ ] Déploiement prod (Contabo/SmartServeur, Docker) — voir `eaumalik-saas/docs/DEPLOY.md`

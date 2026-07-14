@@ -9,8 +9,9 @@ import {
   getArchivedStaff,
   removeArchivedStaff,
   listArchivedStaff,
+  readUsersRaw,
+  writeUsersRaw,
 } from '@/data/repositories';
-import { readUsers, writeUsers } from '@/data/localDb';
 
 const PermissionsSchema = z.object({
   can_view_products: z.boolean(),
@@ -167,7 +168,7 @@ export async function deleteStaffUserAction(id: string) {
     } | null = null;
 
     if (isMockMode()) {
-      const u = readUsers().find((x: any) => x.id === id);
+      const u = (await readUsersRaw()).find((x: any) => x.id === id);
       if (!u) return { success: false as const, error: 'Compte introuvable.' };
       profile = {
         id: u.id, email: u.email, full_name: u.full_name, phone: u.phone ?? null,
@@ -195,8 +196,8 @@ export async function deleteStaffUserAction(id: string) {
 
     // 3) Suppression effective de l'utilisateur (auth + profil)
     if (isMockMode()) {
-      const remaining = readUsers().filter((u: any) => u.id !== id);
-      writeUsers(remaining);
+      const remaining = (await readUsersRaw()).filter((u: any) => u.id !== id);
+      await writeUsersRaw(remaining);
     } else {
       const supabase = createSupabaseServiceRoleClient();
       const { error: authErr } = await supabase.auth.admin.deleteUser(id);
@@ -259,7 +260,7 @@ export async function restoreArchivedStaffAction(raw: unknown) {
 
     if (isMockMode()) {
       // Mode mock : réinsert dans users.json avec un nouveau mot de passe en clair
-      const users = readUsers();
+      const users = await readUsersRaw();
       if (users.some((u: any) => u.id === snap.id)) {
         return { success: false as const, error: 'Un compte actif existe déjà avec cet id.' };
       }
@@ -279,7 +280,7 @@ export async function restoreArchivedStaffAction(raw: unknown) {
         updated_at: new Date().toISOString(),
       };
       users.push(restored);
-      writeUsers(users);
+      await writeUsersRaw(users);
       await removeArchivedStaff(snap.id);
       revalidatePath('/admin/personnels');
       return { success: true as const, restoredId: snap.id };

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readUsers, writeUsers } from '@/data/localDb';
+import { readUsersRaw, writeUsersRaw } from '@/data/repositories';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +20,14 @@ export const dynamic = 'force-dynamic';
  * En production cette route n'est pas utilisee (Supabase gere l'auth).
  */
 export async function POST(req: NextRequest) {
+  // Route dev/mock uniquement — jamais active en production (Supabase gère l'auth).
+  const mockMode =
+    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!mockMode) {
+    return NextResponse.json({ error: 'Route désactivée en production.' }, { status: 404 });
+  }
   try {
     const body = await req.json().catch(() => ({}));
     const { email, password, isSignUp = false, profile } = body as {
@@ -28,7 +36,6 @@ export async function POST(req: NextRequest) {
       isSignUp?: boolean;
       profile?: { full_name?: string; phone?: string; city?: string; address?: string; referred_by?: string };
     };
-
     if (!email || !password) {
       return NextResponse.json({ error: 'Email et mot de passe requis.' }, { status: 400 });
     }
@@ -36,7 +43,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Mot de passe : minimum 8 caracteres.' }, { status: 400 });
     }
 
-    const users = readUsers();
+    const users = await readUsersRaw();
     const existing = users.find((u: any) => u.email?.toLowerCase() === email.toLowerCase());
 
     if (isSignUp) {
@@ -70,7 +77,7 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       };
       users.push(newUser);
-      writeUsers(users);
+      await writeUsersRaw(users);
       const res = NextResponse.json({ user: sanitize(newUser), created: true });
       setDevSessionCookie(res, sanitize(newUser));
       return res;

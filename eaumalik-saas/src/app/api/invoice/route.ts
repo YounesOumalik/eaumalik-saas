@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import PDFDocument from 'pdfkit';
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server';
 import { badRequest, forbidden, isMockMode, safeErrorResponse, unauthorized } from '@/lib/api-guard';
-import { readOrders } from '@/data/localDb';
+import { readOrdersRaw } from '@/data/repositories';
 import { MOCK_COMPANY } from '@/data/mock';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 async function loadOrderForCaller(orderId: string) {
   // Mode mock : charger directement depuis le JSON local (pas d'auth Supabase).
   if (isMockMode()) {
-    const orders = readOrders();
+    const orders = await readOrdersRaw();
     const order = orders.find(o => o.id === orderId);
     if (!order) throw new Response('not found', { status: 404 });
     return order;

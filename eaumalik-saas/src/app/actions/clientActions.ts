@@ -10,7 +10,12 @@ import {
   requireUser,
   getOptionalUser,
 } from '@/lib/supabase/server';
-import { readNews, writeNews, readUsers, readProducts } from '@/data/localDb';
+import {
+  readUsersRaw,
+  readNewsRaw,
+  writeNewsRaw,
+  readProductsRaw,
+} from '@/data/repositories';
 
 // ============================================================================
 // Helpers — bascule mock ↔ Supabase
@@ -78,7 +83,7 @@ async function getCurrentUser() {
 
   // Mode mock : le profil complet vient de users.json (le cookie dev porte l'id).
   if (isMockMode()) {
-    const allUsers = readUsers() as any[];
+    const allUsers = await readUsersRaw() as any[];
     const me = allUsers.find((u: any) => u.id === auth.id);
     return me ?? null;
   }
@@ -111,7 +116,7 @@ export async function getClientDashboardData() {
 
   // Mock : lit users.json, orders (vide), news.json (avec filtrage par cible utilisateur).
   if (isMockMode()) {
-    const allUsers = readUsers() as any[];
+    const allUsers = await readUsersRaw() as any[];
     const me = allUsers.find((u: any) => u.id === user.id);
     const referredUsers: any[] = [];
     if (me?.referred_by) {
@@ -119,7 +124,7 @@ export async function getClientDashboardData() {
       if (ref) referredUsers.push({ id: ref.id, name: ref.full_name, email: ref.email });
     }
     const nowIso = new Date().toISOString();
-    const newsRows = (readNews() as any[]).filter((n: any) => {
+    const newsRows = (await readNewsRaw() as any[]).filter((n: any) => {
       const valid = !n.valid_until || n.valid_until > nowIso;
       const target = n.target_all !== false;
       const targets = Array.isArray(n.target_user_ids) ? n.target_user_ids : [];
@@ -304,9 +309,9 @@ export async function publishNewsAction(raw: unknown) {
     const id = `news-${Date.now()}`;
     const now = new Date().toISOString();
     const row = { id, created_at: now, ...payload };
-    const rows = readNews();
+    const rows = await readNewsRaw();
     rows.unshift(row);
-    writeNews(rows);
+    await writeNewsRaw(rows);
     revalidatePath('/client');
     revalidatePath('/');
     revalidatePath('/crm/news');
@@ -334,7 +339,7 @@ export async function getAvailableProductsForNewsAction() {
   if (!isMockMode()) await requireAdmin();
   const now = new Date().toISOString();
   if (isMockMode()) {
-    const products = readProducts()
+    const products = (await readProductsRaw())
       .filter((p: any) => !p.is_archived)
       .map((p: any) => ({
         id: p.id,
@@ -371,7 +376,7 @@ export async function getAvailableProductsForNewsAction() {
 export async function getAvailableClientsForNewsAction() {
   if (!isMockMode()) await requireAdmin();
   if (isMockMode()) {
-    const clients = (readUsers() as any[])
+    const clients = (await readUsersRaw() as any[])
       .filter((u: any) => u.role === 'client')
       .map((u: any) => ({
         id: u.id,

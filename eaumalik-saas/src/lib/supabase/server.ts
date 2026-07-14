@@ -2,9 +2,9 @@
  * Client Supabase côté serveur (Server Components, Route Handlers, Server Actions).
  * Lit les cookies via next/headers pour propager la session.
  *
- * Helpers d'autorisation requireUser/requireAdmin/AuthError ajoutés pour
- * remplacer next-auth (cf. audit). Le rôle est lu depuis le profil public.users
- * tant que le claim `role` n'a pas été injecté dans le JWT via le trigger.
+ * Helpers d'autorisation requireUser/requireAdmin/AuthError : remplacent
+ * l'ancien next-auth (cf. audit). Le rôle est lu depuis le profil public.users
+ * via la fonction SQL `eaumalik.is_admin()` (pas de claim `role` injecté dans le JWT).
  */
 import 'server-only';
 import { cookies } from 'next/headers';

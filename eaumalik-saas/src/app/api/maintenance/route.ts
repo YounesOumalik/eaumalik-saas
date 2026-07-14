@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   listMaintenanceRecords,
   ensureMaintenanceForOrder,
+  readOrdersRaw,
 } from '@/data/repositories';
 import { createSupabaseServiceRoleClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import {
@@ -98,8 +99,7 @@ export async function POST(req: NextRequest) {
       try { body = await req.json(); } catch { return badRequest('JSON invalide.'); }
       const parsed = createForOrderSchema.safeParse(body);
       if (!parsed.success) return badRequest('order_id requis.');
-      const { readOrders } = await import('@/data/localDb');
-      const order = readOrders().find(o => o.id === parsed.data.order_id);
+      const order = (await readOrdersRaw()).find(o => o.id === parsed.data.order_id);
       if (!order) return badRequest('Commande introuvable.');
       const records = await ensureMaintenanceForOrder(order as any);
       return NextResponse.json({ success: true, records });

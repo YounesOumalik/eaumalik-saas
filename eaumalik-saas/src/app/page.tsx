@@ -1,4 +1,4 @@
-import { listProducts, listActivePromotions, listNews } from '@/data/repositories';
+import { listProducts, listActivePromotions } from '@/data/repositories';
 import BoutiqueClient from './boutique/BoutiqueClient';
 
 // La page d'accueil affiche désormais la même version boutique que /boutique
@@ -11,19 +11,16 @@ import BoutiqueClient from './boutique/BoutiqueClient';
 // Avantage : une seule URL canonique du nouveau design, promos & actualités
 // toujours visibles sur "/", aucun 307 inutile.
 export default async function HomePage() {
-  const [products, promotions, allNews] = await Promise.all([
+  const [products, promotions] = await Promise.all([
     listProducts(),
     listActivePromotions(12),
-    listNews(),
   ]);
-  const newsOnly = (allNews || []).filter(n => !n.is_promotion);
   // La landing page ne montre que les produits phares (is_featured) + les promos.
   const featuredOnly = true;
   return (
     <BoutiqueClient
       initialProducts={products}
       promotions={promotions}
-      news={newsOnly}
       featuredOnly={featuredOnly}
     />
   );

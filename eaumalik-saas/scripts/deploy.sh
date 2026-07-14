@@ -19,7 +19,7 @@ IMAGE_NAME="eaumalik-saas"
 SERVER_HOST="${DEPLOY_HOST:-smartserveur}"
 SERVER_DIR="/opt/${APP_NAME}"
 CONTAINER_NAME="${APP_NAME}-app"
-NETWORK_NAME="coolify"   # réseau Docker partagé côté serveur
+NETWORK_NAME="supabase-prod-net"   # réseau Docker partagé côté serveur (stack Supabase self-hosted)
 BUILD_TAG="$(date +%Y%m%d-%H%M%S)"
 ROLLBACK_TAG_FILE="${SERVER_DIR}/.last_image"
 

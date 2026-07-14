@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { createSupabaseServiceRoleClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { badRequest, forbidden, isMockMode, safeErrorResponse, unauthorized } from '@/lib/api-guard';
 import { ensureMaintenanceForOrder, listMaintenanceRecords, updateOrderStatus } from '@/data/repositories';
-import { readOrders, writeOrders } from '@/data/localDb';
+import { readOrdersRaw, writeOrdersRaw } from '@/data/repositories';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const newStatus = parsed.data;
     const now = new Date().toISOString();
-    const list = readOrders();
+    const list = await readOrdersRaw();
     const order = list.find(o => o.id === idParam);
     if (!order) return badRequest('Commande introuvable.');
 
@@ -46,7 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
     if (newStatus === 'livree') order.delivered_at = now;
-    writeOrders(list);
+    await writeOrdersRaw(list);
 
     let maintenanceRecords: any[] = [];
     if (newStatus === 'livree') {

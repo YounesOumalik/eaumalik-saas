@@ -9,7 +9,7 @@ Internet (eaumalik.com)
    Caddy (déjà installé, port 80/443)
    /etc/caddy/Caddyfile
         │
-        ├── /         → container eaumalik-app:3000 (Docker, réseau coolify)
+        ├── /         → container eaumalik-app:3000 (Docker, réseau supabase-prod-net)
         └── /admin/*  → container eaumalik-app:3000
 
    Supabase existant (déjà up sur le serveur)
@@ -21,7 +21,7 @@ Internet (eaumalik.com)
    → Schéma SQL dédié : eaumalik.* (isolé des autres projets)
 ```
 
-> **Aucun service existant n'est arrêté.** On ajoute un container Next.js sur le réseau `coolify` déjà en place.
+> **Aucun service existant n'est arrêté.** On ajoute un container Next.js sur le réseau `supabase-prod-net` (stack Supabase self-hosted) déjà en place.
 
 ---
 
@@ -94,7 +94,7 @@ Le script :
 4. Supprime l'ancien container et relance
 5. Attend le healthcheck Docker
 
-À la fin il affiche l'IP du container dans le réseau `coolify` (ex : `10.0.1.45`).
+À la fin il affiche l'IP du container dans le réseau `supabase-prod-net` (ex : `10.0.5.x`).
 
 ---
 
@@ -229,9 +229,9 @@ ssh smartserveur 'docker stats eaumalik-app --no-stream'
 ### Erreur `ECONNREFUSED 10.0.1.45:3000` côté Caddy
 → Le container n'est pas sur le bon réseau. Vérifier :
 ```bash
-ssh smartserveur 'docker network inspect coolify | grep eaumalik-app'
+ssh smartserveur 'docker network inspect supabase-prod-net | grep eaumalik-app'
 # Si absent :
-ssh smartserveur 'docker network connect coolify eaumalik-app'
+ssh smartserveur 'docker network connect supabase-prod-net eaumalik-app'
 ```
 
 ### `auth.jwt() ->> 'role'` ne fonctionne pas dans les policies RLS
@@ -243,7 +243,7 @@ ssh smartserveur 'docker network connect coolify eaumalik-app'
 ### `502 Bad Gateway` au reload Caddy
 → Mauvaise IP dans le bloc Caddy. Récupérer la bonne :
 ```bash
-ssh smartserveur 'docker inspect --format "{{.NetworkSettings.Networks.coolify.IPAddress}}" eaumalik-app'
+ssh smartserveur 'docker inspect --format "{{.NetworkSettings.Networks.supabase-prod-net.IPAddress}}" eaumalik-app'
 ```
 
 ---
@@ -258,7 +258,7 @@ ssh smartserveur 'docker inspect --format "{{.NetworkSettings.Networks.coolify.I
               │                          │
               └──────────┬───────────────┘
                          │
-                  réseau coolify (10.0.5.x, 10.0.6.x)
+                  réseau supabase-prod-net (10.0.5.x, 10.0.6.x)
                          │
         ┌────────────────┼────────────────┐
         │                │                │
