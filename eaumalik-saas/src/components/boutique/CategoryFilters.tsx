@@ -40,20 +40,20 @@ export default function CategoryFilters({ active, onChange, search, onSearch, re
 
       <div className="flex items-center gap-3">
         {typeof resultCount === 'number' && (
-          <span className="text-xs text-stone-400 font-medium hidden md:inline">
+          <span className="text-xs font-medium hidden md:inline text-meta">
             {resultCount} produit{resultCount > 1 ? 's' : ''}
           </span>
         )}
         <div className="relative">
           <i
-            className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400"
+            className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-sm text-meta"
             aria-hidden="true"
           />
           <input
             type="search"
             value={search}
             onChange={e => onSearch(e.target.value)}
-            className="w-full md:w-[260px] pl-9 pr-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition text-stone-900 bg-white"
+            className="input-themed w-full md:w-[260px] pl-9"
             placeholder="Rechercher un produit..."
             aria-label="Rechercher un produit"
           />

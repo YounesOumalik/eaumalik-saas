@@ -1,0 +1,116 @@
+# filepath: eaumalik-saas/.github/workflows/deploy.yml
+# ============================================================================
+# EAUMALIK — Déploiement automatisé sur SmartServeur (Contabo)
+# Miroir EXACT de scripts/deploy.sh (build Docker -> tar.gz -> SCP -> load -> run -> healthcheck)
+# Déclenché à chaque push sur `main` (ou manuellement via workflow_dispatch).
+#
+# Secrets GitHub requis (Settings -> Secrets -> Actions) :
+#   DEPLOY_SSH_KEY  Contenu de ~/.ssh/id_smartserveur (clé privée)
+#   DEPLOY_HOST     164.68.97.103
+#   DEPLOY_USER     younes
+#   ENV_PROD        Contenu exact de .env.prod local
+# ============================================================================
+name: Deploy EAUMALIK to SmartServeur
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Évite 2 deploys simultanés (le 2e ferait `docker rm -f` pendant le 1er).
+concurrency:
+  group: deploy-smartserveur
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: eaumalik-saas
+  CONTAINER_NAME: eaumalik-app
+  NETWORK_NAME: supabase-prod-net
+  SERVER_DIR: /opt/eaumalik
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Build Docker image
+        working-directory: eaumalik-saas
+        run: |
+          BUILD_TAG="$(date +%Y%m%d-%H%M%S)"
+          echo "BUILD_TAG=$BUILD_TAG" >> "$GITHUB_ENV"
+          docker build -t "${IMAGE_NAME}:${BUILD_TAG}" -t "${IMAGE_NAME}:latest" .
+
+      - name: Export & transfer image
+        run: |
+          TMP_TAR="/tmp/${IMAGE_NAME}-${BUILD_TAG}.tar.gz"
+          echo "TMP_TAR=$TMP_TAR" >> "$GITHUB_ENV"
+          docker save "${IMAGE_NAME}:${BUILD_TAG}" | gzip > "$TMP_TAR"
+          scp "$TMP_TAR" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:$TMP_TAR"
+
+      - name: Sync .env to server
+        # Idempotent : recrée /opt/eaumalik/.env depuis le secret ENV_PROD à chaque déploiement.
+        run: |
+          echo "${{ secrets.ENV_PROD }}" | ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "mkdir -p ${SERVER_DIR} && cat > ${SERVER_DIR}/.env"
+
+      - name: Deploy on server
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "
+            set -e
+            cd ${SERVER_DIR}
+            docker load -i ${TMP_TAR}
+            rm -f ${TMP_TAR}
+
+            # Sauvegarde du tag précédent pour rollback
+            PREV=\$(docker inspect --format '{{.Config.Image}}' ${CONTAINER_NAME} 2>/dev/null || echo '')
+            echo \$PREV > ${SERVER_DIR}/.last_image.tmp
+
+            docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
+            PORT=\$(grep '^PORT=' .env | cut -d= -f2 | tr -d '[:space:]' || echo 3000)
+            docker run -d \
+              --name ${CONTAINER_NAME} \
+              --restart unless-stopped \
+              --network ${NETWORK_NAME} \
+              --env-file .env \
+              -p 127.0.0.1:\${PORT}:\${PORT} \
+              --log-driver json-file \
+              --log-opt max-size=20m \
+              --log-opt max-file=5 \
+              ${IMAGE_NAME}:${BUILD_TAG}
+
+            echo \${PREV} > ${SERVER_DIR}/.last_image
+            docker image prune -f
+          "
+
+      - name: Healthcheck
+        run: |
+          for i in $(seq 1 30); do
+            STATUS=$(ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "docker inspect --format '{{.State.Health.Status}}' ${CONTAINER_NAME} 2>/dev/null || echo starting")
+            if [ "$STATUS" = "healthy" ]; then
+              echo "✅ Container ${CONTAINER_NAME} healthy"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "⚠️ Healthcheck timeout — vérifie : ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'docker logs ${CONTAINER_NAME}'"
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Cleanup local tar
+        if: always()
+        run: rm -f "$TMP_TAR"

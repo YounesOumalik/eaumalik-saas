@@ -2,30 +2,40 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import type { Product } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { useCart } from '@/components/shared/CartProvider';
 import { useToast } from '@/components/shared/ToastProvider';
+import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
 import ProductDetailModal from './ProductDetailModal';
 
 /**
  * Mapping des categories existantes vers les libelles visuels du nouveau design.
  */
-const CATEGORY_META: Record<string, { label: string; color: string }> = {
-  purificateurs: { label: 'Systeme RO', color: 'bg-brand-50 text-brand-700' },
-  industriel: { label: 'Industriel', color: 'bg-stone-100 text-stone-700' },
-  consommables: { label: 'Filtre', color: 'bg-blue-50 text-blue-700' },
+const CATEGORY_META: Record<string, { label: string }> = {
+  purificateurs: { label: 'Systeme RO' },
+  industriel: { label: 'Industriel' },
+  consommables: { label: 'Filtre' },
 };
 
 export default function ProductCard({ product }: { product: Product }) {
   const [openModal, setOpenModal] = useState(false);
   const { add } = useCart();
   const toast = useToast();
+  const router = useRouter();
+  const { session } = useSupabaseAuth();
 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (product.stock === 0 || product.is_out_of_stock) return;
+    // Politique produit : un compte client est obligatoire pour tout achat.
+    if (!session) {
+      toast('Veuillez vous connecter pour ajouter ce produit au panier.', 'info');
+      router.push(`/login?callbackUrl=${encodeURIComponent('/boutique')}`);
+      return;
+    }
     add({
       product_id: product.id,
       name: product.name,
@@ -42,7 +52,6 @@ export default function ProductCard({ product }: { product: Product }) {
 
   const meta = CATEGORY_META[product.category] ?? {
     label: product.category,
-    color: 'bg-stone-100 text-stone-700',
   };
 
   return (
@@ -55,9 +64,9 @@ export default function ProductCard({ product }: { product: Product }) {
         role="button"
         tabIndex={0}
         aria-label={`Voir ${product.name}`}
-        className="group bg-white rounded-3xl border border-stone-100 overflow-hidden hover:shadow-xl hover:-translate-y-2 transition-all duration-500 cursor-pointer h-full flex flex-col"
+        className="group product-card-surface rounded-3xl overflow-hidden hover:shadow-xl hover:-translate-y-2 transition-all duration-500 cursor-pointer h-full flex flex-col"
       >
-        <div className="relative h-56 bg-gradient-to-br from-brand-50 to-cyan-50 flex items-center justify-center overflow-hidden">
+        <div className="relative h-56 flex items-center justify-center overflow-hidden surface-savor">
           {product.image_url ? (
             <Image
               src={product.image_url}
@@ -68,21 +77,26 @@ export default function ProductCard({ product }: { product: Product }) {
               unoptimized
             />
           ) : (
-            <i className="fa-solid fa-droplet text-6xl text-brand-300" aria-hidden="true" />
+            <i className="fa-solid fa-droplet text-6xl" style={{ color: 'var(--primary-light)' }} aria-hidden="true" />
           )}
 
           {product.is_featured && (
-            <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-brand-600 text-white text-[10px] font-bold uppercase tracking-wider">
+            <div
+              className="absolute top-4 left-4 px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider"
+              style={{ background: 'linear-gradient(135deg, var(--ocean-500), var(--ocean-700))' }}
+            >
               Best-seller
             </div>
           )}
           {!product.is_featured && lowStock && (
-            <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wider">
+            <div className="absolute top-4 left-4 px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider"
+                 style={{ background: 'var(--warning)' }}>
               Stock faible
             </div>
           )}
           {outOfStock && (
-            <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-stone-700 text-white text-[10px] font-bold uppercase tracking-wider">
+            <div className="absolute top-4 right-4 px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider"
+                 style={{ background: 'var(--text-muted)' }}>
               Rupture
             </div>
           )}
@@ -90,21 +104,21 @@ export default function ProductCard({ product }: { product: Product }) {
 
         <div className="p-6 flex flex-col flex-1">
           <div className="flex items-center gap-2 mb-2">
-            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${meta.color}`}>
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase pill-themed">
               {meta.label}
             </span>
           </div>
-          <h3 className="font-serif text-xl font-semibold mb-2 text-stone-900 line-clamp-2">
+          <h3 className="font-serif text-xl font-semibold mb-2 text-heading line-clamp-2">
             {product.name}
           </h3>
-          <p className="text-sm text-stone-500 leading-relaxed mb-4 line-clamp-2">
+          <p className="text-sm leading-relaxed mb-4 line-clamp-2 text-meta">
             {product.description ?? ''}
           </p>
 
           <div className="mt-auto flex items-center justify-between">
             <div>
-              <span className="text-xs text-stone-400">A partir de</span>
-              <span className="text-2xl font-bold text-brand-700 ml-1">
+              <span className="text-xs text-meta">A partir de</span>
+              <span className="text-2xl font-bold ml-1" style={{ color: 'var(--primary)' }}>
                 {outOfStock ? '-' : formatCurrency(product.price)}
               </span>
             </div>
@@ -112,10 +126,28 @@ export default function ProductCard({ product }: { product: Product }) {
               type="button"
               onClick={handleAdd}
               disabled={outOfStock}
-              aria-label={`Ajouter ${product.name} au panier`}
-              className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center group-hover:bg-brand-600 group-hover:text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-brand-600"
+              aria-label={
+                session
+                  ? `Ajouter ${product.name} au panier`
+                  : `Se connecter pour ajouter ${product.name} au panier`
+              }
+              className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: 'var(--primary-glow)', color: 'var(--primary)' }}
+              onMouseEnter={e => {
+                if (!outOfStock) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, var(--ocean-500), var(--ocean-700))';
+                  e.currentTarget.style.color = '#fff';
+                }
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'var(--primary-glow)';
+                e.currentTarget.style.color = 'var(--primary)';
+              }}
             >
-              <i className="fa-solid fa-cart-plus text-lg" aria-hidden="true" />
+              <i
+                className={session ? 'fa-solid fa-cart-plus text-lg' : 'fa-solid fa-user-plus text-lg'}
+                aria-hidden="true"
+              />
             </button>
           </div>
         </div>

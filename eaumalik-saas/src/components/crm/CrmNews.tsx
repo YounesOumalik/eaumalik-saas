@@ -4,14 +4,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Send, Newspaper, Upload, X, Tag, Users, Package, ChevronDown,
   ChevronUp, Search, Trash2, Plus, CalendarClock, MapPin, Check,
+  Pencil, Save, XCircle,
 } from 'lucide-react';
 import {
   publishNewsAction,
+  updateNewsFromCrmAction,
   getAvailableProductsForNewsAction,
   getAvailableClientsForNewsAction,
 } from '@/app/actions/clientActions';
 import { useToast } from '@/components/shared/ToastProvider';
 import { formatCurrency } from '@/lib/utils';
+import type { News } from '@/types';
 
 // ============================================================================
 // Types locaux du formulaire
@@ -48,7 +51,31 @@ type CrmNewsProps = {
    */
   isPromotion?: boolean;
   setIsPromotion?: React.Dispatch<React.SetStateAction<boolean>>;
+  /**
+   * Si défini, le formulaire passe en mode édition et pré-remplit tous les
+   * champs avec les valeurs de cette actualité. La soumission appelle
+   * alors `updateNewsFromCrmAction` au lieu de `publishNewsAction`.
+   */
+  editingItem?: News | null;
+  /**
+   * Callback invoqué après une soumission réussie (création ou édition).
+   * En mode édition, le parent utilise typiquement ce callback pour
+   * basculer l'UI en mode lecture et rafraîchir la liste.
+   */
+  onSaved?: (saved: News) => void;
+  /**
+   * Callback pour annuler le mode édition (ex. bouton "Annuler").
+   */
+  onCancelEdit?: () => void;
 };
+
+/** Formate une date ISO en "YYYY-MM-DD" pour <input type="date">. */
+function isoToDateInput(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
 
 // ============================================================================
 // Composant principal
@@ -56,6 +83,9 @@ type CrmNewsProps = {
 export default function CrmNews({
   isPromotion: externalIsPromotion,
   setIsPromotion: externalSetIsPromotion,
+  editingItem = null,
+  onSaved,
+  onCancelEdit,
 }: CrmNewsProps = {}) {
   // -- Champs de base --------------------------------------------------------
   const [title, setTitle] = useState('');
@@ -239,6 +269,37 @@ export default function CrmNews({
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [clientsDropdownOpen]);
 
+  // ============================================================================
+  // Pré-remplissage en mode édition
+  // ============================================================================
+  useEffect(() => {
+    if (!editingItem) return;
+    setTitle(editingItem.title ?? '');
+    setContent(editingItem.content ?? '');
+    setImageUrl(editingItem.image_url ?? '');
+    setTargetAll(editingItem.target_all !== false);
+    setSelectedUserIds(Array.isArray(editingItem.target_user_ids) ? editingItem.target_user_ids : []);
+    const isPromo = editingItem.is_promotion === true;
+    setIsPromotion(isPromo);
+    setPrice(
+      typeof editingItem.price === 'number' && editingItem.price > 0
+        ? String(editingItem.price)
+        : ''
+    );
+    setOriginalPrice(
+      typeof editingItem.original_price === 'number' && editingItem.original_price > 0
+        ? String(editingItem.original_price)
+        : ''
+    );
+    setProductSelections(
+      Array.isArray(editingItem.product_ids)
+        ? editingItem.product_ids.map(pid => ({ productId: pid, quantity: 1 }))
+        : []
+    );
+    setValidUntil(isoToDateInput(editingItem.valid_until));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingItem?.id]);
+
   // Si la ville précédemment sélectionnée n'existe plus, on retombe sur "Toutes".
   useEffect(() => {
     if (cityFilter !== '__ALL__' && !availableCities.includes(cityFilter)) {
@@ -316,27 +377,41 @@ export default function CrmNews({
       validUntil: validUntil ? new Date(validUntil).toISOString() : null,
     };
 
-    const res = await publishNewsAction(payload);
+    const res = editingItem
+      ? await updateNewsFromCrmAction(editingItem.id, payload)
+      : await publishNewsAction(payload);
+
     if (res.success) {
-      toast(
-        isPromotion
-          ? '🎉 Promotion publiée ! Elle apparaît dans le carrousel de la landing.'
-          : 'Actualité publiée avec succès !',
-        'success'
-      );
-      // Reset
-      setTitle('');
-      setContent('');
-      setImageUrl('');
-      setTargetAll(true);
-      setSelectedUserIds([]);
-      setIsPromotion(true);
-      setPrice('');
-      setOriginalPrice('');
-      setProductSelections([]);
-      setValidUntil('');
+      if (editingItem) {
+        toast(
+          isPromotion
+            ? '✏️ Promotion mise à jour.'
+            : '✏️ Actualité mise à jour.',
+          'success'
+        );
+        onSaved?.(res.news as News);
+      } else {
+        toast(
+          isPromotion
+            ? '🎉 Promotion publiée ! Elle apparaît dans le carrousel de la landing.'
+            : 'Actualité publiée avec succès !',
+          'success'
+        );
+        // Reset complet (uniquement en mode création)
+        setTitle('');
+        setContent('');
+        setImageUrl('');
+        setTargetAll(true);
+        setSelectedUserIds([]);
+        setIsPromotion(true);
+        setPrice('');
+        setOriginalPrice('');
+        setProductSelections([]);
+        setValidUntil('');
+        onSaved?.(res.news as News);
+      }
     } else {
-      toast('Erreur lors de la publication : ' + res.error, 'error');
+      toast('Erreur : ' + res.error, 'error');
     }
     setPublishing(false);
   };
@@ -351,6 +426,33 @@ export default function CrmNews({
         className="glass-card p-6 sm:p-8 max-w-4xl space-y-6"
         style={{ transform: 'none' }}
       >
+        {/* ===================== BANDEAU MODE ÉDITION ===================== */}
+        {editingItem && (
+          <div className="flex items-center justify-between gap-3 p-3 sm:p-4 rounded-xl border-2 border-primary/40 bg-primary/5">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="w-9 h-9 rounded-lg bg-primary text-white flex items-center justify-center shrink-0">
+                <Pencil size={16} />
+              </span>
+              <div className="min-w-0">
+                <div className="font-display font-bold text-sm">Mode édition</div>
+                <div className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                  Vous modifiez « {editingItem.title} »
+                  {editingItem.is_archived === true ? ' (archivée)' : ''}
+                </div>
+              </div>
+            </div>
+            {onCancelEdit && (
+              <button
+                type="button"
+                onClick={onCancelEdit}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-[color:var(--border)] bg-[color:var(--bg-surface)] hover:bg-[color:var(--bg)]"
+              >
+                <XCircle size={14} /> Annuler
+              </button>
+            )}
+          </div>
+        )}
+
         {/* ===================== BLOC TITRE + CONTENU ===================== */}
         <section className="space-y-4">
           <h3 className="font-display font-bold text-lg flex items-center gap-2">
@@ -976,17 +1078,23 @@ export default function CrmNews({
             disabled={!canPublish}
             className="btn-primary w-full justify-center py-3 text-base disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Send size={16} />
+            {editingItem ? <Save size={16} /> : <Send size={16} />}
             {publishing
-              ? 'Publication...'
-              : isPromotion
-                ? '🎉 Publier la promotion'
-                : "📰 Publier l'actualité"}
+              ? editingItem
+                ? 'Enregistrement...'
+                : 'Publication...'
+              : editingItem
+                ? '💾 Enregistrer les modifications'
+                : isPromotion
+                  ? '🎉 Publier la promotion'
+                  : "📰 Publier l'actualité"}
           </button>
           <p className="text-[11px] text-center mt-3" style={{ color: 'var(--text-muted)' }}>
-            {isPromotion
-              ? '📢 La promotion sera visible par tous les clients : carrousel de la landing page + boutique.'
-              : "L'actualité sera visible uniquement dans l'espace client des destinataires choisis."}
+            {editingItem
+              ? '✏️ Les modifications sont enregistrées immédiatement et propagées au carrousel + boutique.'
+              : isPromotion
+                ? '📢 La promotion sera visible par tous les clients : carrousel de la landing page + boutique.'
+                : "L'actualité sera visible uniquement dans l'espace client des destinataires choisis."}
           </p>
         </div>
       </form>

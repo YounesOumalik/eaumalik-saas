@@ -241,6 +241,13 @@ export interface News {
   is_promotion: boolean;
   /** Fin de validité (optionnelle). Après cette date, la promotion disparaît des carrousels. */
   valid_until: string | null;
+  /** Archivée par un administrateur. Cachée du carrousel landing/boutique + espace client,
+   *  mais reste listée dans l'admin pour pouvoir être restaurée. */
+  is_archived?: boolean;
+  /** Date d'archivage (ISO). Null si is_archived = false. */
+  archived_at?: string | null;
+  /** Raison d'archivage (optionnelle, pour audit interne). */
+  archived_reason?: string | null;
   created_at: string;
 }
 

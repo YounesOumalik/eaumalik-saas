@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Droplets } from 'lucide-react';
+import BrandLogo from './BrandLogo';
 import { getCompanyProfile } from '@/data/repositories';
 
 export default async function Footer() {
@@ -28,20 +29,17 @@ export default async function Footer() {
   ];
 
   return (
-    <footer className="bg-stone-900 text-stone-300 rounded-t-[3rem] pt-16 pb-8 px-6 mt-12 overflow-hidden">
+    <footer
+      className="footer-surface rounded-t-[3rem] pt-16 pb-8 px-6 mt-12 overflow-hidden"
+    >
       <div className="max-w-7xl mx-auto">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Bloc marque */}
           <div>
             <Link href="/" className="flex items-center gap-2.5 mb-4 group" aria-label="EauMalik">
-              <span className="w-10 h-10 rounded-xl bg-brand-600 flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-105">
-                <Droplets className="w-5 h-5" />
-              </span>
-              <span className="font-serif text-2xl font-bold text-white tracking-tight">
-                Eau<span className="text-brand-400">Malik</span>
-              </span>
+              <BrandLogo size="md" tone="dark" className="group-hover:opacity-90 transition-opacity" />
             </Link>
-            <p className="text-sm leading-relaxed mb-5 text-stone-400">
+            <p className="text-sm leading-relaxed mb-5 footer-muted">
               L&apos;eau pure, notre engagement. Captage, traitement et distribution d&apos;eau pour les foyers et les professionnels.
             </p>
             <div className="flex gap-2.5">
@@ -52,7 +50,8 @@ export default async function Footer() {
                   target={s.href.startsWith('http') ? '_blank' : undefined}
                   rel="noopener noreferrer"
                   aria-label={s.label}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-sm bg-stone-800 text-stone-300 hover:bg-brand-600 hover:text-white transition-all"
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-sm border-soft transition-all"
+                  style={{ background: 'var(--bg-card)', color: 'var(--footer-muted)' }}
                 >
                   <i className={`fa-brands ${s.icon}`} aria-hidden="true" />
                 </a>
@@ -62,12 +61,12 @@ export default async function Footer() {
 
           {/* Produits */}
           <div>
-            <h4 className="font-serif font-bold text-sm mb-4 uppercase tracking-wider text-white">Produits</h4>
-            <ul className="space-y-2.5 text-sm text-stone-400">
+            <h4 className="font-serif font-bold text-sm mb-4 uppercase tracking-wider text-heading">Produits</h4>
+            <ul className="space-y-2.5 text-sm footer-muted">
               {produits.map(p => (
                 <li key={p.label}>
-                  <Link href={p.href} className="hover:text-brand-400 transition-colors inline-flex items-center gap-2 group">
-                    <span className="w-1 h-1 rounded-full bg-brand-500 transition-all group-hover:w-3" />
+                  <Link href={p.href} className="hover:opacity-80 transition-colors inline-flex items-center gap-2 group">
+                    <span className="w-1 h-1 rounded-full transition-all group-hover:w-3" style={{ background: 'var(--primary)' }} />
                     {p.label}
                   </Link>
                 </li>
@@ -77,12 +76,12 @@ export default async function Footer() {
 
           {/* Services */}
           <div>
-            <h4 className="font-serif font-bold text-sm mb-4 uppercase tracking-wider text-white">Services</h4>
-            <ul className="space-y-2.5 text-sm text-stone-400">
+            <h4 className="font-serif font-bold text-sm mb-4 uppercase tracking-wider text-heading">Services</h4>
+            <ul className="space-y-2.5 text-sm footer-muted">
               {services.map(s => (
                 <li key={s.label}>
-                  <Link href={s.href} className="hover:text-brand-400 transition-colors inline-flex items-center gap-2 group">
-                    <span className="w-1 h-1 rounded-full bg-brand-500 transition-all group-hover:w-3" />
+                  <Link href={s.href} className="hover:opacity-80 transition-colors inline-flex items-center gap-2 group">
+                    <span className="w-1 h-1 rounded-full transition-all group-hover:w-3" style={{ background: 'var(--primary)' }} />
                     {s.label}
                   </Link>
                 </li>
@@ -92,28 +91,31 @@ export default async function Footer() {
 
           {/* Suivez-nous / Contact */}
           <div>
-            <h4 className="font-serif font-bold text-sm mb-4 uppercase tracking-wider text-white">Suivez-nous</h4>
-            <ul className="space-y-2.5 text-sm text-stone-400">
+            <h4 className="font-serif font-bold text-sm mb-4 uppercase tracking-wider text-heading">Suivez-nous</h4>
+            <ul className="space-y-2.5 text-sm footer-muted">
               <li className="flex items-center gap-2">
-                <i className="fa-solid fa-phone text-brand-500" aria-hidden="true" />
+                <i className="fa-solid fa-phone" aria-hidden="true" style={{ color: 'var(--primary)' }} />
                 <span>{company.phone}</span>
               </li>
               <li className="flex items-center gap-2">
-                <i className="fa-solid fa-envelope text-brand-500" aria-hidden="true" />
-                <a href={`mailto:${company.email}`} className="hover:text-brand-400 transition-colors break-all">{company.email}</a>
+                <i className="fa-solid fa-envelope" aria-hidden="true" style={{ color: 'var(--primary)' }} />
+                <a href={`mailto:${company.email}`} className="hover:opacity-80 transition-colors break-all">{company.email}</a>
               </li>
               <li className="flex items-center gap-2">
-                <i className="fa-solid fa-location-dot text-brand-500" aria-hidden="true" />
+                <i className="fa-solid fa-location-dot" aria-hidden="true" style={{ color: 'var(--primary)' }} />
                 <span>{company.address}</span>
               </li>
             </ul>
           </div>
         </div>
 
-        <div className="mt-12 pt-6 flex flex-wrap justify-between items-center gap-3 text-xs text-stone-500 border-t border-stone-800">
+        <div
+          className="mt-12 pt-6 flex flex-wrap justify-between items-center gap-3 text-xs border-t"
+          style={{ borderColor: 'var(--border)' }}
+        >
           <span>© {year} {company.legal_name}</span>
           <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-500" aria-hidden="true" />
+            <span className="w-1.5 h-1.5 rounded-full" aria-hidden="true" style={{ background: 'var(--primary)' }} />
             L&apos;eau pure, notre engagement
           </span>
         </div>

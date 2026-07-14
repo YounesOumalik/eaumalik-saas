@@ -14,10 +14,11 @@ export const theme = {
     email: 'eaumaliksarl@gmail.com',
   },
   colors: {
-    primary: '#0891b2',
-    primaryLight: '#22d3ee',
-    primaryDark: '#0e7490',
-    accent: '#06b6d4',
+    // Palette "Bleu océan" (sky Tailwind) — direction prise le 2026-07-14.
+    primary: '#0284c7',
+    primaryLight: '#38bdf8',
+    primaryDark: '#075985',
+    accent: '#0ea5e9',
     danger: '#ef4444',
     warning: '#f59e0b',
     success: '#10b981',

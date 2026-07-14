@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useTheme } from '@/components/shared/ThemeProvider';
 
 interface Sector {
   title: string;
@@ -86,7 +87,7 @@ const SECTORS: Sector[] = [
 ];
 
 const COLOR_MAP: Record<Sector['color'], { bg: string; text: string; border: string }> = {
-  brand: { bg: 'bg-brand-600/20', text: 'text-brand-400', border: 'border-brand-500/30' },
+  brand: { bg: 'bg-ocean-600/20', text: 'text-ocean-400', border: 'border-ocean-500/30' },
   blue: { bg: 'bg-blue-600/20', text: 'text-blue-400', border: 'border-blue-500/30' },
   emerald: { bg: 'bg-emerald-600/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
   amber: { bg: 'bg-amber-600/20', text: 'text-amber-400', border: 'border-amber-500/30' },
@@ -103,10 +104,14 @@ const TRUST_BADGES = [
 
 /**
  * Section industrielle — 6 secteurs avec cartes en verre dépoli
- * sur fond sombre, bouton "Demander un devis" qui ouvre le formulaire de contact.
+ * sur fond dégradé, bouton "Demander un devis" qui ouvre le formulaire de contact.
  */
 export default function BoutiqueIndustrial() {
   const [activeSector, setActiveSector] = useState<string | null>(null);
+  const { theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isDark = mounted ? theme === 'dark' : true;
 
   const handleClick = (sector: string) => {
     setActiveSector(sector);
@@ -118,23 +123,34 @@ export default function BoutiqueIndustrial() {
     <section
       id="industriel"
       className="py-32 px-6 relative overflow-hidden"
-      style={{ background: 'linear-gradient(180deg,#1c1917 0%,#292524 100%)' }}
+      style={{
+        background: isDark
+          ? 'linear-gradient(180deg,#020617 0%,#0a0f1e 100%)'
+          : 'linear-gradient(180deg,#0369a1 0%,#0284c7 100%)',
+        color: 'var(--text)',
+      }}
     >
-      <div className="absolute inset-0 opacity-10 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-brand-500 blur-[150px]" />
+      <div className="absolute inset-0 opacity-15 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-ocean-500 blur-[150px]" />
         <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full bg-blue-500 blur-[120px]" />
       </div>
 
       <div className="max-w-7xl mx-auto relative z-10">
         <div className="text-center mb-20 reveal revealed">
-          <span className="text-xs font-bold uppercase tracking-[0.3em] text-brand-400 mb-4 block">
+          <span
+            className="text-xs font-bold uppercase tracking-[0.3em] mb-4 block"
+            style={{ color: isDark ? 'var(--primary-light)' : '#bae6fd' }}
+          >
             Solutions professionnelles
           </span>
           <h2 className="font-serif text-4xl md:text-6xl font-normal leading-[0.85] tracking-tighter text-white mb-6">
             Produits industriels<br />
-            <em className="text-brand-400">à négocier</em>
+            <em style={{ color: isDark ? 'var(--primary-light)' : '#bae6fd' }}>à négocier</em>
           </h2>
-          <p className="text-lg text-stone-400 font-light max-w-2xl mx-auto">
+          <p
+            className="text-lg font-light max-w-2xl mx-auto"
+            style={{ color: isDark ? 'var(--text-muted)' : 'rgba(255,255,255,0.85)' }}
+          >
             Des solutions sur mesure pour les entreprises, hôtels, cliniques et collectivités.
             Chaque projet est étudié individuellement pour répondre à vos besoins spécifiques.
           </p>
@@ -146,7 +162,12 @@ export default function BoutiqueIndustrial() {
             return (
               <div
                 key={sector.title}
-                className="group p-8 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm hover:bg-white/10 hover:border-brand-500/30 transition-all duration-500"
+                className="group p-8 rounded-3xl border transition-all duration-500"
+                style={{
+                  borderColor: 'rgba(255,255,255,0.15)',
+                  background: 'rgba(255,255,255,0.06)',
+                  backdropFilter: 'blur(8px)',
+                }}
               >
                 <div
                   className={`w-16 h-16 rounded-2xl ${colors.bg} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}
@@ -154,10 +175,12 @@ export default function BoutiqueIndustrial() {
                   <i className={`${sector.icon} text-3xl ${colors.text}`} aria-hidden="true" />
                 </div>
                 <h3 className="font-serif text-2xl text-white font-semibold mb-3">{sector.title}</h3>
-                <p className="text-stone-400 text-sm leading-relaxed mb-6">{sector.description}</p>
+                <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  {sector.description}
+                </p>
                 <ul className="space-y-2 mb-6">
                   {sector.bullets.map(b => (
-                    <li key={b} className="flex items-center gap-2 text-stone-300 text-sm">
+                    <li key={b} className="flex items-center gap-2 text-sm" style={{ color: 'rgba(255,255,255,0.9)' }}>
                       <i className={`fa-solid fa-circle-check ${colors.text}`} aria-hidden="true" />
                       {b}
                     </li>
@@ -168,6 +191,7 @@ export default function BoutiqueIndustrial() {
                   onClick={() => handleClick(sector.title)}
                   data-sector-idx={idx}
                   className={`w-full py-3 rounded-xl border ${colors.border} ${colors.text} text-sm font-bold uppercase tracking-wider hover:bg-white hover:text-stone-900 transition-all duration-300`}
+                  style={{ background: 'transparent' }}
                 >
                   Demander un devis
                 </button>
@@ -179,8 +203,8 @@ export default function BoutiqueIndustrial() {
         {/* Trust badges */}
         <div className="flex flex-wrap justify-center gap-8 reveal revealed">
           {TRUST_BADGES.map(badge => (
-            <div key={badge.label} className="flex items-center gap-3 text-stone-400">
-              <i className={`${badge.icon} text-2xl text-brand-500`} aria-hidden="true" />
+            <div key={badge.label} className="flex items-center gap-3" style={{ color: 'rgba(255,255,255,0.85)' }}>
+              <i className={`${badge.icon} text-2xl text-ocean-300`} aria-hidden="true" />
               <span className="text-sm font-medium">{badge.label}</span>
             </div>
           ))}

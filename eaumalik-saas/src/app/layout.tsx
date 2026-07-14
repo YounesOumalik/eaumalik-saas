@@ -25,12 +25,30 @@ export const metadata: Metadata = {
     'Casablanca',
     'EAUMALIK'
   ],
+  // Icons auto-découverts via `app/icon.png` (32x32) et `app/apple-icon.png` (180x180).
+  // On peut omettre `icons` ici : Next.js génère les balises <link rel="icon"> et
+  // <link rel="apple-touch-icon"> à partir des fichiers présents dans `app/`.
+  // Open Graph image : logo PNG (téléchargeable depuis le repo)
   openGraph: {
     title: "EAUMALIK SARL — L'eau pure, une vie plus saine",
     description: "Solutions professionnelles de traitement et purification de l'eau au Maroc. Osmose inverse et filtres à eau.",
     type: 'website',
     locale: 'fr_MA',
     siteName: 'EAUMALIK SARL',
+    images: [
+      {
+        url: '/logo.png',
+        width: 2986,
+        height: 1423,
+        alt: 'EAUMALIK SARL — Purification et osmose inverse',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "EAUMALIK SARL — L'eau pure, une vie plus saine",
+    description: "Solutions professionnelles de traitement et purification de l'eau au Maroc.",
+    images: ['/logo.png'],
   },
   robots: {
     index: true,
@@ -47,10 +65,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" data-theme="dark" suppressHydrationWarning>
+    <html lang="fr" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* Script anti-flash : pose data-theme (et .dark) avant le premier paint
+            pour éviter le flash blanc/noir au chargement.
+            Stratégie : préférence stockée > prefers-color-scheme > sombre. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var k='eaumalik_theme',s=localStorage.getItem(k);var t=s;if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';}document.documentElement.setAttribute('data-theme',t);if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){document.documentElement.setAttribute('data-theme','dark');document.documentElement.classList.add('dark');}})();`,
+          }}
+        />
       </head>
       <body>
         <Providers>

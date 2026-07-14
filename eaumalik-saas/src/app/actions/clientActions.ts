@@ -308,7 +308,7 @@ export async function publishNewsAction(raw: unknown) {
   if (isMockMode()) {
     const id = `news-${Date.now()}`;
     const now = new Date().toISOString();
-    const row = { id, created_at: now, ...payload };
+    const row = { id, created_at: now, ...payload, is_archived: false, archived_at: null, archived_reason: null };
     const rows = await readNewsRaw();
     rows.unshift(row);
     await writeNewsRaw(rows);
@@ -330,6 +330,196 @@ export async function publishNewsAction(raw: unknown) {
   revalidatePath('/client');
   revalidatePath('/');
   return { success: true as const, news: data };
+}
+
+/**
+ * Met à jour une actualité / promotion existante à partir du formulaire CRM
+ * (mêmes champs camelCase que `publishNewsAction`).
+ *
+ * En mode mock, on patche directement dans data-store/news.json.
+ * En mode Supabase, on patche uniquement les colonnes du payload (le reste est
+ * préservé côté DB).
+ */
+export async function updateNewsFromCrmAction(id: string, raw: unknown) {
+  if (!id || typeof id !== 'string') {
+    return { success: false as const, error: 'Identifiant manquant.' };
+  }
+  const parsed = NewsSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Validation échouée.' };
+  }
+  if (!isMockMode()) await requireAdmin();
+  const payload = buildNewsPayload(parsed.data);
+
+  // ---------- MOCK ----------
+  if (isMockMode()) {
+    const rows = await readNewsRaw();
+    const idx = rows.findIndex((r: any) => r.id === id);
+    if (idx === -1) return { success: false as const, error: 'Actualité introuvable.' };
+    const existing = rows[idx];
+    const updated = {
+      ...existing,
+      ...payload,
+      id,
+      // On ne touche pas au flag d'archive via l'update « normal »
+      is_archived: existing.is_archived === true,
+      archived_at: existing.archived_at ?? null,
+      archived_reason: existing.archived_reason ?? null,
+    };
+    rows[idx] = updated;
+    await writeNewsRaw(rows);
+    revalidatePath('/client');
+    revalidatePath('/');
+    revalidatePath('/crm/news');
+    revalidatePath('/admin/publications');
+    return { success: true as const, news: updated };
+  }
+
+  // ---------- SUPABASE ----------
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from('news')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error || !data) return { success: false as const, error: 'Mise à jour échouée.' };
+  revalidatePath('/client');
+  revalidatePath('/');
+  revalidatePath('/admin/publications');
+  return { success: true as const, news: data };
+}
+
+/**
+ * Supprime définitivement une actualité / promotion. Bypass admin gate en mock
+ * (la session dev est garantie par le middleware).
+ */
+export async function deleteNewsFromCrmAction(id: string) {
+  if (!id || typeof id !== 'string') {
+    return { success: false as const, error: 'Identifiant manquant.' };
+  }
+  if (!isMockMode()) await requireAdmin();
+
+  if (isMockMode()) {
+    const rows = await readNewsRaw();
+    const filtered = rows.filter((r: any) => r.id !== id);
+    if (filtered.length === rows.length) {
+      return { success: false as const, error: 'Actualité introuvable.' };
+    }
+    await writeNewsRaw(filtered);
+    revalidatePath('/admin/publications');
+    revalidatePath('/');
+    revalidatePath('/client');
+    return { success: true as const };
+  }
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { error } = await supabase.from('news').delete().eq('id', id);
+  if (error) return { success: false as const, error: 'Suppression échouée.' };
+  revalidatePath('/admin/publications');
+  revalidatePath('/');
+  revalidatePath('/client');
+  return { success: true as const };
+}
+
+/**
+ * Archive (soft-delete) une actualité / promotion. La publication disparaît
+ * du carrousel landing, de la boutique et de l'espace client, mais reste
+ * listée dans l'admin pour restauration ultérieure.
+ */
+export async function archiveNewsAction(id: string, reason?: string | null) {
+  if (!id || typeof id !== 'string') {
+    return { success: false as const, error: 'Identifiant manquant.' };
+  }
+  if (!isMockMode()) await requireAdmin();
+  const now = new Date().toISOString();
+
+  if (isMockMode()) {
+    const rows = await readNewsRaw();
+    const idx = rows.findIndex((r: any) => r.id === id);
+    if (idx === -1) return { success: false as const, error: 'Actualité introuvable.' };
+    const updated = {
+      ...rows[idx],
+      is_archived: true,
+      archived_at: now,
+      archived_reason: reason ?? rows[idx].archived_reason ?? null,
+    };
+    rows[idx] = updated;
+    await writeNewsRaw(rows);
+    revalidatePath('/admin/publications');
+    revalidatePath('/');
+    revalidatePath('/client');
+    return { success: true as const, news: updated };
+  }
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from('news')
+    .update({ is_archived: true, archived_at: now, archived_reason: reason ?? null })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error || !data) return { success: false as const, error: 'Archivage échoué.' };
+  revalidatePath('/admin/publications');
+  revalidatePath('/');
+  revalidatePath('/client');
+  return { success: true as const, news: data };
+}
+
+/** Restaure (désarchive) une actualité / promotion. */
+export async function unarchiveNewsAction(id: string) {
+  if (!id || typeof id !== 'string') {
+    return { success: false as const, error: 'Identifiant manquant.' };
+  }
+  if (!isMockMode()) await requireAdmin();
+
+  if (isMockMode()) {
+    const rows = await readNewsRaw();
+    const idx = rows.findIndex((r: any) => r.id === id);
+    if (idx === -1) return { success: false as const, error: 'Actualité introuvable.' };
+    const updated = {
+      ...rows[idx],
+      is_archived: false,
+      archived_at: null,
+      archived_reason: null,
+    };
+    rows[idx] = updated;
+    await writeNewsRaw(rows);
+    revalidatePath('/admin/publications');
+    revalidatePath('/');
+    revalidatePath('/client');
+    return { success: true as const, news: updated };
+  }
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from('news')
+    .update({ is_archived: false, archived_at: null, archived_reason: null })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error || !data) return { success: false as const, error: 'Restauration échouée.' };
+  revalidatePath('/admin/publications');
+  revalidatePath('/');
+  revalidatePath('/client');
+  return { success: true as const, news: data };
+}
+
+/**
+ * Liste TOUTES les actualités (actives + archivées) pour l'écran d'admin
+ * `/admin/publications`. Triées du plus récent au plus ancien.
+ */
+export async function listAdminNewsAction() {
+  if (!isMockMode()) await requireAdmin();
+  const rows = await readNewsRaw();
+  // Tri desc par created_at, archivées en queue pour visibilité rapide
+  const sorted = [...rows].sort((a: any, b: any) => {
+    const aArch = a.is_archived === true ? 1 : 0;
+    const bArch = b.is_archived === true ? 1 : 0;
+    if (aArch !== bArch) return aArch - bArch; // actives d'abord
+    return (b.created_at || '').localeCompare(a.created_at || '');
+  });
+  return { success: true as const, news: sorted };
 }
 
 /**

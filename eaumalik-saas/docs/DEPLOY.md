@@ -186,6 +186,38 @@ Le script garde le tag de l'image précédente dans `/opt/eaumalik/.last_image`.
 
 ---
 
+## Déploiement automatisé (GitHub Actions)
+
+Le workflow `.github/workflows/deploy.yml` reproduit **à l'identique** `scripts/deploy.sh`
+(build Docker → tar.gz → SCP → `docker load` → `run` → healthcheck) à chaque `push` sur `main`.
+Il peut aussi être lancé manuellement depuis l'onglet **Actions** (bouton *Run workflow*).
+
+### Secrets GitHub requis (Settings → Secrets → Actions)
+
+| Secret | Valeur |
+|--------|--------|
+| `DEPLOY_SSH_KEY` | Contenu de `~/.ssh/id_smartserveur` (clé privée, bloc SSH `smartserveur`) |
+| `DEPLOY_HOST` | `164.68.97.103` (HostName du bloc `smartserveur`) |
+| `DEPLOY_USER` | `younes` (User du bloc `smartserveur`) |
+| `ENV_PROD` | Contenu **exact** de `.env.prod` local (contient les clés Supabase service-role) |
+
+### Notes
+
+- Le `.env` du serveur (`/opt/eaumalik/.env`) est **recréé à chaque déploiement** depuis le secret `ENV_PROD` (idempotent, autonome — aucune étape manuelle préalable sur le serveur).
+- `deploy.sh --rollback` reste utilisable manuellement en cas de besoin (le tag précédent est sauvegardé dans `/opt/eaumalik/.last_image`).
+- Un groupe `concurrency: deploy-smartserveur` empêche 2 pushes rapides de lancer 2 déplois concurrents.
+- Le réseau `supabase-prod-net` et le bloc Caddy sont gérés séparément (étapes « une seule fois » ci-dessus).
+
+### Vérification post-déploiement
+
+```bash
+# Onglet Actions : workflow vert + log « ✅ Container eaumalik-app healthy »
+curl -sI https://eaumalik.com          # Attendu : 200 + HSTS
+ssh smartserveur 'docker ps --filter name=eaumalik-app'   # Up ... (healthy)
+```
+
+---
+
 ## Commandes utiles
 
 ```bash

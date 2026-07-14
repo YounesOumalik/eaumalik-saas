@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { readUsersRaw, writeUsersRaw } from '@/data/repositories';
+import { verifyCaptchaPayload } from '@/lib/captcha';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,12 +32,30 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json().catch(() => ({}));
-    const { email, password, isSignUp = false, profile } = body as {
+    const { email, password, isSignUp = false, captcha_answer, profile } = body as {
       email?: string;
       password?: string;
       isSignUp?: boolean;
+      captcha_answer?: string;
       profile?: { full_name?: string; phone?: string; city?: string; address?: string; referred_by?: string };
     };
+
+    // --- Validation CAPTCHA (anti-bot) ---
+    const captchaToken = cookies().get('eaumalik_captcha')?.value;
+    const captchaRes = verifyCaptchaPayload(captchaToken, captcha_answer);
+    // Consomme le cookie (single-use) à CHAQUE tentative, succès ou échec,
+    // pour empêcher la réutilisation/replay d'un même challenge résolu.
+    cookies().delete('eaumalik_captcha');
+    if (!captchaRes.ok) {
+      const msg =
+        captchaRes.reason === 'expired'
+          ? 'CAPTCHA expiré. Rechargez et réessayez.'
+          : captchaRes.reason === 'tampered'
+            ? 'CAPTCHA invalide.'
+            : 'CAPTCHA incorrect.';
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+
     if (!email || !password) {
       return NextResponse.json({ error: 'Email et mot de passe requis.' }, { status: 400 });
     }

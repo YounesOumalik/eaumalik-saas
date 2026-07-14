@@ -1,24 +1,23 @@
 import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/supabase/server';
+import { listNews } from '@/data/repositories';
 import PublicationsManager from '@/components/admin/PublicationsManager';
 
 /**
  * Page `/admin/publications` — accessible uniquement aux administrateurs.
  *
- * Permet de composer et publier des actualités / promotions.
- *
- * Depuis juillet 2026, la réponse aux messages des clients a été
- * déplacée dans la section CRM (`/crm/messages`) ; elle n'est plus
- * accessible depuis cette page.
+ * Permet de composer, modifier, archiver et supprimer des actualités /
+ * promotions. La réponse aux messages clients a été déplacée dans la
+ * section CRM (`/crm/messages`) en juillet 2026.
  *
  * Implémentation :
- *  - Le server component se contente de vérifier l'accès admin.
- *  - Le composant client ne dépend d'AUCUNE action Supabase côté
- *    serveur → la page s'affiche même en mode dégradé (env var
- *    `SUPABASE_SERVICE_ROLE_KEY` manquante).
- *
- * Migrée dans la section Administration à la demande utilisateur
- * (juillet 2026) — voir `PublicationsManager.tsx`.
+ *  - Server component : charge la liste initiale (`listNews` avec
+ *    `includeArchived = true`) pour que la page s'affiche même sans
+ *    appel client supplémentaire. En cas d'erreur de lecture (mode
+ *    dégradé, env manquante…), on retombe sur un tableau vide plutôt
+ *    que de bloquer l'accès à l'admin.
+ *  - Client component (`PublicationsManager`) : gère l'UI (onglets,
+ *    édition, archivage, suppression) et se resynchronise en local.
  */
 export const dynamic = 'force-dynamic';
 
@@ -29,8 +28,16 @@ export default async function AdminPublicationsPage() {
     redirect('/login?callbackUrl=/admin/publications');
   }
 
-  // Aucun appel Supabase ici : on délègue tout au composant client
-  // pour qu'un éventuel problème d'env var n'empêche pas l'affichage
-  // de l'onglet « Publier ».
-  return <PublicationsManager />;
+  // Charge la liste complète (actives + archivées) côté serveur.
+  // En cas d'échec (mode mock corrompu, etc.), on retombe sur [] :
+  // l'admin pourra toujours publier ; la liste se rechargera à la
+  // prochaine action.
+  let initialNews: Awaited<ReturnType<typeof listNews>> = [];
+  try {
+    initialNews = await listNews({ includeArchived: true });
+  } catch {
+    initialNews = [];
+  }
+
+  return <PublicationsManager initialNews={initialNews} />;
 }

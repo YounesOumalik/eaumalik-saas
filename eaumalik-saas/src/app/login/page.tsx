@@ -1,12 +1,15 @@
 'use client';
 
-import { Mail, LogIn, UserPlus, KeyRound, User, Gift, Phone, MapPin, Home, Loader2 } from 'lucide-react';
+import { LogIn, UserPlus, KeyRound, User, Gift, Phone, MapPin, Home, Mail, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
-import { createSupabaseBrowserClient, maybeSupabaseBrowserClient } from '@/lib/supabase/client';
+import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
 import { PHONE_MA_REGEX } from '@/lib/utils';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
+import BrandLogo from '@/components/shared/BrandLogo';
+import CaptchaChallenge from '@/components/shared/CaptchaChallenge';
 
 const PasswordSchema = z
   .string()
@@ -40,54 +43,60 @@ function LoginInner() {
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [referralCode, setReferralCode] = useState('');
-
-  const handleGoogle = async () => {
-    setError('');
-    const supabase = createSupabaseBrowserClient();
-    try {
-      const { error: oauthErr } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: `${window.location.origin}/login?callbackUrl=${encodeURIComponent(callbackUrl)}` },
-      });
-      if (oauthErr) setError(oauthErr.message);
-    } catch (err: any) {
-      setError('Connexion Google indisponible.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+  const [captchaReload, setCaptchaReload] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
     setSuccess('');
 
+    // Garde-fou côté client (UX uniquement, le serveur revalide tout).
+    if (!captchaAnswer || captchaAnswer.trim().length < 4) {
+      setError('Merci de compléter le CAPTCHA.');
+      return;
+    }
+
+    setLoading(true);
+
     if (isDevMode) {
       // Mode mock : on authentifie l'utilisateur contre src/data/mock.ts
-      // via l'API /api/auth/dev-login.
+      // via l'API /api/auth/dev-login. Le CAPTCHA est validé côté serveur.
       try {
         const res = await fetch('/api/auth/dev-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, isSignUp, profile: {
-            full_name: fullName, phone, city, address, referred_by: referralCode,
-          } }),
+          body: JSON.stringify({
+            email,
+            password,
+            isSignUp,
+            captcha_answer: captchaAnswer,
+            profile: {
+              full_name: fullName,
+              phone,
+              city,
+              address,
+              referred_by: referralCode,
+            },
+          }),
         });
         const json = await res.json();
         if (!res.ok) {
           setError(json.error || 'Identifiants invalides.');
           setLoading(false);
+          if (typeof json.error === 'string' && /captcha/i.test(json.error)) {
+            setCaptchaAnswer('');
+            setCaptchaReload(n => n + 1);
+          }
           return;
         }
         if (json.created) {
           setSuccess('Compte créé avec succès. Vous pouvez maintenant vous connecter.');
           setIsSignUp(false);
           setLoading(false);
+          setCaptchaAnswer('');
           return;
         }
-        // Login OK : le cookie de session est posé par /api/auth/dev-login.
-        // On notifie le provider (même onglet) pour rafraîchir la navbar.
         window.dispatchEvent(new Event('eaumalik:dev-session-change'));
         const role = json.user?.role;
         if (role === 'admin' || role === 'staff') {
@@ -110,52 +119,89 @@ function LoginInner() {
       const pwd = PasswordSchema.safeParse(password);
       if (!pwd.success) { setError(pwd.error.issues[0]?.message ?? 'Mot de passe invalide.'); setLoading(false); return; }
 
-      const supabase = createSupabaseBrowserClient();
-      const { error: signUpErr } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName, phone, city, address: address || null, referred_by: referralCode || null },
-        },
-      });
-
-      if (signUpErr) {
-        setError(signUpErr.message || 'Inscription impossible.');
+      // En mode Supabase on passe par /api/auth/sign-up pour que le CAPTCHA
+      // soit validé côté serveur AVANT l'appel à supabase.auth.signUp().
+      try {
+        const res = await fetch('/api/auth/sign-up', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            password,
+            captcha_answer: captchaAnswer,
+            profile: {
+              full_name: fullName,
+              phone,
+              city,
+              address: address || null,
+              referred_by: referralCode || null,
+            },
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setError(json.error || 'Inscription impossible.');
+          setLoading(false);
+          if (typeof json.error === 'string' && /captcha/i.test(json.error)) {
+            setCaptchaAnswer('');
+            setCaptchaReload(n => n + 1);
+          }
+          return;
+        }
+        setSuccess('Compte créé avec succès. Vérifiez votre email pour confirmer, puis connectez-vous.');
+        setIsSignUp(false);
+        setFullName('');
+        setPhone('');
+        setCity('');
+        setAddress('');
+        setReferralCode('');
+        setCaptchaAnswer('');
+        setLoading(false);
+        return;
+      } catch (err) {
+        setError('Erreur lors de la création du compte.');
         setLoading(false);
         return;
       }
-      setSuccess('Compte créé avec succès. Vérifiez votre email pour confirmer, puis connectez-vous.');
-      setIsSignUp(false);
-      setFullName('');
-      setPhone('');
-      setCity('');
-      setAddress('');
-      setReferralCode('');
-      setLoading(false);
-      return;
     }
 
-    const supabase = createSupabaseBrowserClient();
-    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInErr) {
-      setError('Email ou mot de passe incorrect.');
+    // Mode Supabase — LOGIN : on délègue aussi à une route serveur pour valider
+    // le CAPTCHA. Cela garantit qu'aucun script ne peut tenter de brute-forcer
+    // un compte sans passer le CAPTCHA.
+    try {
+      const res = await fetch('/api/auth/sign-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, captcha_answer: captchaAnswer }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Email ou mot de passe incorrect.');
+        setLoading(false);
+        if (typeof json.error === 'string' && /captcha/i.test(json.error)) {
+          setCaptchaAnswer('');
+          setCaptchaReload(n => n + 1);
+        }
+        return;
+      }
+      const userRole = json.user?.role;
+      if (userRole === 'admin' || userRole === 'staff') {
+        router.push('/admin');
+      } else {
+        router.push(callbackUrl);
+      }
+      router.refresh();
+    } catch (err) {
+      setError('Erreur de connexion.');
       setLoading(false);
-      return;
     }
-    const userRole = signInData.user?.user_metadata?.role;
-    if (userRole === 'admin' || userRole === 'staff') {
-      router.push('/admin');
-    } else {
-      router.push(callbackUrl);
-    }
-    router.refresh();
   };
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
       <div className="glass-card p-8 max-w-md w-full" style={{ transform: 'none' }}>
-        <div className="w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-5" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-dark))' }}>
-          <i className="fa-solid fa-droplet text-white text-xl" aria-hidden="true" />
+        <div className="mb-6 flex justify-center">
+          <BrandLogo size="lg" tone="light" priority />
         </div>
         <h1 className="font-display font-extrabold text-2xl mb-2 text-center">
           {isSignUp ? <>Créer un <span className="gradient-text">Compte</span></> : <>Connexion <span className="gradient-text">EAUMALIK</span></>}
@@ -175,7 +221,7 @@ function LoginInner() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 mb-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {isSignUp && (
             <>
               <div>
@@ -210,22 +256,19 @@ function LoginInner() {
               <input type="text" className="form-input" value={referralCode} onChange={e => setReferralCode(e.target.value)} placeholder="EX : A1B2C3" />
             </div>
           )}
+          <CaptchaChallenge value={captchaAnswer} onChange={setCaptchaAnswer} disabled={loading} reloadToken={captchaReload} />
           <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 text-base disabled:opacity-50">
             {loading ? <Loader2 className="animate-spin" size={16} /> : isSignUp ? <><UserPlus size={16} /> Créer mon compte</> : <><LogIn size={16} /> Se connecter</>}
           </button>
         </form>
 
-        <div className="relative flex items-center justify-center my-6">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[color:var(--border)]" /></div>
-          <span className="relative px-3 text-xs uppercase bg-[color:var(--bg-surface)]" style={{ color: 'var(--text-muted)' }}>Ou</span>
-        </div>
-
-        <button onClick={handleGoogle} disabled={loading} className="btn-outline w-full justify-center py-2.5 text-sm disabled:opacity-50 mb-6">
-          <Mail size={16} aria-hidden="true" /> Google Login
-        </button>
-
-        <div className="text-center text-sm">
-          <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(''); setSuccess(''); }} className="text-primary-400 hover:text-primary-300 font-semibold">
+        <div className="flex items-center justify-between mt-5 text-sm">
+          {!isSignUp ? (
+            <Link href="/login/mot-de-passe-oublie" className="text-primary-400 hover:text-primary-300 font-semibold">
+              Mot de passe oublié ?
+            </Link>
+          ) : <span />}
+          <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(''); setSuccess(''); setCaptchaAnswer(''); }} className="text-primary-400 hover:text-primary-300 font-semibold">
             {isSignUp ? 'Déjà un compte ? Connectez-vous' : 'Pas de compte ? Créez-en un ici'}
           </button>
         </div>

@@ -6,6 +6,7 @@ import type { Product, ProductCategory, News } from '@/types';
 import ProductCard from '@/components/boutique/ProductCard';
 import CategoryFilters from '@/components/boutique/CategoryFilters';
 import BoutiqueHero from '@/components/boutique/BoutiqueHero';
+import BoutiqueFiltration from '@/components/boutique/BoutiqueFiltration';
 import BoutiquePromotions from '@/components/boutique/BoutiquePromotions';
 import { useToast } from '@/components/shared/ToastProvider';
 
@@ -63,26 +64,29 @@ export default function BoutiqueClient({
   }, []);
 
   return (
-    <div className="bg-white">
+    <div className="surface-page">
       <BoutiqueHero />
+
+      <BoutiqueFiltration />
 
       <BoutiquePromotions promotions={promotions} showNews={false} />
 
       {/* CATALOGUE */}
-      <section id="catalogue" className="py-32 px-6 bg-white">
+      <section id="catalogue" className="py-16 md:py-20 px-6 surface-page">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16 reveal revealed">
-            <span className="text-xs font-bold uppercase tracking-[0.3em] text-brand-600 mb-4 block">
+          <div className="text-center mb-10 reveal revealed">
+            <span className="text-xs font-bold uppercase tracking-[0.3em] mb-4 block"
+                  style={{ color: 'var(--primary)' }}>
               {featuredOnly ? 'Nos coups de cœur' : 'Notre catalogue'}
             </span>
-            <h2 className="font-serif text-4xl md:text-6xl font-normal leading-[0.85] tracking-tighter mb-6 text-stone-900">
+            <h2 className="font-serif text-4xl md:text-6xl font-normal leading-[0.9] tracking-tighter mb-4 text-heading">
               {featuredOnly ? (
-                <>Nos produits<br /><em className="text-brand-700">phares</em></>
+                <>Nos produits<br /><em style={{ color: 'var(--primary)' }}>phares</em></>
               ) : (
-                <>Explorez nos<br /><em className="text-brand-700">produits</em></>
+                <>Explorez nos<br /><em style={{ color: 'var(--primary)' }}>produits</em></>
               )}
             </h2>
-            <p className="text-lg text-stone-500 font-light max-w-xl mx-auto">
+            <p className="text-lg font-light max-w-xl mx-auto text-meta">
               {featuredOnly
                 ? 'Une selection de nos meilleures solutions de purification d\'eau. Decouvrez tout le catalogue dans la boutique.'
                 : 'Des solutions completes pour chaque besoin de purification d\'eau.'}
@@ -102,10 +106,10 @@ export default function BoutiqueClient({
           {filtered.length === 0 ? (
             <div className="text-center py-20">
               <i
-                className="fa-solid fa-box-open text-5xl mb-4 text-stone-300"
+                className="fa-solid fa-box-open text-5xl mb-4 text-meta"
                 aria-hidden="true"
               />
-              <p className="text-stone-500">Aucun produit ne correspond a votre recherche.</p>
+              <p className="text-meta">Aucun produit ne correspond a votre recherche.</p>
               <button
                 type="button"
                 onClick={() => {
@@ -113,7 +117,7 @@ export default function BoutiqueClient({
                   setSearch('');
                   toast('Filtres reinitialises', 'info');
                 }}
-                className="mt-4 px-5 py-2 rounded-xl bg-brand-50 text-brand-700 text-sm font-semibold hover:bg-brand-100 transition"
+                className="mt-4 px-5 py-2 rounded-xl pill-themed text-sm font-semibold transition"
               >
                 Reinitialiser les filtres
               </button>
@@ -130,7 +134,7 @@ export default function BoutiqueClient({
             <div className="text-center mt-14">
               <Link
                 href="/boutique"
-                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-lg shadow-brand-600/20"
+                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full btn-primary text-sm font-semibold transition"
               >
                 Voir toute la boutique
                 <i className="fa-solid fa-arrow-right" aria-hidden="true" />

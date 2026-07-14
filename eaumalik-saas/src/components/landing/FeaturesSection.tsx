@@ -14,16 +14,19 @@ const FEATURES = [
 // Design aligné sur la page boutique (font-serif, brand-*, stone-*).
 export default function FeaturesSection() {
   return (
-    <section id="features" className="py-32 px-6 bg-white">
+    <section id="features" className="py-32 px-6 surface-page">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16 reveal">
-          <span className="text-xs font-bold uppercase tracking-[0.3em] text-brand-600 mb-4 block">
+          <span
+            className="text-xs font-bold uppercase tracking-[0.3em] mb-4 block"
+            style={{ color: 'var(--primary)' }}
+          >
             Notre engagement
           </span>
-          <h2 className="font-serif text-4xl md:text-6xl font-normal leading-[0.85] tracking-tighter mb-6 text-stone-900">
-            Pourquoi choisir <em className="text-brand-700">EAUMALIK</em> ?
+          <h2 className="font-serif text-4xl md:text-6xl font-normal leading-[0.85] tracking-tighter mb-6 text-heading">
+            Pourquoi choisir <em style={{ color: 'var(--primary)' }}>EAUMALIK</em> ?
           </h2>
-          <p className="text-lg text-stone-500 font-light max-w-xl mx-auto">
+          <p className="text-lg font-light max-w-xl mx-auto text-meta">
             Notre engagement, votre confiance. Des solutions sur mesure pour chaque besoin en traitement de l&apos;eau.
           </p>
         </div>
@@ -31,14 +34,17 @@ export default function FeaturesSection() {
           {FEATURES.map((f, i) => (
             <div
               key={f.title}
-              className="bg-white rounded-3xl border border-stone-100 p-8 reveal hover:shadow-xl hover:-translate-y-1 transition-all duration-500"
+              className="surface-card rounded-3xl p-8 reveal hover:shadow-xl hover:-translate-y-1 transition-all duration-500"
               style={{ transitionDelay: `${i * 80}ms` }}
             >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 bg-brand-50">
-                <i className={`${f.icon} text-brand-600`} aria-hidden="true" />
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center mb-5"
+                style={{ background: 'var(--primary-glow)' }}
+              >
+                <i className={`${f.icon}`} aria-hidden="true" style={{ color: 'var(--primary)' }} />
               </div>
-              <h3 className="font-serif font-semibold text-xl mb-2 text-stone-900">{f.title}</h3>
-              <p className="text-sm leading-relaxed text-stone-500">{f.desc}</p>
+              <h3 className="font-serif font-semibold text-xl mb-2 text-heading">{f.title}</h3>
+              <p className="text-sm leading-relaxed text-meta">{f.desc}</p>
             </div>
           ))}
         </div>

@@ -104,8 +104,7 @@ Les policies RLS utilisent la fonction `eaumalik.is_admin()` (définie dans `sup
 | `NEXT_PUBLIC_SUPABASE_URL`           | URL du projet Supabase                   |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`      | Anon key                                 |
 | `SUPABASE_SERVICE_ROLE_KEY`          | Service role (admin, BYPASS RLS)         |
-| `NEXT_PUBLIC_USE_MOCKS`              | `true` = pas besoin de Supabase          |
-
+| `NEXT_PUBLIC_USE_MOCKS`              | `true` = pas besoin de Supabase          || `CAPTCHA_SECRET`                   | Secret HMAC du CAPTCHA maison (obligatoire en prod, `openssl rand -hex 32`) |
 ## Pages
 
 | Route                       | Description                                |
@@ -113,7 +112,7 @@ Les policies RLS utilisent la fonction `eaumalik.is_admin()` (définie dans `sup
 | `/`                         | Landing page                               |
 | `/boutique`                 | Catalogue + filtres + recherche            |
 | `/panier`                   | Panier + checkout                          |
-| `/login`                    | Connexion Google                           |
+| `/login`                    | Connexion email + mot de passe (CAPTCHA maison) |
 | `/admin`                    | Tableau de bord admin (commandes)          |
 | `/admin/stocks`             | Gestion des stocks                         |
 | `/admin/catalogue`          | CRUD produ(Supabase Auth / dev mock)       |
@@ -133,6 +132,11 @@ Les policies RLS utilisent la fonction `eaumalik.is_admin()` (définie dans `sup
 | `PATCH /api/maintenance/{id}`                | `{ status: '...' }`                |
 | `GET /api/invoice?order_id=xxx`              | Télécharge le PDF                  |
 | `POST /api/auth/dev-login`                   | Auth dev/mock (mocks uniquement)     |
+| `GET /api/auth/captcha`                      | SVG CAPTCHA maison (cookie signé)    |
+| `POST /api/auth/sign-up`                     | Inscription Supabase + validation CAPTCHA |
+| `POST /api/auth/sign-in`                     | Connexion Supabase + validation CAPTCHA |
+| `POST /api/auth/forgot-password`             | Demande reset mdp (CAPTCHA, message générique) |
+| `POST /api/auth/reset-password`              | Reset mdp (mode mock, token + CAPTCHA) |
 
 Toutes les routes valident les entrées avec **Zod**.
 ## Sécurité

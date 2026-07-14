@@ -3,9 +3,16 @@
 import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import type { News } from '@/types';
+import { useRouter } from 'next/navigation';
+import type { News, Product } from '@/types';
 import { formatCurrency, formatDate, daysUntil } from '@/lib/utils';
-import { Sparkles, Tag, Clock, Newspaper, ArrowRight } from 'lucide-react';
+import { Sparkles, Tag, Clock, Newspaper, ArrowRight, Lock, UserPlus } from 'lucide-react';
+import { useCart } from '@/components/shared/CartProvider';
+import { useToast } from '@/components/shared/ToastProvider';
+import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
+
+// Lien de la promo → invite : ajout bloque tant que la connexion / inscription
+// n'est pas faite (meme regle que le catalogue, voir ProductCard).
 
 interface Props {
   promotions: News[];
@@ -19,25 +26,131 @@ const PERCENT = (original: number, promo: number): number => {
   return Math.round(((original - promo) / original) * 100);
 };
 
-const BADGE_COLOR: Record<string, string> = {
-  promo: 'bg-brand-600 text-white',
-  info: 'bg-blue-600 text-white',
-  news: 'bg-stone-700 text-white',
-};
-
+/**
+ * Carte promotion : le bouton "En profiter" ajoute les produits liés au panier
+ * (selon `product_ids`) puis exige la création de compte / connexion AVANT de
+ * laisser l'utilisateur accéder au panier pour finaliser la commande.
+ *
+ * Cas gerés :
+ *  - Pas authentifié → redirection vers /login?callbackUrl=/panier
+ *  - Authentifié → ajout au panier + redirection vers /panier
+ *  - Pas de product_ids → fallback sur /boutique#catalogue (vente libre)
+ */
 function PromotionCard({ promo }: { promo: News }) {
+  const router = useRouter();
+  const toast = useToast();
+  const { add } = useCart();
+  const { session } = useSupabaseAuth();
+  const [adding, setAdding] = useState(false);
+
   const hasPrice = typeof promo.price === 'number' && promo.price > 0;
   const hasOriginal =
     typeof promo.original_price === 'number' && (promo.original_price as number) > 0;
   const discount = hasPrice && hasOriginal ? PERCENT(promo.original_price!, promo.price!) : 0;
-  const remaining =
-    promo.valid_until ? Math.max(0, daysUntil(promo.valid_until)) : null;
+  const remaining = promo.valid_until ? Math.max(0, daysUntil(promo.valid_until)) : null;
+  const hasLinkedProducts = Array.isArray(promo.product_ids) && promo.product_ids.length > 0;
+
+  /**
+   * Calcule le prix unitaire à appliquer pour la promotion :
+   *  - Si la promo a un prix global et plusieurs produits liés, on répartit
+   *    équitablement (price / nbProducts).
+   *  - Si un seul produit et un prix global → ce prix-là.
+   *  - Sinon : null (on laisse le prix catalogue).
+   */
+  const computePromoUnitPrice = (products: Product[]): number | null => {
+    if (!hasPrice) return null;
+    if (products.length === 0) return null;
+    if (products.length === 1) return promo.price!;
+    // Répartition équitable du prix promo sur l'ensemble des produits.
+    return Math.round((promo.price! / products.length) * 100) / 100;
+  };
+
+  const handleEnjoy = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (adding) return;
+
+    // Pas de produit lié : on bascule sur la vue catalogue de la boutique.
+    if (!hasLinkedProducts) {
+      router.push('/boutique#catalogue');
+      return;
+    }
+
+    // Pas authentifié : on exige la création/connexion AVANT l'ajout au panier.
+    if (!session) {
+      toast('Veuillez vous inscrire ou vous connecter pour profiter de cette offre.', 'info');
+      router.push(`/login?callbackUrl=${encodeURIComponent('/panier')}`);
+      return;
+    }
+
+    // Authentifié : on charge les produits liés et on les ajoute au panier.
+    try {
+      setAdding(true);
+      let products: Product[] = [];
+
+      // 1) Tentative via le filtre serveur `ids=` (si supporté).
+      const idsRes = await fetch(
+        `/api/products?ids=${encodeURIComponent(promo.product_ids.join(','))}`,
+        { cache: 'no-store' },
+      ).catch(() => null);
+
+      if (idsRes && idsRes.ok) {
+        const json = await idsRes.json();
+        if (Array.isArray(json)) {
+          products = (json as Product[]).filter((p) => promo.product_ids.includes(p.id));
+        }
+      }
+
+      // 2) Fallback : on charge tout le catalogue et on filtre côté client.
+      if (products.length === 0) {
+        const allRes = await fetch('/api/products', { cache: 'no-store' });
+        if (allRes.ok) {
+          const all = (await allRes.json()) as Product[];
+          products = all.filter((p) => promo.product_ids.includes(p.id));
+        }
+      }
+
+      if (products.length === 0) {
+        toast('Produits de la promotion introuvables. Redirection vers la boutique.', 'error');
+        router.push('/boutique#catalogue');
+        return;
+      }
+
+      const unitPrice = computePromoUnitPrice(products);
+
+      products.forEach((p) => {
+        // On n'augmente jamais le prix catalogue si le calcul promo dépasse.
+        const priceToApply =
+          unitPrice !== null ? Math.min(p.price, unitPrice) : p.price;
+        add({
+          product_id: p.id,
+          name: p.name,
+          price: priceToApply,
+          image_url: p.image_url,
+          quantity: 1,
+        });
+      });
+
+      const summary =
+        products.length === 1
+          ? `${products[0].name} ajouté au panier`
+          : `${products.length} articles ajoutés au panier`;
+      toast(`${summary} — finalisez votre commande`, 'success');
+      router.push('/panier');
+    } catch (err) {
+      toast("Erreur lors de l'ajout au panier. Veuillez réessayer.", 'error');
+      router.push('/boutique#catalogue');
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <article
-      className="group bg-white rounded-3xl border border-stone-100 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 flex flex-col"
+      className="group rounded-3xl border border-[color:var(--border)] overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 flex flex-col bg-[color:var(--bg-card)]"
       aria-label={`Promotion: ${promo.title}`}
     >
-      <div className="relative h-44 bg-gradient-to-br from-brand-50 via-cyan-50 to-blue-50 flex items-center justify-center overflow-hidden">
+      <div className="relative h-44 bg-gradient-to-br from-brand-50 via-cyan-50 to-blue-50 dark:from-[color:var(--bg-surface)] dark:via-[color:var(--bg-surface)] dark:to-[color:var(--bg-card)] flex items-center justify-center overflow-hidden">
         {promo.image_url ? (
           <Image
             src={promo.image_url}
@@ -48,7 +161,7 @@ function PromotionCard({ promo }: { promo: News }) {
             unoptimized
           />
         ) : (
-          <div className="flex flex-col items-center gap-2 text-brand-600">
+          <div className="flex flex-col items-center gap-2 text-brand-600 dark:text-brand-300">
             <Sparkles className="w-12 h-12" aria-hidden="true" />
             <span className="text-xs font-bold uppercase tracking-[0.25em]">
               Offre du moment
@@ -60,28 +173,28 @@ function PromotionCard({ promo }: { promo: News }) {
             -{discount}%
           </span>
         )}
-        <span className="absolute top-4 right-4 px-3 py-1 rounded-full bg-white/90 backdrop-blur-sm text-brand-700 text-[11px] font-bold uppercase tracking-wider border border-brand-100">
+        <span className="absolute top-4 right-4 px-3 py-1 rounded-full bg-white/90 backdrop-blur-sm text-brand-700 text-[11px] font-bold uppercase tracking-wider border border-brand-100 dark:bg-[color:var(--bg-surface)]/90 dark:text-brand-300 dark:border-[color:var(--border)]">
           <Tag className="inline-block w-3 h-3 mr-1 -mt-0.5" aria-hidden="true" />
           Promo
         </span>
       </div>
 
       <div className="p-6 flex-1 flex flex-col">
-        <h3 className="font-serif text-xl md:text-2xl text-stone-900 leading-snug mb-2">
+        <h3 className="font-serif text-xl md:text-2xl leading-snug mb-2 text-[color:var(--text)]">
           {promo.title}
         </h3>
-        <p className="text-sm text-stone-500 font-light line-clamp-3 mb-4">
+        <p className="text-sm font-light line-clamp-3 mb-4 text-[color:var(--text-muted)]">
           {promo.content}
         </p>
 
         <div className="mt-auto space-y-3">
           {hasPrice && (
             <div className="flex items-baseline gap-3">
-              <span className="text-2xl font-bold text-brand-700">
+              <span className="text-2xl font-bold text-brand-700 dark:text-brand-300">
                 {formatCurrency(promo.price!)}
               </span>
               {hasOriginal && (
-                <span className="text-sm text-stone-400 line-through">
+                <span className="text-sm line-through text-[color:var(--text-muted)]">
                   {formatCurrency(promo.original_price!)}
                 </span>
               )}
@@ -91,7 +204,7 @@ function PromotionCard({ promo }: { promo: News }) {
           {remaining !== null && (
             <div
               className={`flex items-center gap-2 text-xs font-semibold ${
-                remaining <= 3 ? 'text-rose-600' : 'text-stone-500'
+                remaining <= 3 ? 'text-rose-600 dark:text-rose-400' : 'text-[color:var(--text-muted)]'
               }`}
             >
               <Clock className="w-3.5 h-3.5" aria-hidden="true" />
@@ -101,16 +214,45 @@ function PromotionCard({ promo }: { promo: News }) {
             </div>
           )}
 
-          <Link
-            href="/boutique#catalogue"
-            className="inline-flex items-center gap-2 text-sm font-bold text-brand-700 hover:text-brand-800 transition-colors group/cta"
+          {/* Bandeau "compte requis" — visible uniquement quand la promotion
+              est liée à des produits et que l'utilisateur n'est pas connecté. */}
+          {hasLinkedProducts && !session && (
+            <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800 leading-snug dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300">
+              <UserPlus className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+              <span>
+                Inscription ou connexion requise pour réserver cette offre et passer commande.
+              </span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleEnjoy}
+            disabled={adding}
+            className="inline-flex items-center gap-2 text-sm font-bold text-brand-700 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-200 transition-colors group/cta disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            En profiter
-            <ArrowRight
-              className="w-4 h-4 transition-transform group-hover/cta:translate-x-1"
-              aria-hidden="true"
-            />
-          </Link>
+            {hasLinkedProducts ? (
+              session ? (
+                <>
+                  <Lock className="w-3.5 h-3.5" aria-hidden="true" />
+                  {adding ? 'Ajout en cours…' : 'En profiter & commander'}
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-3.5 h-3.5" aria-hidden="true" />
+                  S&apos;inscrire pour en profiter
+                </>
+              )
+            ) : (
+              <>
+                En profiter
+                <ArrowRight
+                  className="w-4 h-4 transition-transform group-hover/cta:translate-x-1"
+                  aria-hidden="true"
+                />
+              </>
+            )}
+          </button>
         </div>
       </div>
     </article>
@@ -120,28 +262,28 @@ function PromotionCard({ promo }: { promo: News }) {
 function NewsCard({ item }: { item: News }) {
   return (
     <article
-      className="group bg-white rounded-3xl border border-stone-100 p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-500 flex flex-col gap-4"
+      className="group rounded-3xl border border-[color:var(--border)] p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-500 flex flex-col gap-4 bg-[color:var(--bg-card)]"
       aria-label={`Actualité: ${item.title}`}
     >
       <div className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 text-stone-600 text-[11px] font-bold uppercase tracking-wider">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-[color:var(--bg-surface)] text-[color:var(--text-secondary)] border border-[color:var(--border)]">
           <Newspaper className="w-3 h-3" aria-hidden="true" />
           Actualité
         </span>
-        <time className="text-xs text-stone-400" dateTime={item.created_at}>
+        <time className="text-xs text-[color:var(--text-muted)]" dateTime={item.created_at}>
           {formatDate(item.created_at)}
         </time>
       </div>
-      <h3 className="font-serif text-lg md:text-xl text-stone-900 leading-snug">
+      <h3 className="font-serif text-lg md:text-xl leading-snug text-[color:var(--text)]">
         {item.title}
       </h3>
-      <p className="text-sm text-stone-500 font-light leading-relaxed line-clamp-3">
+      <p className="text-sm font-light leading-relaxed line-clamp-3 text-[color:var(--text-muted)]">
         {item.content}
       </p>
-      <div className="mt-auto pt-2 border-t border-stone-100">
+      <div className="mt-auto pt-2 border-t border-[color:var(--border)]">
         <Link
           href="/boutique#contact"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 hover:text-brand-800 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-200 transition-colors"
         >
           Nous contacter
           <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -190,23 +332,23 @@ export default function BoutiquePromotions({
   return (
     <section
       id="offres"
-      className="py-24 px-6 bg-gradient-to-b from-white to-stone-50"
+      className="py-24 px-6 bg-gradient-to-b from-white to-stone-50 dark:from-[color:var(--bg-surface)] dark:to-[color:var(--bg)]"
       aria-labelledby="offres-title"
     >
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12 reveal">
-          <span className="text-xs font-bold uppercase tracking-[0.3em] text-brand-600 mb-4 block">
+          <span className="text-xs font-bold uppercase tracking-[0.3em] text-brand-600 dark:text-brand-300 mb-4 block">
             Offres du moment
           </span>
           <h2
             id="offres-title"
-            className="font-serif text-4xl md:text-6xl font-normal leading-[0.85] tracking-tighter mb-6 text-stone-900"
+            className="font-serif text-4xl md:text-6xl font-normal leading-[0.85] tracking-tighter mb-6 text-stone-900 dark:text-[color:var(--text)]"
           >
             Promotions &amp;
             <br />
-            <em className="text-brand-700">actualités</em>
+            <em className="text-brand-700 dark:text-brand-300">actualités</em>
           </h2>
-          <p className="text-lg text-stone-500 font-light max-w-xl mx-auto">
+          <p className="text-lg font-light max-w-xl mx-auto text-stone-500 dark:text-[color:var(--text-muted)]">
             Profitez de nos offres en cours et restez informé des dernières
             actualités EAUMALIK.
           </p>
@@ -245,7 +387,7 @@ export default function BoutiquePromotions({
         )}
 
         {tab === 'promotions' && promoList.length === 0 && (
-          <p className="text-center text-stone-400 italic">
+          <p className="text-center italic text-[color:var(--text-muted)]">
             Aucune promotion en cours. Revenez bientôt !
           </p>
         )}
@@ -259,7 +401,7 @@ export default function BoutiquePromotions({
         )}
 
         {showNews && tab === 'news' && newsList.length === 0 && (
-          <p className="text-center text-stone-400 italic">
+          <p className="text-center italic text-[color:var(--text-muted)]">
             Aucune actualité publiée pour le moment.
           </p>
         )}

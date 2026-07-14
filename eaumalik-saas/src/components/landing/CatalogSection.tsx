@@ -70,14 +70,14 @@ export default function CatalogSection({ products }: { products: Product[] }) {
   }
 
   return (
-    <section id="catalogue" className="py-24 bg-white">
+    <section id="catalogue" className="py-24 surface-page">
       <div className="max-w-7xl mx-auto px-6">
         <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-100 text-brand-700 text-xs font-bold uppercase tracking-[0.3em] mb-4">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full pill-themed text-xs font-bold uppercase tracking-[0.3em] mb-4">
             <Droplets className="w-4 h-4" /> Notre gamme
           </div>
-          <h2 className="font-serif text-4xl md:text-6xl text-stone-900 mb-4">Catalogue Produits</h2>
-          <p className="text-stone-600 max-w-2xl mx-auto">
+          <h2 className="font-serif text-4xl md:text-6xl mb-4 text-heading">Catalogue Produits</h2>
+          <p className="max-w-2xl mx-auto text-body">
             Filtres, osmoseurs, fontaines et consommables — sélectionnez une catégorie pour explorer nos solutions.
           </p>
         </div>
@@ -88,9 +88,7 @@ export default function CatalogSection({ products }: { products: Product[] }) {
             <button
               key={cat}
               onClick={() => setActiveCat(cat)}
-              className={`cat-btn px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 border border-stone-200 ${
-                activeCat === cat ? 'active' : 'bg-white text-stone-600 hover:border-brand-300'
-              }`}
+              className={`boutique-cat-btn ${activeCat === cat ? 'active' : ''}`}
             >
               {cat === 'Tous' ? 'Tous' : CATEGORY_LABELS[cat as ProductCategory]}
             </button>
@@ -106,9 +104,9 @@ export default function CatalogSection({ products }: { products: Product[] }) {
             >
               <button
                 onClick={() => openProduct(p)}
-                className="group block w-full text-left bg-cream rounded-3xl overflow-hidden border border-stone-100 hover:shadow-xl transition-all duration-300"
+                className="group block w-full text-left surface-savor rounded-3xl overflow-hidden border-soft hover:shadow-xl transition-all duration-300"
               >
-                <div className="aspect-square bg-savor relative overflow-hidden">
+                <div className="aspect-square surface-solid relative overflow-hidden">
                   {p.image_url ? (
                     <Image
                       src={p.image_url}
@@ -118,19 +116,19 @@ export default function CatalogSection({ products }: { products: Product[] }) {
                       className="object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-brand-300">
+                    <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--primary-light)' }}>
                       <Droplets className="w-16 h-16" />
                     </div>
                   )}
                 </div>
                 <div className="p-5">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--primary)' }}>
                     {CATEGORY_LABELS[p.category]}
                   </span>
-                  <h3 className="font-serif text-lg text-stone-900 mt-1 mb-3 leading-snug">{p.name}</h3>
+                  <h3 className="font-serif text-lg text-heading mt-1 mb-3 leading-snug">{p.name}</h3>
                   <div className="flex items-center justify-between">
-                    <span className="text-brand-600 font-bold text-lg">{formatCurrency(p.price)}</span>
-                    <span className="text-stone-400 text-sm flex items-center gap-1 group-hover:text-brand-500 transition-colors">
+                    <span className="font-bold text-lg" style={{ color: 'var(--primary)' }}>{formatCurrency(p.price)}</span>
+                    <span className="text-sm flex items-center gap-1 transition-colors text-meta group-hover:text-body">
                       Détails <ArrowRight className="w-3.5 h-3.5" />
                     </span>
                   </div>
@@ -144,14 +142,14 @@ export default function CatalogSection({ products }: { products: Product[] }) {
       {/* Modal produit / devis */}
       {selected && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm"
+          className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => {
             setSelected(null);
             setDevisMode(false);
           }}
         >
           <div
-            className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-modal-in"
+            className="modal-surface rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-modal-in"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -159,7 +157,8 @@ export default function CatalogSection({ products }: { products: Product[] }) {
                 setSelected(null);
                 setDevisMode(false);
               }}
-              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600"
+              className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center surface-solid border-soft"
+              style={{ color: 'var(--text-secondary)' }}
               aria-label="Fermer"
             >
               <X className="w-5 h-5" />
@@ -167,29 +166,29 @@ export default function CatalogSection({ products }: { products: Product[] }) {
 
             {!devisMode ? (
               <div className="grid md:grid-cols-2">
-                <div className="aspect-square bg-savor relative">
+                <div className="aspect-square surface-savor relative">
                   {selected.image_url ? (
                     <Image src={selected.image_url} alt={selected.name} fill unoptimized className="object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-brand-300">
+                    <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--primary-light)' }}>
                       <Droplets className="w-20 h-20" />
                     </div>
                   )}
                 </div>
                 <div className="p-7">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--primary)' }}>
                     {CATEGORY_LABELS[selected.category]}
                   </span>
-                  <h3 className="font-serif text-2xl text-stone-900 mt-1 mb-3">{selected.name}</h3>
-                  <div className="text-brand-600 font-bold text-2xl mb-4">{formatCurrency(selected.price)}</div>
+                  <h3 className="font-serif text-2xl text-heading mt-1 mb-3">{selected.name}</h3>
+                  <div className="font-bold text-2xl mb-4" style={{ color: 'var(--primary)' }}>{formatCurrency(selected.price)}</div>
                   {selected.description && (
-                    <p className="text-stone-600 text-sm leading-relaxed mb-4">{selected.description}</p>
+                    <p className="text-sm leading-relaxed mb-4 text-body">{selected.description}</p>
                   )}
                   {selected.specs && selected.specs.length > 0 && (
                     <ul className="space-y-1.5 mb-6">
                       {selected.specs.map((s, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-stone-600">
-                          <CheckCircle2 className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
+                        <li key={i} className="flex items-start gap-2 text-sm text-body">
+                          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--primary)' }} />
                           {s}
                         </li>
                       ))}
@@ -197,7 +196,7 @@ export default function CatalogSection({ products }: { products: Product[] }) {
                   )}
                   <button
                     onClick={() => setDevisMode(true)}
-                    className="w-full py-3.5 bg-brand-600 hover:bg-brand-500 text-white rounded-2xl text-sm font-bold uppercase tracking-wide transition-colors"
+                    className="w-full py-3.5 btn-primary text-sm font-bold uppercase tracking-wide"
                   >
                     Demander un devis
                   </button>
@@ -205,46 +204,46 @@ export default function CatalogSection({ products }: { products: Product[] }) {
               </div>
             ) : (
               <form onSubmit={submitDevis} className="p-7">
-                <h3 className="font-serif text-2xl text-stone-900 mb-1">Demande de devis</h3>
-                <p className="text-stone-500 text-sm mb-5">{selected.name}</p>
+                <h3 className="font-serif text-2xl text-heading mb-1">Demande de devis</h3>
+                <p className="text-sm mb-5 text-meta">{selected.name}</p>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-1">Nom complet *</label>
+                    <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Nom complet *</label>
                     <input
                       required
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none"
+                      className="input-themed"
                       placeholder="Votre nom"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-1">Téléphone *</label>
+                    <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Téléphone *</label>
                     <input
                       required
                       value={form.phone}
                       onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none"
+                      className="input-themed"
                       placeholder="06 12 34 56 78"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-1">Email (optionnel)</label>
+                    <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Email (optionnel)</label>
                     <input
                       type="email"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none"
+                      className="input-themed"
                       placeholder="vous@exemple.com"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-1">Message</label>
+                    <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Message</label>
                     <textarea
                       rows={3}
                       value={form.message}
                       onChange={(e) => setForm({ ...form, message: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none resize-none"
+                      className="input-themed resize-none"
                     />
                   </div>
                 </div>
@@ -252,14 +251,14 @@ export default function CatalogSection({ products }: { products: Product[] }) {
                   <button
                     type="button"
                     onClick={() => setDevisMode(false)}
-                    className="px-5 py-3 rounded-2xl border border-stone-200 text-stone-600 text-sm font-semibold hover:bg-stone-50"
+                    className="px-5 py-3 rounded-2xl btn-outline border-soft text-sm font-semibold"
                   >
                     Retour
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white rounded-2xl text-sm font-bold uppercase tracking-wide transition-colors"
+                    className="flex-1 py-3 btn-primary disabled:opacity-60 text-sm font-bold uppercase tracking-wide"
                   >
                     {submitting ? 'Envoi…' : 'Envoyer la demande'}
                   </button>
@@ -272,9 +271,9 @@ export default function CatalogSection({ products }: { products: Product[] }) {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-[60] flex items-center gap-2 bg-stone-900 text-white px-5 py-3 rounded-2xl shadow-lg animate-toast-in">
-          <CheckCircle2 className="w-5 h-5 text-brand-400" />
-          {toast}
+        <div className="fixed bottom-6 right-6 z-[60] flex items-center gap-2 px-5 py-3 rounded-2xl shadow-lg animate-toast-in surface-solid border-soft">
+          <CheckCircle2 className="w-5 h-5" style={{ color: 'var(--primary)' }} />
+          <span style={{ color: 'var(--text)' }}>{toast}</span>
         </div>
       )}
     </section>

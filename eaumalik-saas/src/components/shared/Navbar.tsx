@@ -8,6 +8,7 @@ import { Droplets } from 'lucide-react';
 import { useSupabaseAuth } from './SupabaseAuthProvider';
 import ThemeToggle from './ThemeToggle';
 import CartButton from './CartButton';
+import BrandLogo from './BrandLogo';
 import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 import { ADMIN_NAV_ITEMS, filterAdminNavItems } from '@/lib/adminNav';
 
@@ -67,18 +68,15 @@ export default function Navbar() {
     permissions,
   );
 
-  const linkClass = 'px-4 py-2 rounded-full text-sm font-semibold text-stone-600 hover:text-brand-600 hover:bg-brand-50 transition-colors';
+  // Classe theme-aware : `nav-link` (cf. globals.css) gère les 2 modes via
+  // var(--text-secondary) + var(--primary-light).
+  const linkClass = 'nav-link px-4 py-2 rounded-full';
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-cream/85 backdrop-blur-md border-b border-stone-200 shadow-sm' : 'bg-cream/40 backdrop-blur-sm'}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'nav-glass shadow-sm' : 'nav-glass'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-20">
         <Link href="/" className="flex items-center gap-2 group" aria-label="EauMalik Accueil">
-          <span className="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
-            <Droplets className="w-5 h-5" />
-          </span>
-          <span className="font-serif text-2xl font-bold text-stone-900 tracking-tight">
-            Eau<span className="text-brand-600">Malik</span>
-          </span>
+          <BrandLogo size="md" tone="auto" priority className="group-hover:opacity-90 transition-opacity" />
         </Link>
 
         <div className="hidden lg:flex items-center gap-1">
@@ -99,20 +97,22 @@ export default function Navbar() {
               )}
               <button
                 onClick={async () => { await signOut(); window.location.href = '/'; }}
-                className="px-3 py-2 rounded-full text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                className="px-3 py-2 rounded-full text-sm font-semibold transition-colors"
+                style={{ color: 'var(--danger)' }}
               >
                 Déconnexion
               </button>
             </div>
           ) : (
-            <Link href="/login" className="hidden lg:inline-flex px-5 py-2.5 rounded-full text-sm font-bold text-white bg-brand-600 hover:bg-brand-500 transition-colors">
+            <Link href="/login" className="hidden lg:inline-flex px-5 py-2.5 rounded-full text-sm font-bold btn-primary">
               Connexion
             </Link>
           )}
 
           <button
             onClick={() => setMobileOpen(true)}
-            className="lg:hidden min-w-[44px] min-h-[44px] w-11 h-11 rounded-xl flex items-center justify-center bg-stone-100 text-stone-700"
+            className="lg:hidden min-w-[44px] min-h-[44px] w-11 h-11 rounded-xl flex items-center justify-center surface-solid border-soft"
+            style={{ color: 'var(--text)' }}
             aria-label="Ouvrir le menu"
           >
             <i className="fa-solid fa-bars text-base" aria-hidden="true" />
@@ -132,39 +132,39 @@ export default function Navbar() {
             className={`mobile-menu lg:hidden ${mobileOpen ? 'open' : ''}`}
             id="mobile-menu"
             aria-hidden={!mobileOpen}
-            style={{ background: '#FDFCF8' }}
           >
             <button
               onClick={() => setMobileOpen(false)}
-              className="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-lg flex items-center justify-center bg-stone-100 text-stone-700"
+              className="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-lg flex items-center justify-center surface-solid border-soft"
+              style={{ color: 'var(--text)' }}
               aria-label="Fermer"
             >
               <i className="fa-solid fa-xmark" aria-hidden="true" />
             </button>
             {NAV_LINKS.map(l => (
-              <Link key={l.href} href={l.href} className="mobile-link" style={{ color: '#44403c' }} onClick={() => setMobileOpen(false)}>{l.label}</Link>
+              <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>{l.label}</Link>
             ))}
             {session ? (
               <>
                 {isStaff ? (
                   allowedAdminLinks.map(l => (
-                    <Link key={l.href} href={l.href} className="mobile-link" style={{ color: '#44403c' }} onClick={() => setMobileOpen(false)}>Admin - {l.label}</Link>
+                    <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>Admin - {l.label}</Link>
                   ))
                 ) : (
-                  <Link href="/client" className="mobile-link" style={{ color: '#44403c' }} onClick={() => setMobileOpen(false)}>Mon Espace</Link>
+                  <Link href="/client" className="mobile-link" onClick={() => setMobileOpen(false)}>Mon Espace</Link>
                 )}
                 <button
                   onClick={async () => { await signOut(); window.location.href = '/'; setMobileOpen(false); }}
                   className="mobile-link text-left font-semibold cursor-pointer w-full"
-                  style={{ color: '#ef4444' }}
+                  style={{ color: 'var(--danger)' }}
                 >
                   Déconnexion
                 </button>
               </>
             ) : (
-              <Link href="/login" className="mobile-link font-semibold" style={{ color: '#0d9488' }} onClick={() => setMobileOpen(false)}>Connexion</Link>
+              <Link href="/login" className="mobile-link font-semibold" style={{ color: 'var(--primary)' }} onClick={() => setMobileOpen(false)}>Connexion</Link>
             )}
-            <Link href="/panier" className="mobile-link" style={{ color: '#44403c' }} onClick={() => setMobileOpen(false)}>Panier</Link>
+            <Link href="/panier" className="mobile-link" onClick={() => setMobileOpen(false)}>Panier</Link>
           </div>
         </>,
         document.body
@@ -176,12 +176,19 @@ export default function Navbar() {
 function DropdownMenu({ title, links, isActive }: { title: string; links: { href: string; label: string }[]; isActive: boolean }) {
   return (
     <div className="relative group">
-      <span className={`flex items-center py-2 px-4 rounded-full cursor-pointer text-sm font-semibold text-stone-600 hover:text-brand-600 hover:bg-brand-50 transition-colors ${isActive ? 'text-brand-600 bg-brand-50' : ''}`}>
+      <span className={`nav-link flex items-center px-4 py-2 rounded-full ${isActive ? 'active' : ''}`}>
         {title} <i className="fa-solid fa-chevron-down text-[0.6rem] ml-1" aria-hidden="true" />
       </span>
-      <div className="absolute left-0 top-full w-52 flex flex-col bg-white border border-stone-200 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible pointer-events-none group-hover:pointer-events-auto transition-all duration-200 z-50 p-2 gap-1 before:absolute before:-top-4 before:left-0 before:w-full before:h-4">
+      <div
+        className="absolute left-0 top-full w-52 flex flex-col rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible pointer-events-none group-hover:pointer-events-auto transition-all duration-200 z-50 p-2 gap-1 before:absolute before:-top-4 before:left-0 before:w-full before:h-4 surface-solid border-soft"
+      >
         {links.map(l => (
-          <Link key={l.href} href={l.href} className="flex items-center gap-2.5 px-3 py-2 text-sm text-stone-600 hover:bg-brand-50 hover:text-brand-600 rounded-lg transition-colors font-medium">
+          <Link
+            key={l.href}
+            href={l.href}
+            className="nav-link flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg font-medium"
+            style={{ background: 'transparent' }}
+          >
             <i className="fa-solid fa-chevron-right text-[0.65rem] opacity-70" aria-hidden="true" /> {l.label}
           </Link>
         ))}

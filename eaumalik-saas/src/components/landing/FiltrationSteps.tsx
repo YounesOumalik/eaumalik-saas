@@ -39,14 +39,14 @@ export default function FiltrationSteps() {
   }, []);
 
   return (
-    <section id="filtration" ref={sectionRef} className="py-24 bg-cream">
+    <section id="filtration" ref={sectionRef} className="py-24 surface-cream">
       <div className="max-w-5xl mx-auto px-6">
         <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-100 text-brand-700 text-xs font-bold uppercase tracking-[0.3em] mb-4">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full pill-themed text-xs font-bold uppercase tracking-[0.3em] mb-4">
             <Droplets className="w-4 h-4" /> Technologie
           </div>
-          <h2 className="font-serif text-4xl md:text-6xl text-stone-900 mb-4">Le Processus de Filtration</h2>
-          <p className="text-stone-600 max-w-2xl mx-auto">
+          <h2 className="font-serif text-4xl md:text-6xl mb-4 text-heading">Le Processus de Filtration</h2>
+          <p className="max-w-2xl mx-auto text-body">
             Cinq étapes de purification pour une eau pure, saine et savoureuse à chaque goutte.
           </p>
         </div>
@@ -69,12 +69,12 @@ export default function FiltrationSteps() {
                   </div>
                   <div className="artifact-card">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="text-xs font-bold text-brand-700 bg-brand-100 px-2.5 py-1 rounded-full">
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full pill-themed">
                         Étape {i + 1}
                       </span>
-                      <h3 className="font-serif text-xl text-stone-900">{step.title}</h3>
+                      <h3 className="font-serif text-xl text-heading">{step.title}</h3>
                     </div>
-                    <p className="text-stone-600 leading-relaxed">{step.desc}</p>
+                    <p className="leading-relaxed text-body">{step.desc}</p>
                   </div>
                 </div>
               );

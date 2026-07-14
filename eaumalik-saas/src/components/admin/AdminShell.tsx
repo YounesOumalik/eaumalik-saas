@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
+import BrandLogo from '@/components/shared/BrandLogo';
 import { ADMIN_NAV_ITEMS, filterAdminNavItems, type AdminNavItem } from '@/lib/adminNav';
 
 /**
@@ -112,7 +113,15 @@ export default function AdminShell({ title, children }: { title: string; childre
           aria-label="Navigation administration"
         >
           <div className="admin-sidebar__header">
-            {!collapsed && <span className="admin-sidebar__title">{title}</span>}
+            {!collapsed ? (
+              <Link href="/" className="admin-sidebar__brand" aria-label="EauMalik Accueil">
+                <BrandLogo size="sm" tone="dark" className="admin-sidebar__logo" />
+              </Link>
+            ) : (
+              <Link href="/" className="admin-sidebar__brand admin-sidebar__brand--collapsed" aria-label="EauMalik Accueil">
+                <BrandLogo size="sm" tone="dark" className="admin-sidebar__logo" />
+              </Link>
+            )}
             <button
               type="button"
               onClick={toggleCollapsed}
@@ -124,6 +133,7 @@ export default function AdminShell({ title, children }: { title: string; childre
               {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
             </button>
           </div>
+          {!collapsed && <div className="admin-sidebar__subtitle">{title}</div>}
 
           <nav className="admin-sidebar__nav" aria-label="Sections">
             {allowedTabs.map((tab: AdminNavItem) => {

@@ -18,6 +18,7 @@ const CARTS_FILE = path.join(DB_DIR, 'carts.json');
 const MESSAGES_FILE = path.join(DB_DIR, 'messages.json');
 const NEWS_FILE = path.join(DB_DIR, 'news.json');
 const MAINTENANCE_FILE = path.join(DB_DIR, 'maintenance.json');
+const PASSWORD_RESETS_FILE = path.join(DB_DIR, 'password_resets.json');
 
 // Initialize with mock data if files don't exist
 if (!fs.existsSync(PRODUCTS_FILE)) {
@@ -150,6 +151,31 @@ export function writeArchivedUsers(users: ArchivedUser[]) {
 
 export function writeUsers(users: any[]) {
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+// ---------------------------------------------------------
+// Password resets (mode mock uniquement — flow "mot de passe oublié")
+// Format : { token, email, expires, used, created_at }
+// ---------------------------------------------------------
+export interface PasswordReset {
+  token: string;
+  email: string;
+  expires: number; // epoch ms
+  used: boolean;
+  created_at: string;
+}
+
+export function readPasswordResets(): PasswordReset[] {
+  try {
+    const data = fs.readFileSync(PASSWORD_RESETS_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (e) {
+    return [];
+  }
+}
+
+export function writePasswordResets(resets: PasswordReset[]) {
+  fs.writeFileSync(PASSWORD_RESETS_FILE, JSON.stringify(resets, null, 2));
 }
 
 // ---------------------------------------------------------

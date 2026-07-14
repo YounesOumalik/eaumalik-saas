@@ -23,6 +23,20 @@ const nextConfig = {
             : [],
     },
   },
+  webpack: (config, { dev }) => {
+    if (dev) {
+      // Désactiver le cache persistant sur disque en dev. Sur cette machine
+      // sous-alimentée en RAM, les écritures de cache sont interrompues (OOM kill)
+      // et corrompues (« invalid code lengths set »), produisant des builds .next
+      // incomplets (chunks vendor manquants). On recompile depuis la source à
+      // chaque fois, sans cache disque, évitant la restauration d'un cache corrompu.
+      config.cache = false;
+      // Réduire le parallélisme webpack pour limiter le pic de mémoire lors de la
+      // compilation de la lourde route '/' (lucide-react + supabase + next).
+      config.parallelism = 1;
+    }
+    return config;
+  },
   async headers() {
     const isProd = process.env.NODE_ENV === 'production';
     const supabaseHostRaw = (process.env.NEXT_PUBLIC_SUPABASE_URL || '')

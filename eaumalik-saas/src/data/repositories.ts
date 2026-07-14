@@ -22,6 +22,8 @@ import {
   writeNews,
   readMaintenance,
   writeMaintenance,
+  readPasswordResets,
+  writePasswordResets,
 } from '@/data/localDb';
 import { sanitizePostgREST } from '@/lib/api-guard';
 
@@ -483,6 +485,9 @@ function normalizeNews(row: RawNews): News {
     row.is_promotion === true ||
     (typeof price === 'number' && price > 0) ||
     product_ids.length > 0;
+  const is_archived = row.is_archived === true;
+  const archived_at = row.archived_at ?? null;
+  const archived_reason = row.archived_reason ?? null;
   return {
     id: row.id,
     title: row.title,
@@ -495,6 +500,9 @@ function normalizeNews(row: RawNews): News {
     target_user_ids,
     is_promotion,
     valid_until: row.valid_until ?? null,
+    is_archived,
+    archived_at,
+    archived_reason,
     created_at: row.created_at,
   };
 }
@@ -502,6 +510,8 @@ function normalizeNews(row: RawNews): News {
 /** Liste toutes les actualités (admin / carrousel). Triées du plus récent au plus ancien. */
 export async function listNews(options?: {
   includeArchived?: boolean;
+  /** Filtre supplémentaire : ne retourner que les archivées (ou inversement). */
+  archivedOnly?: boolean;
   includeExpired?: boolean;
   promotionOnly?: boolean;
   forUserId?: string;
@@ -528,6 +538,12 @@ export async function listNews(options?: {
     if (!options?.includeExpired) {
       filtered = filtered.filter(r => !r.valid_until || r.valid_until > nowIso);
     }
+    // Filtrage archive : par défaut, on cache les archivées (visiteur / client).
+    if (options?.archivedOnly) {
+      filtered = filtered.filter(r => r.is_archived === true);
+    } else if (!options?.includeArchived) {
+      filtered = filtered.filter(r => r.is_archived !== true);
+    }
     const sorted = filtered.sort((a, b) => b.created_at.localeCompare(a.created_at));
     return sorted.map(normalizeNews);
   }
@@ -536,6 +552,11 @@ export async function listNews(options?: {
   let query = supabase.from('news').select('*').order('created_at', { ascending: false });
   if (options?.promotionOnly) {
     query = query.or('is_promotion.eq.true,price.gt.0,not.product_ids.eq.{}');
+  }
+  if (options?.archivedOnly) {
+    query = query.eq('is_archived', true);
+  } else if (!options?.includeArchived) {
+    query = query.or('is_archived.is.null,is_archived.eq.false');
   }
   const { data, error } = await query;
   if (error) throw error;
@@ -565,6 +586,9 @@ export async function createNews(input: Omit<News, 'id' | 'created_at'>): Promis
     product_ids: input.product_ids ?? [],
     target_user_ids: input.target_user_ids ?? [],
     target_all: input.target_all !== false,
+    is_archived: false,
+    archived_at: null,
+    archived_reason: null,
   };
   const normalized = normalizeNews(record);
 
@@ -595,6 +619,69 @@ export async function updateNews(id: string, patch: Partial<Omit<News, 'id' | 'c
 
   const supabase = await getSupabase();
   const { data, error } = await supabase.from('news').update(patch).eq('id', id).select().single();
+  if (error) throw error;
+  return normalizeNews(data as RawNews);
+}
+
+/**
+ * Archive (soft-delete) une actualité / promotion. La publication disparaît
+ * des affichages publics (carrousel landing, boutique, espace client) mais
+ * reste présente en BDD pour audit / restauration.
+ */
+export async function archiveNews(id: string, reason: string | null = null): Promise<News> {
+  const archived_at = new Date().toISOString();
+  if (shouldUseMocks()) {
+    const rows = readNews() as RawNews[];
+    const idx = rows.findIndex(r => r.id === id);
+    if (idx === -1) throw new Error('Actualité introuvable.');
+    const updated: RawNews = {
+      ...rows[idx],
+      is_archived: true,
+      archived_at,
+      archived_reason: reason ?? rows[idx].archived_reason ?? null,
+    };
+    rows[idx] = updated;
+    writeNews(rows);
+    return normalizeNews(updated);
+  }
+
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('news')
+    .update({ is_archived: true, archived_at, archived_reason: reason ?? null })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return normalizeNews(data as RawNews);
+}
+
+/**
+ * Restaure (désarchive) une actualité / promotion.
+ */
+export async function unarchiveNews(id: string): Promise<News> {
+  if (shouldUseMocks()) {
+    const rows = readNews() as RawNews[];
+    const idx = rows.findIndex(r => r.id === id);
+    if (idx === -1) throw new Error('Actualité introuvable.');
+    const updated: RawNews = {
+      ...rows[idx],
+      is_archived: false,
+      archived_at: null,
+      archived_reason: null,
+    };
+    rows[idx] = updated;
+    writeNews(rows);
+    return normalizeNews(updated);
+  }
+
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('news')
+    .update({ is_archived: false, archived_at: null, archived_reason: null })
+    .eq('id', id)
+    .select()
+    .single();
   if (error) throw error;
   return normalizeNews(data as RawNews);
 }
@@ -901,6 +988,18 @@ export async function readUsersRaw(): Promise<any[]> {
 export async function writeUsersRaw(users: any[]): Promise<void> {
   if (shouldUseMocks()) { writeUsers(users); return; }
   throw new Error('writeUsersRaw: écriture JSON FS interdite en prod (utilisez Supabase Auth).');
+}
+
+export async function readPasswordResetsRaw(): Promise<any[]> {
+  if (shouldUseMocks()) return readPasswordResets();
+  // En prod, le reset est géré par Supabase Auth (resetPasswordForEmail) :
+  // on ne stocke pas de tokens côté application.
+  return [];
+}
+
+export async function writePasswordResetsRaw(resets: any[]): Promise<void> {
+  if (shouldUseMocks()) { writePasswordResets(resets); return; }
+  throw new Error('writePasswordResetsRaw: écriture JSON FS interdite en prod (utilisez Supabase Auth).');
 }
 
 export async function readArchivedUsersRaw(): Promise<any[]> {

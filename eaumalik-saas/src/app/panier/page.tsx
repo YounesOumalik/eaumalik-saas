@@ -53,6 +53,17 @@ export default function CartPage() {
 
   const handleCheckout = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    // === Invité non connecté : on exige la création de compte AVANT le checkout.
+    // Politique produit : tout achat passe par un compte client (suivi de
+    // commande, alertes de maintenance, cashback, parrainage). On redirige
+    // donc vers /login en gardant /panier comme callbackUrl pour reprendre
+    // exactement là où on en était après inscription.
+    if (!session) {
+      router.push(`/login?callbackUrl=${encodeURIComponent('/panier')}`);
+      return;
+    }
+
     const fd = new FormData(e.currentTarget);
     const data: CheckoutFormData = {
       client_name: String(fd.get('client_name') ?? ''),
@@ -62,10 +73,12 @@ export default function CartPage() {
       notes: String(fd.get('notes') ?? '') || undefined,
     };
 
-    // === PROSPECT : création de compte OBLIGATOIRE à l'achat (si pas déjà connecté).
-    // Champs exigés : Email, Téléphone, Ville, Mot de passe x2.
+    // Utilisateur déjà connecté : pas de création de compte à la volée.
     let account: { email: string; password: string; full_name: string; phone: string; city: string } | undefined;
     if (!session) {
+      // (Bloc conservé pour compat : ne devrait jamais être atteint grâce au
+      // guard ci-dessus, mais on garde la validation si la fonction est
+      // appelée depuis un autre contexte dans le futur.)
       const email = String(fd.get('account_email') ?? '').trim();
       const password = String(fd.get('account_password') ?? '');
       const confirm = String(fd.get('account_confirm') ?? '');
@@ -78,7 +91,6 @@ export default function CartPage() {
       if (!PHONE_MA_REGEX.test(prospectPhone)) return toast('Numéro de téléphone invalide (format 0XXXXXXXXX).', 'error');
       if (!prospectCity) return toast('Veuillez choisir une ville.', 'error');
 
-      // On utilise le nom du prospect comme full_name du compte (modifiable ensuite).
       account = {
         email,
         password,
@@ -86,8 +98,6 @@ export default function CartPage() {
         phone: prospectPhone,
         city: prospectCity,
       };
-      // On injecte aussi ces infos dans la commande (au cas où l'utilisateur
-      // n'a pas re-saisi le téléphone/ville dans les champs livraison).
       if (!data.client_phone) data.client_phone = prospectPhone;
       if (!data.client_city) data.client_city = prospectCity;
     }
@@ -235,14 +245,27 @@ export default function CartPage() {
                 </div>
               </dl>
               <button
-                onClick={() => setCheckout(true)}
+                onClick={() => {
+                  if (!session) {
+                    router.push(`/login?callbackUrl=${encodeURIComponent('/panier')}`);
+                    return;
+                  }
+                  setCheckout(true);
+                }}
                 className="btn-primary w-full justify-center mt-6"
               >
-                <Lock size={14} aria-hidden="true" /> Passer la commande
+                <Lock size={14} aria-hidden="true" />
+                {session ? 'Passer la commande' : 'Se connecter pour commander'}
               </button>
               <p className="text-center mt-3 text-xs flex items-center justify-center gap-2" style={{ color: 'var(--text-muted)' }}>
                 <Truck size={12} /> Paiement à la livraison
               </p>
+              {!session && (
+                <p className="text-center mt-2 text-[11px] flex items-center justify-center gap-1.5 text-amber-700">
+                  <UserPlus size={11} aria-hidden="true" />
+                  Inscription requise pour finaliser la commande
+                </p>
+              )}
             </div>
           </aside>
         </div>
@@ -255,53 +278,17 @@ export default function CartPage() {
             <form onSubmit={handleCheckout} className="glass-card p-6 space-y-4" style={{ transform: 'none' }} noValidate>
               <h3 className="font-display font-bold text-lg mb-2">Informations de livraison</h3>
               {!session && (
-                <div className="p-4 rounded-xl border border-brand-200 bg-brand-50/60 space-y-4">
-                  <div>
-                    <h4 className="font-display font-semibold text-sm text-brand-800 flex items-center gap-2">
-                      <UserPlus size={15} aria-hidden="true" /> Créer votre compte prospect
-                    </h4>
-                    <p className="text-xs text-brand-700/80 mt-1">
-                      Pour finaliser votre commande, créez votre compte en quelques secondes. Vous pourrez suivre votre commande et vos alertes de maintenance depuis votre espace client.
+                <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 flex items-start gap-3">
+                  <UserPlus size={18} className="text-amber-600 mt-0.5 shrink-0" aria-hidden="true" />
+                  <div className="text-sm text-amber-900">
+                    <p className="font-semibold mb-1">Compte client obligatoire pour commander</p>
+                    <p className="text-xs leading-relaxed">
+                      Pour finaliser votre commande, vous devez disposer d&apos;un compte client.
+                      Vous permet de suivre vos commandes, recevoir les alertes de maintenance et profiter du parrainage/cashback.
+                      <Link href={`/login?callbackUrl=${encodeURIComponent('/panier')}`} className="ml-1 underline font-semibold">
+                        Se connecter ou créer un compte
+                      </Link>
                     </p>
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="account_email">Email (identifiant du compte) *</label>
-                    <input id="account_email" name="account_email" type="email" required className="form-input" placeholder="votre@email.com" />
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label" htmlFor="prospect_phone">Numéro de téléphone *</label>
-                      <input
-                        id="prospect_phone"
-                        name="prospect_phone"
-                        type="tel"
-                        required
-                        pattern="0[6-7][0-9]{8}"
-                        className="form-input"
-                        placeholder="06XXXXXXXX"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" htmlFor="prospect_city">Ville *</label>
-                      <SearchableCitySelect
-                        id="prospect_city"
-                        name="prospect_city"
-                        value={selectedCity}
-                        onChange={setSelectedCity}
-                        placeholder="Choisir une ville"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label" htmlFor="account_password">Mot de passe *</label>
-                      <input id="account_password" name="account_password" type="password" required minLength={8} className="form-input" placeholder="8+ caractères" />
-                    </div>
-                    <div>
-                      <label className="form-label" htmlFor="account_confirm">Confirmer le mot de passe *</label>
-                      <input id="account_confirm" name="account_confirm" type="password" required minLength={8} className="form-input" placeholder="Répéter le mot de passe" />
-                    </div>
                   </div>
                 </div>
               )}
