@@ -214,17 +214,6 @@ function PromotionCard({ promo }: { promo: News }) {
             </div>
           )}
 
-          {/* Bandeau "compte requis" — visible uniquement quand la promotion
-              est liée à des produits et que l'utilisateur n'est pas connecté. */}
-          {hasLinkedProducts && !session && (
-            <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800 leading-snug dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300">
-              <UserPlus className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
-              <span>
-                Inscription ou connexion requise pour réserver cette offre et passer commande.
-              </span>
-            </div>
-          )}
-
           <button
             type="button"
             onClick={handleEnjoy}

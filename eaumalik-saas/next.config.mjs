@@ -74,6 +74,8 @@ const nextConfig = {
       "form-action 'self'",
       // Workers : permettre les blobs pour Web Workers Next.js
       "worker-src 'self' blob:",
+      // Iframes : autoriser les fournisseurs de cartographie tiers (Google Maps embed, OpenStreetMap)
+      "frame-src 'self' https://www.google.com https://maps.google.com https://www.openstreetmap.org https://*.openstreetmap.org",
       "object-src 'none'",
       "upgrade-insecure-requests",
     ].join('; ');

@@ -72,12 +72,14 @@ const STEPS: Step[] = [
 
 /**
  * Section "Comment fonctionne l'osmose inverse ?" — diagramme animé horizontal
- * + 5 étapes détaillées. Le schéma se déclenche au scroll : l'aiguille du
- * manomètre oscille, les impuretés flottent dans le flux d'entrée, la
- * membrane pulse et rejette les contaminants, l'eau pure descend dans le
- * verre et le niveau monte.
+ * + 5 étapes détaillées. Le schéma se déclenche au scroll : la pompe tourne,
+ * les impuretés flottent dans le flux d'entrée, la membrane pulse et rejette
+ * les contaminants, l'eau pure descend dans le verre et le niveau monte.
+ *
+ * Déplacée depuis /boutique vers la page d'accueil le 2026-07-14 pour
+ * mettre en avant le fonctionnement de la filtration sur le hero flow.
  */
-export default function BoutiqueFiltration() {
+export default function FiltrationSection() {
   const containerRef = useRef<HTMLDivElement>(null);
   const diagramRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(0);

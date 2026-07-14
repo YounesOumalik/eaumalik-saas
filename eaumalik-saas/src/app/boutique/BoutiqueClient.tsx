@@ -6,7 +6,6 @@ import type { Product, ProductCategory, News } from '@/types';
 import ProductCard from '@/components/boutique/ProductCard';
 import CategoryFilters from '@/components/boutique/CategoryFilters';
 import BoutiqueHero from '@/components/boutique/BoutiqueHero';
-import BoutiqueFiltration from '@/components/boutique/BoutiqueFiltration';
 import BoutiquePromotions from '@/components/boutique/BoutiquePromotions';
 import { useToast } from '@/components/shared/ToastProvider';
 
@@ -14,6 +13,8 @@ import { useToast } from '@/components/shared/ToastProvider';
  * Page boutique :
  *  - Hero + Promotions (offres uniquement)
  *  - Catalogue filtres + recherche + grille de cartes (articles a vendre)
+ * Le module de filtration détaillé a été déplacé sur la page d'accueil
+ * (cf. components/landing/FiltrationSection) le 2026-07-14.
  * Toutes les fonctions existantes (panier, toast, modal) sont preservees.
  */
 export default function BoutiqueClient({
@@ -66,8 +67,6 @@ export default function BoutiqueClient({
   return (
     <div className="surface-page">
       <BoutiqueHero />
-
-      <BoutiqueFiltration />
 
       <BoutiquePromotions promotions={promotions} showNews={false} />
 
