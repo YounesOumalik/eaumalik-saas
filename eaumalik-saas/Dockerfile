@@ -25,11 +25,18 @@ ENV NODE_ENV=production
 # (elles sont codées en dur dans le JS).
 #
 # Solution : on charge le fichier .env.prod dans le
-# contexte du build via COPY. Next.js lit automatiquement
-# .env.prod en NODE_ENV=production (cf. next.config.mjs /
-# @next/env). C'est la voie la plus fiable — pas de
-# risque de désynchro entre le local et le serveur CI.
-COPY .env.prod* ./
+# contexte du build via COPY. ATTENTION : Next.js (@next/
+# env) reconnait UNIQUEMENT .env, .env.local,
+# .env.development, .env.production — PAS .env.prod !
+# On copie donc .env.prod sous le nom .env.production
+# pour qu'il soit chargé automatiquement par @next/env
+# lors du 'npm run build'.
+#
+# C'est la voie la plus fiable : pas de risque de
+# désynchro entre le local et le serveur CI, et le bundle
+# client contient bien les NEXT_PUBLIC_* inlinées par
+# webpack DefinePlugin.
+COPY .env.prod* .env.production* ./
 
 # Fallback ARG/ENV pour les déploiements CI qui passent
 # les secrets via `docker build --build-arg` plutôt que
