@@ -1,9 +1,12 @@
-import { listNews } from '@/data/repositories';
-import NewsManager from '@/components/admin/NewsManager';
+import { redirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
-
-export default async function AdminNewsPage() {
-  const news = await listNews({ includeExpired: true });
-  return <NewsManager initialNews={news} />;
+/**
+ * Compatibilité ascendante — l'ancienne route `/admin/actualites` (gestion
+ * CRUD des actualités via NewsManager) redirige vers la nouvelle page unifiée
+ * `/admin/publications` qui inclut désormais la publication ET la messagerie.
+ *
+ * À supprimer une fois tous les bookmarks/liens internes migrés.
+ */
+export default function AdminActualitesRedirect() {
+  redirect('/admin/publications');
 }

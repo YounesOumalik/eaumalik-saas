@@ -58,5 +58,28 @@
     "cashback_balance": 0,
     "created_at": "2026-07-11T16:53:26.072Z",
     "updated_at": "2026-07-11T16:53:26.072Z"
+  },
+  {
+    "id": "u-1784045105936",
+    "email": "sammi@gmail.com",
+    "password": "12345678",
+    "full_name": "sami md",
+    "phone": "0623874323",
+    "city": "Asilah",
+    "address": "kjsdhfihsd fsdkfhdaslfa fakshflash",
+    "role": "client",
+    "permissions": {
+      "can_view_products": true,
+      "can_edit_products": false,
+      "can_validate_orders": false,
+      "can_follow_prospects": false,
+      "can_view_comptabilite": false,
+      "can_view_stocks": false
+    },
+    "referral_code": "ORYAM8",
+    "referred_by": null,
+    "cashback_balance": 0,
+    "created_at": "2026-07-14T16:05:05.936Z",
+    "updated_at": "2026-07-14T16:05:05.936Z"
   }
 ]

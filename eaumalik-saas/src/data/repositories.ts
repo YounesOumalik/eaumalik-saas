@@ -295,10 +295,17 @@ export async function createOrder(input: {
 export async function listClients(): Promise<User[]> {
   if (shouldUseMocks()) {
     const all = readUsers();
-    return all.filter(u => u.role === 'client');
+    return all.filter(u => u.role === 'client') as User[];
   }
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from('users').select('*').eq('role', 'client').order('created_at', { ascending: false });
+  // On selectionne explicitement les champs liés au parrainage pour que
+  // l'UI CRM puisse distinguer un client direct d'un client filleul
+  // (parrainage) et afficher le code/email du parrain.
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, email, full_name, phone, city, address, avatar_url, google_id, role, nps_score, referral_code, referred_by, cashback_balance, created_at, updated_at')
+    .eq('role', 'client')
+    .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as User[];
 }

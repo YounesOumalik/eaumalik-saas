@@ -106,32 +106,38 @@ export default function ClientDashboard({ initialData }: Props) {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2 pb-3 mb-6 w-full" style={{ borderBottom: '1px solid var(--border)' }}>
-        {[
-          { id: 'parrainage', label: 'Parrainage & Cashback', icon: Gift },
-          { id: 'maintenance', label: 'Maintenance Filtres', icon: ShieldAlert },
-          { id: 'chat', label: 'Discuter avec le vendeur', icon: MessageCircle },
-          { id: 'news', label: 'Actualités & Offres', icon: Newspaper },
-          { id: 'orders', label: 'Historique commandes', icon: Receipt },
-          { id: 'profile', label: 'Mes Coordonnées', icon: User },
-        ].map(tab => {
-          const Icon = tab.icon;
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
-                active
-                  ? 'bg-[color:var(--primary)] text-white'
-                  : 'hover:bg-[color:var(--bg-card-hover)] text-[color:var(--text-secondary)]'
-              }`}
-            >
-              <Icon size={16} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+      <div className="flex flex-wrap items-center gap-2 pb-3 mb-6 w-full">
+        <div className="inline-flex flex-wrap rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+          {[
+            { id: 'parrainage', label: 'Parrainage & Cashback', icon: Gift },
+            { id: 'maintenance', label: 'Maintenance Filtres', icon: ShieldAlert },
+            { id: 'chat', label: 'Discuter avec le vendeur', icon: MessageCircle },
+            { id: 'news', label: 'Actualités & Offres', icon: Newspaper },
+            { id: 'orders', label: 'Historique commandes', icon: Receipt },
+            { id: 'profile', label: 'Mes Coordonnées', icon: User },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as any)}
+                className="px-4 py-2 text-sm font-semibold transition-all flex items-center gap-1.5"
+                style={{
+                  background: active ? 'var(--primary)' : 'transparent',
+                  color: active ? '#fff' : 'var(--text-secondary)',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg-card-hover)'; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                aria-pressed={active}
+              >
+                <Icon size={14} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Tab Contents */}

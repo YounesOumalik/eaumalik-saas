@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { ReactNode, useState, useEffect, useCallback } from 'react';
 import {
-  Box,
   Warehouse,
   Tags,
   TrendingUp,
@@ -12,29 +11,37 @@ import {
   LogOut,
   Users,
   Wrench,
-  Megaphone,
+  Send,
   PanelLeftClose,
   PanelLeftOpen,
+  ShoppingBag,
+  type LucideIcon,
 } from 'lucide-react';
 import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
+import { ADMIN_NAV_ITEMS, filterAdminNavItems, type AdminNavItem } from '@/lib/adminNav';
 
-const TABS = [
-  { id: 'commandes',    label: 'Commandes',     href: '/admin',                  icon: Box },
-  { id: 'stocks',       label: 'Stocks',        href: '/admin/stocks',           icon: Warehouse },
-  { id: 'catalogue',    label: 'Catalogue',     href: '/admin/catalogue',        icon: Tags },
-  { id: 'comptabilite', label: 'Comptabilité',  href: '/admin/comptabilite',     icon: TrendingUp },
-  { id: 'maintenance',  label: 'Maintenance',   href: '/admin/maintenance',      icon: Wrench },
-  { id: 'personnels',   label: 'Personnels',    href: '/admin/personnels',       icon: Users },
-  { id: 'actualites',   label: 'Actualités / Promotions', href: '/admin/actualites', icon: Megaphone },
-];
+/**
+ * Icônes spécifiques à la barre latérale. La source de vérité
+ * (libellés, liens, permissions) vit dans `@/lib/adminNav`.
+ */
+const SIDEBAR_ICONS: Record<string, LucideIcon> = {
+  commandes: ShoppingBag,
+  stocks: Warehouse,
+  catalogue: Tags,
+  comptabilite: TrendingUp,
+  maintenance: Wrench,
+  clients: Users,
+  publications: Send,
+  personnels: Users,
+};
 
 const STORAGE_KEY = 'eaumalik.admin.sidebar.collapsed';
 
 export default function AdminShell({ title, children }: { title: string; children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { session, signOut } = useSupabaseAuth();
+  const { session, signOut, isAdmin } = useSupabaseAuth();
 
   const [permissions, setPermissions] = useState<any>(null);
   const [role, setRole] = useState<string>('');
@@ -72,20 +79,17 @@ export default function AdminShell({ title, children }: { title: string; childre
     });
   }, []);
 
-  const allowedTabs = TABS.filter(tab => {
-    if (!permissions) return true;
-    if (role === 'admin') return true;
-
-    if (tab.id === 'commandes') return permissions.can_validate_orders;
-    if (tab.id === 'stocks') return permissions.can_view_stocks;
-    if (tab.id === 'catalogue') return permissions.can_view_products;
-    if (tab.id === 'comptabilite') return permissions.can_view_comptabilite;
-    if (tab.id === 'maintenance') return permissions.can_view_comptabilite || role === 'admin';
-    if (tab.id === 'actualites') return role === 'admin';
-    if (tab.id === 'personnels') return role === 'admin';
-
-    return true;
-  });
+  // La sidebar affiche EXACTEMENT les mêmes entrées que le dropdown
+  // "Administration" du Navbar (même source, même ordre, même filtrage).
+  // Cela inclut '/commandes', qui pointe vers la page autonome dédiée.
+  // On utilise le même fallback `isAdmin` que le Navbar pour que les
+  // entrées admin-only (publications, personnels) soient visibles dès le
+  // premier rendu, avant que `role` ne soit hydraté.
+  const allowedTabs = filterAdminNavItems(
+    ADMIN_NAV_ITEMS,
+    role || (isAdmin ? 'admin' : null),
+    permissions,
+  );
 
   // Détection de l'onglet actif via le pathname (au lieu de `?tab=`)
   const isActive = useCallback(
@@ -122,8 +126,8 @@ export default function AdminShell({ title, children }: { title: string; childre
           </div>
 
           <nav className="admin-sidebar__nav" aria-label="Sections">
-            {allowedTabs.map(tab => {
-              const Icon = tab.icon;
+            {allowedTabs.map((tab: AdminNavItem) => {
+              const Icon = SIDEBAR_ICONS[tab.id];
               const active = isActive(tab.href);
               return (
                 <button

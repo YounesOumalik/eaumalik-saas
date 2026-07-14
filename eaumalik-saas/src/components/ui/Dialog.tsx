@@ -27,9 +27,10 @@ import type { ReactNode } from 'react';
  *   - `md`  : max-w-xl       (~ 36rem)   — formulaire membre (defaut)
  *   - `lg`  : max-w-2xl      (~ 42rem)   — detail commande / client
  *   - `xl`  : max-w-3xl      (~ 48rem)   — boutique produit
+ *   - `2xl` : max-w-4xl      (~ 56rem)   — formulaires denses (ex : maintenance)
  *   - `full`: max-w-[1400px] (~ 87.5rem) — formulaires et contenus volumineux (etalage pleine page)
  */
-export type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
+export type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
 
 /**
  * Variante visuelle :
@@ -45,6 +46,7 @@ const SIZE_CLASS: Record<DialogSize, string> = {
   md:   'max-w-xl',
   lg:   'max-w-2xl',
   xl:   'max-w-3xl',
+  '2xl': 'max-w-4xl',
   full: 'max-w-[1400px]',
 };
 

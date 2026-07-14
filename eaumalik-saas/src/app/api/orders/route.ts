@@ -16,7 +16,7 @@ const OrderItemSchema = z.object({
 
 const CreateOrderSchema = z.object({
   client_name: z.string().min(3).max(100),
-  client_phone: z.string().regex(/^0[6-7][0-9]{8}$/, 'Numéro de téléphone invalide (06/07XXXXXXXX)'),
+  client_phone: z.string().regex(/^0[0-9]{9}$/, 'Numéro de téléphone invalide (0XXXXXXXXX)'),
   client_city: z.string().min(1).max(60),
   client_address: z.string().min(5).max(200),
   notes: z.string().max(500).optional(),

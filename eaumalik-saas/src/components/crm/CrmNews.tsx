@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Send, Newspaper, Upload, X, Tag, Users, Package, ChevronDown,
-  ChevronUp, Search, Trash2, Plus, CalendarClock,
+  ChevronUp, Search, Trash2, Plus, CalendarClock, MapPin, Check,
 } from 'lucide-react';
 import {
   publishNewsAction,
@@ -37,9 +37,26 @@ type ProductSelection = {
 };
 
 // ============================================================================
+// Props publiques
+// ============================================================================
+type CrmNewsProps = {
+  /**
+   * Mode de publication : `true` = promotion, `false` = annonce.
+   * Optionnel — si non fourni, le composant gère son propre état interne.
+   * Permet au parent (ex. `PublicationsManager`) de piloter le mode via
+   * des boutons clairement distincts affichés en haut de la page.
+   */
+  isPromotion?: boolean;
+  setIsPromotion?: React.Dispatch<React.SetStateAction<boolean>>;
+};
+
+// ============================================================================
 // Composant principal
 // ============================================================================
-export default function CrmNews() {
+export default function CrmNews({
+  isPromotion: externalIsPromotion,
+  setIsPromotion: externalSetIsPromotion,
+}: CrmNewsProps = {}) {
   // -- Champs de base --------------------------------------------------------
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -51,10 +68,15 @@ export default function CrmNews() {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [clients, setClients] = useState<ClientLite[]>([]);
   const [clientSearch, setClientSearch] = useState('');
+  const [cityFilter, setCityFilter] = useState<string>('__ALL__');
+  const [clientsDropdownOpen, setClientsDropdownOpen] = useState(false);
+  const clientsDropdownRef = useRef<HTMLDivElement>(null);
   const [clientsLoaded, setClientsLoaded] = useState(false);
 
-  // -- Promotion -------------------------------------------------------------
-  const [isPromotion, setIsPromotion] = useState(true);
+  // -- Promotion (peut être piloté depuis le parent via les props) -----------
+  const [internalIsPromotion, internalSetIsPromotion] = useState(true);
+  const isPromotion = externalIsPromotion ?? internalIsPromotion;
+  const setIsPromotion = externalSetIsPromotion ?? internalSetIsPromotion;
   const [price, setPrice] = useState<string>('');
   const [originalPrice, setOriginalPrice] = useState<string>('');
   const [productSelections, setProductSelections] = useState<ProductSelection[]>([]);
@@ -140,18 +162,89 @@ export default function CrmNews() {
     );
   };
 
-  const selectAllClients = () => setSelectedUserIds(clients.map(c => c.id));
   const clearClients = () => setSelectedUserIds([]);
 
+  /**
+   * Coche uniquement les clients actuellement filtrés (ville + recherche).
+   * Préserve les sélections existantes hors de la vue filtrée.
+   */
+  const selectAllFiltered = () => {
+    setSelectedUserIds(prev => {
+      const ids = new Set(prev);
+      filteredClients.forEach(c => ids.add(c.id));
+      return Array.from(ids);
+    });
+  };
+
+  const removeClient = (id: string) => {
+    setSelectedUserIds(prev => prev.filter(x => x !== id));
+  };
+
+  // Villes uniques triées alphabétiquement (locale FR).
+  const availableCities = useMemo(() => {
+    const set = new Set<string>();
+    clients.forEach(c => {
+      const city = (c.city ?? '').trim();
+      if (city) set.add(city);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [clients]);
+
+  // Nombre de clients par ville (pour "(n)" dans le <select>).
+  const cityCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    clients.forEach(c => {
+      const city = (c.city ?? '').trim();
+      if (city) map.set(city, (map.get(city) ?? 0) + 1);
+    });
+    return map;
+  }, [clients]);
+
   const filteredClients = useMemo(() => {
+    let result = clients;
+    // Filtre par ville d'abord (réduit fortement le volume affiché)
+    if (cityFilter !== '__ALL__') {
+      result = result.filter(c => (c.city ?? '').trim() === cityFilter);
+    }
+    // Puis recherche texte (nom ou email)
     const q = clientSearch.trim().toLowerCase();
-    if (!q) return clients;
-    return clients.filter(c =>
-      (c.full_name ?? '').toLowerCase().includes(q) ||
-      (c.email ?? '').toLowerCase().includes(q) ||
-      (c.city ?? '').toLowerCase().includes(q)
-    );
-  }, [clients, clientSearch]);
+    if (q) {
+      result = result.filter(c =>
+        (c.full_name ?? '').toLowerCase().includes(q) ||
+        (c.email ?? '').toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [clients, cityFilter, clientSearch]);
+
+  // Clients actuellement cochés (pour les chips de sélection).
+  const selectedClientsData = useMemo(() => {
+    return selectedUserIds
+      .map(id => clients.find(c => c.id === id))
+      .filter((c): c is ClientLite => Boolean(c));
+  }, [selectedUserIds, clients]);
+
+  // Ferme la liste déroulante au clic en dehors.
+  useEffect(() => {
+    if (!clientsDropdownOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (
+        clientsDropdownRef.current &&
+        !clientsDropdownRef.current.contains(e.target as Node)
+      ) {
+        setClientsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [clientsDropdownOpen]);
+
+  // Si la ville précédemment sélectionnée n'existe plus, on retombe sur "Toutes".
+  useEffect(() => {
+    if (cityFilter !== '__ALL__' && !availableCities.includes(cityFilter)) {
+      setCityFilter('__ALL__');
+    }
+  }, [availableCities, cityFilter]);
 
   const filteredProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
@@ -177,35 +270,44 @@ export default function CrmNews() {
   // ============================================================================
   // Publication
   // ============================================================================
+  // Pour les promotions, le ciblage est forcé à "tous les clients" :
+  // elles apparaissent sur la landing page + la boutique, donc visibles
+  // par tout le monde sans sélection manuelle.
   const canPublish =
     title.trim().length >= 3 &&
     content.trim().length >= 3 &&
     !publishing &&
-    (targetAll || selectedUserIds.length >= 1);
+    (isPromotion || targetAll || selectedUserIds.length >= 1);
 
-  const targetLabel = targetAll
-    ? '📢 Tous les clients'
-    : selectedUserIds.length === 0
-      ? '⚠️ Aucun client sélectionné'
-      : `👥 ${selectedUserIds.length} client(s) ciblé(s)`;
+  const targetLabel = isPromotion
+    ? '📢 Visible par tous (landing + boutique)'
+    : targetAll
+      ? '📢 Tous les clients'
+      : selectedUserIds.length === 0
+        ? '⚠️ Aucun client sélectionné'
+        : `👥 ${selectedUserIds.length} client(s) ciblé(s)`;
 
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim() || publishing) return;
-    if (!targetAll && selectedUserIds.length === 0) {
+    if (!isPromotion && !targetAll && selectedUserIds.length === 0) {
       toast('Sélectionnez au moins un client destinataire.', 'error');
       return;
     }
 
     setPublishing(true);
 
+    // Pour une promotion : ciblage forcé à "tous les clients"
+    // (visible dans le carrousel landing + la boutique).
+    const effectiveTargetAll = isPromotion ? true : targetAll;
+
     const payload = {
       title: title.trim(),
       content: content.trim(),
       imageUrl: imageUrl || undefined,
       // Ciblage
-      targetAll,
-      targetUserIds: targetAll ? [] : selectedUserIds,
+      targetAll: effectiveTargetAll,
+      targetUserIds: effectiveTargetAll ? [] : selectedUserIds,
       // Promotion
       isPromotion,
       price: isPromotion ? promoPriceNum : null,
@@ -244,10 +346,6 @@ export default function CrmNews() {
   // ============================================================================
   return (
     <>
-      <h2 className="font-display font-extrabold text-2xl mb-6">
-        Publier une Actualité / Promotion
-      </h2>
-
       <form
         onSubmit={handlePublish}
         className="glass-card p-6 sm:p-8 max-w-4xl space-y-6"
@@ -256,32 +354,46 @@ export default function CrmNews() {
         {/* ===================== BLOC TITRE + CONTENU ===================== */}
         <section className="space-y-4">
           <h3 className="font-display font-bold text-lg flex items-center gap-2">
-            <Newspaper size={18} className="text-primary-light" /> Contenu de l&apos;annonce
+            {isPromotion ? (
+              <Tag size={18} className="text-warning" />
+            ) : (
+              <Newspaper size={18} className="text-primary-light" />
+            )}
+            {isPromotion ? 'Contenu de la promotion' : 'Contenu de l\u2019annonce'}
           </h3>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Rédigez votre communication. Les actualités publiées apparaissent immédiatement
-            dans l&apos;espace client des destinataires choisis.
+            {isPromotion
+              ? "Rédigez la communication associée à votre offre. La promotion apparaîtra dans le carrousel défilant de la landing page."
+              : "Rédigez votre communication. Les actualités publiées apparaissent immédiatement dans l'espace client des destinataires choisis."}
           </p>
           <div>
-            <label className="form-label">Titre de l&apos;annonce *</label>
+            <label className="form-label">
+              {isPromotion ? 'Titre de la promotion *' : 'Titre de l\u2019annonce *'}
+            </label>
             <input
               type="text"
               required
               className="form-input"
               value={title}
               onChange={e => setTitle(e.target.value)}
-              placeholder="Ex: -20% sur les recharges de filtres ce mois-ci !"
+              placeholder={isPromotion
+                ? 'Ex: -20% sur les recharges de filtres ce mois-ci !'
+                : "Ex: Nouvelle ouverture d'horaires samedi matin"}
             />
           </div>
           <div>
-            <label className="form-label">Contenu de l&apos;annonce *</label>
+            <label className="form-label">
+              {isPromotion ? 'Contenu de la promotion *' : 'Contenu de l\u2019annonce *'}
+            </label>
             <textarea
               required
               rows={6}
               className="form-input min-h-[10rem]"
               value={content}
               onChange={e => setContent(e.target.value)}
-              placeholder="Écrivez le message complet ici... Décrivez l'offre, la durée, les conditions."
+              placeholder={isPromotion
+                ? "Écrivez le message de la promotion... Décrivez l'offre, la durée, les conditions."
+                : 'Écrivez le message complet ici... Décrivez le contexte, la raison, les destinataires.'}
             />
           </div>
 
@@ -314,6 +426,10 @@ export default function CrmNews() {
         </section>
 
         {/* ===================== CIBLAGE DESTINATAIRES ===================== */}
+        {/* Masqué pour les promotions : visibles sur la landing page + boutique
+            (tous les clients). Le ciblage reste pertinent uniquement pour les
+            annonces, où l'envoi se fait via l'espace client des destinataires. */}
+        {!isPromotion && (
         <section className="border border-[color:var(--border)] rounded-2xl overflow-hidden">
           <button
             type="button"
@@ -377,120 +493,264 @@ export default function CrmNews() {
               </div>
 
               {!targetAll && (
-                <div className="border border-[color:var(--border)] rounded-xl p-4 bg-[color:var(--bg-card)]">
-                  <div className="flex items-center gap-2 mb-3 flex-wrap">
-                    <div className="relative flex-1 min-w-[12rem]">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" />
-                      <input
-                        type="text"
-                        className="form-input pl-9 py-2 text-sm"
-                        placeholder="Rechercher un client (nom, email, ville)..."
-                        value={clientSearch}
-                        onChange={e => setClientSearch(e.target.value)}
-                      />
+                <div className="border border-[color:var(--border)] rounded-xl p-4 bg-[color:var(--bg-card)] space-y-4">
+                  {/* ============== Filtres : ville + recherche ============== */}
+                  <div className="grid sm:grid-cols-[1fr_1.4fr] gap-3">
+                    <div>
+                      <label className="form-label text-xs flex items-center gap-1">
+                        <MapPin size={12} /> Filtrer par ville
+                      </label>
+                      <select
+                        className="form-input py-2 text-sm"
+                        value={cityFilter}
+                        onChange={e => setCityFilter(e.target.value)}
+                        disabled={!clientsLoaded}
+                      >
+                        <option value="__ALL__">
+                          Toutes les villes ({clients.length})
+                        </option>
+                        {availableCities.map(city => (
+                          <option key={city} value={city}>
+                            {city} ({cityCounts.get(city) ?? 0})
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <button
-                      type="button"
-                      onClick={selectAllClients}
-                      disabled={!clientsLoaded}
-                      className="btn-outline py-2 px-3 text-xs rounded-lg"
-                    >
-                      Tout sélectionner
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearClients}
-                      className="btn-outline py-2 px-3 text-xs rounded-lg"
-                    >
-                      Effacer
-                    </button>
+                    <div>
+                      <label className="form-label text-xs flex items-center gap-1">
+                        <Search size={12} /> Recherche
+                      </label>
+                      <div className="relative">
+                        <Search
+                          size={14}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none"
+                        />
+                        <input
+                          type="text"
+                          className="form-input pl-9 py-2 text-sm"
+                          placeholder="Nom ou email..."
+                          value={clientSearch}
+                          onChange={e => setClientSearch(e.target.value)}
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  {!clientsLoaded && (
-                    <div className="text-center text-xs py-6" style={{ color: 'var(--text-muted)' }}>
-                      Chargement des clients...
-                    </div>
-                  )}
-                  {clientsLoaded && clients.length === 0 && (
-                    <div className="text-center text-xs py-6" style={{ color: 'var(--text-muted)' }}>
-                      Aucun client n&apos;a encore été inscrit.
+                  {/* ============== Chips des clients déjà cochés ============== */}
+                  {selectedClientsData.length > 0 && (
+                    <div className="border border-[color:var(--primary)]/30 bg-[color:var(--primary)]/5 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold flex items-center gap-1.5">
+                          <Check size={12} className="text-primary-light" />
+                          {selectedClientsData.length} client
+                          {selectedClientsData.length > 1 ? 's' : ''} sélectionné
+                          {selectedClientsData.length > 1 ? 's' : ''}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={clearClients}
+                          className="text-xs text-red-500 hover:underline"
+                        >
+                          Tout effacer
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                        {selectedClientsData.map(c => (
+                          <span
+                            key={c.id}
+                            className="inline-flex items-center gap-1 pl-2 pr-1 py-1 text-xs rounded-full bg-[color:var(--bg-surface)] border border-[color:var(--border)]"
+                          >
+                            <span className="font-semibold truncate max-w-[10rem]">
+                              {c.full_name}
+                            </span>
+                            {c.city && (
+                              <span className="opacity-60 truncate max-w-[6rem]">
+                                · {c.city}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeClient(c.id)}
+                              className="ml-0.5 w-4 h-4 rounded-full hover:bg-red-500/20 flex items-center justify-center text-red-500"
+                              title="Retirer ce client"
+                              aria-label={`Retirer ${c.full_name}`}
+                            >
+                              <X size={10} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
 
-                  <div className="max-h-72 overflow-y-auto grid sm:grid-cols-2 gap-2 pr-1">
-                    {filteredClients.map(c => {
-                      const checked = selectedUserIds.includes(c.id);
-                      return (
-                        <label
-                          key={c.id}
-                          className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer border transition-colors ${
-                            checked
-                              ? 'border-[color:var(--primary)] bg-[color:var(--primary)]/10'
-                              : 'border-[color:var(--border)] hover:bg-[color:var(--bg-surface)]'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleClient(c.id)}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-sm truncate">{c.full_name}</div>
-                            <div className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-                              {c.email}{c.city ? ` · ${c.city}` : ''}
-                            </div>
+                  {/* ============== Liste déroulante multi-sélection ============== */}
+                  <div className="relative" ref={clientsDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setClientsDropdownOpen(o => !o)}
+                      disabled={!clientsLoaded}
+                      className="w-full form-input py-2 text-sm flex items-center justify-between gap-2 text-left disabled:opacity-60"
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <Users size={14} className="text-primary-light flex-shrink-0" />
+                        <span className="truncate">
+                          {clientsDropdownOpen
+                            ? 'Fermer la liste des clients'
+                            : `Ouvrir la liste (${filteredClients.length} client${
+                                filteredClients.length > 1 ? 's' : ''
+                              } disponible${filteredClients.length > 1 ? 's' : ''})`}
+                        </span>
+                      </span>
+                      <ChevronDown
+                        size={16}
+                        className={`flex-shrink-0 transition-transform ${
+                          clientsDropdownOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {clientsDropdownOpen && (
+                      <div className="absolute z-20 mt-1 w-full max-h-72 overflow-y-auto border border-[color:var(--border)] rounded-xl bg-[color:var(--bg-surface)] shadow-xl">
+                        {!clientsLoaded && (
+                          <div
+                            className="p-4 text-center text-xs"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            Chargement des clients...
                           </div>
-                        </label>
-                      );
-                    })}
-                    {clientsLoaded && clients.length > 0 && filteredClients.length === 0 && (
-                      <div className="col-span-full text-center text-xs py-4" style={{ color: 'var(--text-muted)' }}>
-                        Aucun client ne correspond à votre recherche.
+                        )}
+
+                        {clientsLoaded && clients.length === 0 && (
+                          <div
+                            className="p-4 text-center text-xs"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            Aucun client n&apos;a encore été inscrit.
+                          </div>
+                        )}
+
+                        {clientsLoaded &&
+                          clients.length > 0 &&
+                          filteredClients.length === 0 && (
+                            <div
+                              className="p-4 text-center text-xs"
+                              style={{ color: 'var(--text-muted)' }}
+                            >
+                              Aucun client ne correspond à ces filtres.
+                            </div>
+                          )}
+
+                        {filteredClients.length > 0 && (
+                          <>
+                            <div className="sticky top-0 bg-[color:var(--bg-card)] border-b border-[color:var(--border)] px-3 py-2 flex items-center justify-between gap-2">
+                              <span
+                                className="text-xs"
+                                style={{ color: 'var(--text-muted)' }}
+                              >
+                                {filteredClients.length} dans cette liste
+                              </span>
+                              <div className="flex items-center gap-2 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={selectAllFiltered}
+                                  className="text-primary-light hover:underline font-semibold"
+                                >
+                                  Tout cocher
+                                </button>
+                                <span style={{ color: 'var(--text-muted)' }}>·</span>
+                                <button
+                                  type="button"
+                                  onClick={clearClients}
+                                  className="text-red-500 hover:underline"
+                                >
+                                  Tout décocher
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="divide-y divide-[color:var(--border)]">
+                              {filteredClients.map(c => {
+                                const checked = selectedUserIds.includes(c.id);
+                                return (
+                                  <label
+                                    key={c.id}
+                                    className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
+                                      checked
+                                        ? 'bg-[color:var(--primary)]/10'
+                                        : 'hover:bg-[color:var(--bg-card)]'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => toggleClient(c.id)}
+                                      className="flex-shrink-0"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-semibold text-sm truncate">
+                                        {c.full_name}
+                                      </div>
+                                      <div
+                                        className="text-xs truncate"
+                                        style={{ color: 'var(--text-muted)' }}
+                                      >
+                                        {c.email}
+                                        {c.city ? ` · ${c.city}` : ''}
+                                      </div>
+                                    </div>
+                                    {checked && (
+                                      <Check
+                                        size={14}
+                                        className="text-primary-light flex-shrink-0"
+                                      />
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
+
+                  {/* ============== Astuce UX ============== */}
+                  <p
+                    className="text-[11px] flex items-start gap-1.5"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    💡 Filtrez par ville pour cibler rapidement une zone géographique,
+                    puis ouvrez la liste déroulante pour cocher les clients un par un
+                    (ou utilisez « Tout cocher » sur la sélection filtrée).
+                  </p>
                 </div>
               )}
             </div>
           )}
         </section>
+        )}
 
         {/* ===================== PROMOTION SPÉCIALE ===================== */}
+        {isPromotion && (
         <section className="border border-[color:var(--border)] rounded-2xl overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setPromoOpen(!promoOpen)}
-            className="w-full flex items-center justify-between p-4 bg-[color:var(--bg-surface)] hover:bg-[color:var(--bg-card-hover)] transition-colors"
-          >
+          <div className="w-full flex items-center justify-between p-4 bg-[color:var(--bg-surface)]">
             <span className="flex items-center gap-2 font-display font-bold text-base">
               <Tag size={18} className="text-warning" /> Promotion spéciale
-              <span className={`text-xs font-normal px-2 py-0.5 rounded-full border border-[color:var(--border)] ${
-                isPromotion ? 'bg-warning-soft text-warning' : 'bg-[color:var(--bg-card)] text-[color:var(--text-muted)]'
-              }`}>
-                {isPromotion ? '✅ Activée' : '— Information seulement'}
+              <span className="text-xs font-normal px-2 py-0.5 rounded-full border border-[color:var(--border)] bg-warning-soft text-warning">
+                ✅ Activée
               </span>
             </span>
-            {promoOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          </button>
+          </div>
 
-          {promoOpen && (
-            <div className="p-4 sm:p-6 space-y-4 bg-[color:var(--bg)]">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isPromotion}
-                  onChange={e => setIsPromotion(e.target.checked)}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm">
-                  Cochez pour transformer cette annonce en{' '}
-                  <strong className="text-warning">promotion commerciale</strong>
-                  {' '}— elle apparaîtra dans le carrousel défilant de la landing page.
-                </span>
-              </label>
+          <div className="p-4 sm:p-6 space-y-4 bg-[color:var(--bg)]">
+              <p className="text-sm flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-warning inline-block" />
+                Cette annonce sera publiée comme{' '}
+                <strong className="text-warning">promotion commerciale</strong>
+                {' '}— elle apparaîtra dans le carrousel défilant de la landing page.
+              </p>
 
-              {isPromotion && (
-                <>
+              <>
                   {/* Prix & réduction */}
                   <div className="grid sm:grid-cols-3 gap-4">
                     <div>
@@ -704,11 +964,10 @@ export default function CrmNews() {
                       )}
                     </div>
                   </div>
-                </>
-              )}
+              </>
             </div>
-          )}
         </section>
+        )}
 
         {/* ===================== BOUTON PUBLIER ===================== */}
         <div className="border-t border-[color:var(--border)] pt-4">
@@ -726,7 +985,7 @@ export default function CrmNews() {
           </button>
           <p className="text-[11px] text-center mt-3" style={{ color: 'var(--text-muted)' }}>
             {isPromotion
-              ? 'La promotion apparaîtra immédiatement dans le carrousel défilant de la landing page.'
+              ? '📢 La promotion sera visible par tous les clients : carrousel de la landing page + boutique.'
               : "L'actualité sera visible uniquement dans l'espace client des destinataires choisis."}
           </p>
         </div>

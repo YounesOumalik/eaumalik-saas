@@ -6,6 +6,11 @@
  * Important : on ne lit que la présence d'un cookie de session pour la redirection,
  * pas le rôle (le rôle est vérifié côté page pour éviter les races entre cookies
  * JWT et helpers de rôle).
+ *
+ * On expose aussi `x-crm-pathname` dans la réponse pour que les layouts
+ * (notamment `/crm/layout.tsx`) puissent reconstruire un `callbackUrl`
+ * précis en cas de redirect — utile quand l'utilisateur est renvoyé vers
+ * /login après expiration de session au milieu d'une navigation.
  */
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -25,6 +30,14 @@ function isProtected(pathname: string) {
 export async function updateSupabaseSession(request: NextRequest) {
   // Pré-crée la réponse pour pouvoir modifier ses headers/cookies.
   let response = NextResponse.next({ request: { headers: request.headers } });
+
+  // Expose le pathname courant aux Server Components (utile pour /crm/layout
+  // qui doit reconstruire un callbackUrl précis quand il redirige vers /login).
+  // On passe par `request.headers` (forwardé au RSC) pour ne pas dépendre
+  // d'une extension propriétaire.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-crm-pathname', request.nextUrl.pathname + request.nextUrl.search);
+  response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

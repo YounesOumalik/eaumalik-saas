@@ -105,7 +105,7 @@ function LoginInner() {
 
     if (isSignUp) {
       if (!fullName || fullName.length < 3) { setError('Nom complet obligatoire (min. 3 caractères).'); setLoading(false); return; }
-      if (!PHONE_MA_REGEX.test(phone)) { setError('Numéro de téléphone invalide (ex: 06XXXXXXXX).'); setLoading(false); return; }
+      if (!PHONE_MA_REGEX.test(phone)) { setError('Numéro de téléphone invalide (ex: 0XXXXXXXXX).'); setLoading(false); return; }
       if (!city) { setError('La ville est obligatoire.'); setLoading(false); return; }
       const pwd = PasswordSchema.safeParse(password);
       if (!pwd.success) { setError(pwd.error.issues[0]?.message ?? 'Mot de passe invalide.'); setLoading(false); return; }

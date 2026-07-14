@@ -1,5 +1,79 @@
 [
   {
+    "id": "o-1784045105936",
+    "order_number": "CMD-2026-F5DE5C",
+    "user_id": "u-1784045105936",
+    "client_name": "sami md",
+    "client_phone": "0623874323",
+    "client_address": "kjsdhfihsd fsdkfhdaslfa fakshflash",
+    "client_city": "Asilah",
+    "status": "annulee",
+    "subtotal": 4498,
+    "delivery_fee": 0,
+    "total": 4498,
+    "payment_method": "cash_on_delivery",
+    "invoice_generated": false,
+    "created_at": "2026-07-14T16:05:05.936Z",
+    "updated_at": "2026-07-14T17:24:41.028Z",
+    "items": [
+      {
+        "id": "o-1784045105936-item-0",
+        "order_id": "o-1784045105936",
+        "product_id": "sys-ro-compact",
+        "product_name": "Osmoseur Compact Premium EauMalik",
+        "unit_price": 1999,
+        "quantity": 1,
+        "line_total": 1999
+      },
+      {
+        "id": "o-1784045105936-item-1",
+        "order_id": "o-1784045105936",
+        "product_id": "sys-osmoseur-premium-10",
+        "product_name": "Osmoseur Premium 10 Étapes",
+        "unit_price": 2499,
+        "quantity": 1,
+        "line_total": 2499
+      }
+    ],
+    "tracking_number": "CMD-2026-F5DE5C",
+    "carrier": "EAUMALIK Express",
+    "notes": "[Annulation — 2026-07-14 17:24:41]\nAgent : Administrateur EAUMALIK <supadmin@gmail.com> (admin)\nMotif : (non renseigné)"
+  },
+  {
+    "id": "o-1784044468581",
+    "order_number": "CMD-2026-5CF046",
+    "user_id": "u-1783786619901",
+    "client_name": "Oumalik",
+    "client_phone": "0687234567",
+    "client_address": "iwueryimfsd dfjsdkjfg",
+    "client_city": "Azrou",
+    "status": "livree",
+    "subtotal": 2499,
+    "delivery_fee": 0,
+    "total": 2499,
+    "payment_method": "cash_on_delivery",
+    "invoice_generated": false,
+    "created_at": "2026-07-14T15:54:28.581Z",
+    "updated_at": "2026-07-14T17:25:29.091Z",
+    "items": [
+      {
+        "id": "o-1784044468581-item-0",
+        "order_id": "o-1784044468581",
+        "product_id": "p1",
+        "product_name": "Purificateur d'Eau Pro Modèle 1",
+        "unit_price": 2499,
+        "quantity": 1,
+        "line_total": 2499
+      }
+    ],
+    "tracking_number": "CMD-2026-5CF046",
+    "carrier": "EAUMALIK Express",
+    "processed_at": "2026-07-14T17:25:20.284Z",
+    "shipped_at": "2026-07-14T17:25:25.380Z",
+    "estimated_delivery": "2026-07-16T15:56:27.019Z",
+    "delivered_at": "2026-07-14T17:25:29.091Z"
+  },
+  {
     "id": "o-1783788835623",
     "order_number": "CMD-2026-7779",
     "user_id": null,
@@ -11,7 +85,7 @@
     "subtotal": 4998,
     "delivery_fee": 0,
     "total": 4998,
-    "notes": null,
+    "notes": "Note initiale du SAV : client VIP.",
     "payment_method": "cash_on_delivery",
     "invoice_generated": false,
     "created_at": "2026-07-11T16:53:55.623Z",
@@ -49,7 +123,7 @@
     "subtotal": 2499,
     "delivery_fee": 0,
     "total": 2499,
-    "notes": null,
+    "notes": "Note initiale du SAV : client VIP.",
     "payment_method": "cash_on_delivery",
     "invoice_generated": false,
     "created_at": "2026-07-11T16:20:30.908Z",

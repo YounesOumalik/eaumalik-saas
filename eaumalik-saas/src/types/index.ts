@@ -96,6 +96,12 @@ export interface User {
   google_id: string | null;
   role: UserRole;
   nps_score: number | null;
+  /** Code de parrainage unique (8 caractères alphanumériques en majuscules). */
+  referral_code?: string | null;
+  /** ID du client parraineur (celui qui a invite ce client via son code). */
+  referred_by?: string | null;
+  /** Solde cashback gagne via les commandes des filleuls (en MAD). */
+  cashback_balance?: number | null;
   created_at: string;
   updated_at: string;
 }

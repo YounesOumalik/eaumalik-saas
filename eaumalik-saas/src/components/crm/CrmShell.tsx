@@ -1,22 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { ReactNode, useState, useEffect } from 'react';
-import { Users, Filter, MessageSquare, Newspaper, Home } from 'lucide-react';
+import { Users, Filter, MessageSquare, Home, ShoppingBag } from 'lucide-react';
 import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 
 const TABS = [
-  { id: 'maintenance', label: 'Maintenance Filtres', href: '/crm',          icon: Filter },
-  { id: 'clients',     label: 'Clients',            href: '/crm/clients',     icon: Users },
-  { id: 'messages',    label: 'Messages Clients',   href: '/crm/messages',    icon: MessageSquare },
-  { id: 'news',        label: 'Publier Actualité',  href: '/crm/news',        icon: Newspaper },
+  { id: 'maintenance',  label: 'Maintenance Filtres', href: '/crm',             permission: 'can_view_products',    icon: Filter },
+  { id: 'clients',      label: 'Clients',             href: '/crm/clients',      permission: 'can_follow_prospects', icon: Users },
+  { id: 'messages',     label: 'Messages Clients',    href: '/crm/messages',     permission: 'can_follow_prospects', icon: MessageSquare },
 ];
 
 export default function CrmShell({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const params = useSearchParams();
-  const tab = params.get('tab') ?? 'maintenance';
+  const pathname = usePathname() || '/crm';
 
   const [permissions, setPermissions] = useState<any>(null);
   const [role, setRole] = useState<string>('');
@@ -30,14 +28,20 @@ export default function CrmShell({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const allowedTabs = TABS.filter(t => {
-    if (!permissions) return true;
-    if (role === 'admin') return true;
+  // Onglet actif dérivé du pathname (et non plus seulement du query param),
+  // pour que l'élément actif reflète toujours l'URL courante (ex. /crm/clients
+  // → "Clients" est actif, pas "Maintenance Filtres").
+  const activeId = (() => {
+    if (pathname.startsWith('/crm/messages')) return 'messages';
+    if (pathname.startsWith('/crm/clients')) return 'clients';
+    return 'maintenance';
+  })();
 
-    if (t.id === 'clients') return permissions.can_follow_prospects;
-    if (t.id === 'messages') return permissions.can_follow_prospects;
-    if (t.id === 'news') return permissions.can_edit_products;
-    return true;
+  const allowedTabs = TABS.filter(t => {
+    if (!permissions) return true; // permissions pas encore chargées : on ne masque rien
+    if (role === 'admin') return true; // admin a tout, peu importe les booleens
+    const perm = (t as any).permission;
+    return !perm || permissions[perm] === true;
   });
 
   return (
@@ -49,13 +53,19 @@ export default function CrmShell({ children }: { children: ReactNode }) {
           </div>
           {allowedTabs.map(t => {
             const Icon = t.icon;
-            const active = tab === t.id;
+            const active = activeId === t.id;
+            // On aligne l'URL cible sur l'onglet actif : on inclut ?tab=<id>
+            // pour que les liens partagés / marque-pages gardent la cohérence
+            // avec useSearchParams ailleurs dans l'app (Navbar dropdown).
+            const href = t.href === '/crm' ? '/crm?tab=maintenance' : `${t.href}?tab=${t.id}`;
             return (
               <button
                 key={t.id}
-                onClick={() => router.push(t.href + (t.id === 'maintenance' ? '?tab=maintenance' : ''))}
+                type="button"
+                onClick={() => router.push(href)}
                 className={`sidebar-link ${active ? 'active' : ''}`}
                 data-tab={t.id}
+                aria-current={active ? 'page' : undefined}
               >
                 <Icon size={16} aria-hidden="true" /> <span>{t.label}</span>
               </button>

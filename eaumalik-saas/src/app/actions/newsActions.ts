@@ -66,6 +66,7 @@ export async function createNewsAction(raw: unknown) {
       valid_until: data.valid_until ?? null,
     });
     revalidatePath('/admin/actualites');
+    revalidatePath('/admin/publications');
     revalidatePath('/');
     revalidatePath('/boutique');
     return { success: true as const, news: created };
@@ -96,6 +97,7 @@ export async function updateNewsAction(id: string, raw: unknown) {
 
     const updated = await updateNews(id, patch);
     revalidatePath('/admin/actualites');
+    revalidatePath('/admin/publications');
     revalidatePath('/');
     revalidatePath('/boutique');
     return { success: true as const, news: updated };
@@ -109,6 +111,7 @@ export async function deleteNewsAction(id: string) {
     await gate();
     await deleteNews(id);
     revalidatePath('/admin/actualites');
+    revalidatePath('/admin/publications');
     revalidatePath('/');
     revalidatePath('/boutique');
     return { success: true as const };

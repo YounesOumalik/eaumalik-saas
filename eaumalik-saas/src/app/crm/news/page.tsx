@@ -1,12 +1,10 @@
-import CrmNews from '@/components/crm/CrmNews';
 import { redirect } from 'next/navigation';
-import { requireAdmin } from '@/lib/supabase/server';
 
-export default async function CrmNewsPage() {
-  try {
-    await requireAdmin();
-  } catch {
-    redirect('/login?callbackUrl=/crm/news');
-  }
-  return <CrmNews />;
+/**
+ * Redirection de l'ancienne route CRM `/crm/news` (Publier Actualité)
+ * vers la nouvelle page unifiée `/admin/publications` qui regroupe
+ * publication d'actualités + réponse aux messages clients.
+ */
+export default function CrmNewsRedirect() {
+  redirect('/admin/publications');
 }

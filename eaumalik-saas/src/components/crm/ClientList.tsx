@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Eye, X } from 'lucide-react';
+import { Eye, X, MessageSquare } from 'lucide-react';
 import type { User, Order, OrderStatus, MaintenanceAlert } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import MessagesPanel, { type ClientMessageItem } from './MessagesPanel';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   en_attente: 'En attente',
@@ -17,14 +18,17 @@ export default function ClientList({
   initialClients,
   allOrders,
   allMaintenance,
+  initialMessages = [],
 }: {
   initialClients: User[];
   allOrders: Order[];
   allMaintenance: MaintenanceAlert[];
+  initialMessages?: ClientMessageItem[];
 }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<User | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'buyers' | 'prospects'>('all');
+  const [showMessages, setShowMessages] = useState(false);
 
   const stats = useMemo(() => {
     return initialClients.map(c => {
@@ -57,7 +61,27 @@ export default function ClientList({
 
   return (
     <>
-      <h2 className="font-display font-extrabold text-xl mb-6">Fiches Clients</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="font-display font-extrabold text-xl">Fiches Clients</h2>
+        <button
+          type="button"
+          onClick={() => setShowMessages(true)}
+          className="btn-outline flex items-center gap-2"
+          aria-label="Ouvrir la messagerie clients"
+        >
+          <MessageSquare size={16} />
+          <span>Messages Clients</span>
+          {initialMessages.length > 0 && (
+            <span
+              className="px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white"
+              style={{ background: 'var(--primary)' }}
+              aria-label={`${initialMessages.length} conversation(s) en cours`}
+            >
+              {initialMessages.length}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* Segmented Filter Tabs */}
       <div className="flex flex-wrap gap-2 mb-4" role="tablist">
@@ -148,6 +172,12 @@ export default function ClientList({
           allOrders={allOrders}
           allMaintenance={allMaintenance}
           onClose={() => setSelected(null)}
+        />
+      )}
+      {showMessages && (
+        <MessagesModal
+          initialMessages={initialMessages}
+          onClose={() => setShowMessages(false)}
         />
       )}
     </>
@@ -313,6 +343,60 @@ function ClientDetailModal({
             </>
           )}
           <button onClick={onClose} className="btn-outline w-full justify-center mt-6">Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modale plein-cadre (largeur 4xl, hauteur 85vh) qui héberge le panneau
+ * de messagerie client. Déclenchée depuis le bouton « Messages Clients »
+ * placé dans l'en-tête de la page Fiches Clients — c'est ce qui réalise le
+ * « regroupement » demandé : on n'a plus besoin d'aller sur l'onglet
+ * `/crm/messages` pour consulter / répondre, tout se fait depuis la fiche
+ * client.
+ */
+function MessagesModal({
+  initialMessages,
+  onClose,
+}: {
+  initialMessages: ClientMessageItem[];
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="modal-overlay fixed inset-0 z-[1000] flex items-center justify-center p-4 animate-modal-in"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Messagerie clients"
+    >
+      <div className="modal-surface max-w-4xl w-full h-[85vh] flex flex-col relative rounded-3xl overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-[color:var(--border)]">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={18} className="text-primary-light" />
+            <h2 className="font-display font-extrabold text-base">Messages Clients</h2>
+            {initialMessages.length > 0 && (
+              <span
+                className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white"
+                style={{ background: 'var(--primary)' }}
+              >
+                {initialMessages.length}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80"
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+            aria-label="Fermer la messagerie"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <div className="flex-1 p-4 min-h-0">
+          <MessagesPanel initialMessages={initialMessages} height="100%" />
         </div>
       </div>
     </div>

@@ -315,6 +315,7 @@ export async function publishNewsAction(raw: unknown) {
     revalidatePath('/client');
     revalidatePath('/');
     revalidatePath('/crm/news');
+    revalidatePath('/admin/publications');
     return { success: true as const, news: row };
   }
 

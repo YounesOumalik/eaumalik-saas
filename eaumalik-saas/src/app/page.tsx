@@ -1,29 +1,26 @@
 import HeroSection from '@/components/landing/HeroSection';
-import FeaturesSection from '@/components/landing/FeaturesSection';
-import ProductsPreview from '@/components/landing/ProductsPreview';
-import TestimonialsSection from '@/components/landing/TestimonialsSection';
-import PromotionsCarousel from '@/components/landing/PromotionsCarousel';
-import { listProducts, listActivePromotions } from '@/data/repositories';
+import FiltrationSteps from '@/components/landing/FiltrationSteps';
+import CatalogSection from '@/components/landing/CatalogSection';
+import IndustrialSection from '@/components/landing/IndustrialSection';
+import ContactSection from '@/components/landing/ContactSection';
+import { listProducts } from '@/data/repositories';
 
-// Modèle de page d'accueil "landing" (utilisé avant le refactor du 2026-07-14) :
-//   - HeroSection         : message d'accueil (logo animé, titre, CTAs)
-//   - FeaturesSection     : "Pourquoi choisir EAUMALIK ?" (6 cartes)
-//   - ProductsPreview     : "Nos produits phares" (produits is_featured)
-//   - TestimonialsSection : "Ce que disent nos clients" (3 avis)
-//   - PromotionsCarousel  : carrousel des promotions actives
+// Page d'accueil — design "EauMalik — Catalogue Produits" (maquette adoptée le 2026-07-14) :
+//   - HeroSection      : hero sombre + particules d'eau, CTA vers le catalogue
+//   - FiltrationSteps  : processus de filtration en 5 étapes (animation au scroll)
+//   - CatalogSection   : catalogue filtrable sur données réelles (listProducts)
+//   - IndustrialSection : solutions professionnelles + modal de négociation
+//   - ContactSection   : coordonnées + formulaire de contact (backend)
 export default async function HomePage() {
-  const [products, promotions] = await Promise.all([
-    listProducts(),
-    listActivePromotions(12),
-  ]);
-  const featured = products.filter(p => p.is_featured && !p.is_archived);
+  const products = await listProducts();
+  const visible = products.filter((p) => !p.is_archived);
   return (
     <>
       <HeroSection />
-      <FeaturesSection />
-      <ProductsPreview products={featured} />
-      <TestimonialsSection />
-      <PromotionsCarousel promotions={promotions} />
+      <FiltrationSteps />
+      <CatalogSection products={visible} />
+      <IndustrialSection />
+      <ContactSection />
     </>
   );
 }

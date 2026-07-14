@@ -9,6 +9,35 @@ export const dynamic = 'force-dynamic';
 
 const OrderStatusSchema = z.enum(['en_attente', 'traitee', 'en_livraison', 'livree', 'annulee']);
 
+/**
+ * Schéma du profil d'agent accompagnant une annulation (optionnel mais
+ * journalisé dans `notes` quand fourni).
+ */
+const CancelledBySchema = z.object({
+  id: z.string().min(1).max(120),
+  email: z.string().email().max(200),
+  full_name: z.string().min(1).max(200),
+  role: z.string().min(1).max(60),
+}).optional();
+
+const PatchBodySchema = z.object({
+  status: OrderStatusSchema,
+  reason: z.string().max(500).optional(),
+  cancelled_by: CancelledBySchema,
+});
+
+/** Construit la ligne de commentaire d'annulation (profil agent + date + motif). */
+function buildCancellationComment(agent: { full_name: string; email: string; role: string } | undefined, reason: string | undefined, when: string): string {
+  const dateStr = new Date(when).toISOString().slice(0, 19).replace('T', ' ');
+  const agentLine = agent
+    ? `Agent : ${agent.full_name} <${agent.email}> (${agent.role})`
+    : 'Agent : (inconnu — non authentifié)';
+  const motifLine = reason && reason.trim().length > 0
+    ? `Motif : ${reason.trim()}`
+    : 'Motif : (non renseigné)';
+  return `[Annulation — ${dateStr}]\n${agentLine}\n${motifLine}`;
+}
+
 /** PATCH — admin uniquement (changement de statut d'une commande).
  *  Met automatiquement à jour :
  *    - processed_at / shipped_at / delivered_at selon le nouveau statut
@@ -23,10 +52,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const idParam = String(params.id).slice(0, 80);
     let body: unknown;
     try { body = await req.json(); } catch { return badRequest('JSON invalide.'); }
-    const parsed = OrderStatusSchema.safeParse((body as any)?.status);
-    if (!parsed.success) return badRequest('Statut invalide.');
-
-    const newStatus = parsed.data;
+    const parsed = PatchBodySchema.safeParse(body);
+    if (!parsed.success) return badRequest('Corps invalide.');
+    const { status: newStatus, reason, cancelled_by } = parsed.data;
     const now = new Date().toISOString();
     const list = await readOrdersRaw();
     const order = list.find(o => o.id === idParam);
@@ -46,6 +74,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
     if (newStatus === 'livree') order.delivered_at = now;
+    // Annulation : on consigne le profil de l'agent + date + motif dans `notes`.
+    if (newStatus === 'annulee') {
+      const comment = buildCancellationComment(cancelled_by, reason, now);
+      order.notes = order.notes && order.notes.trim().length > 0
+        ? `${order.notes}\n\n---\n${comment}`
+        : comment;
+    }
     await writeOrdersRaw(list);
 
     let maintenanceRecords: any[] = [];
@@ -62,6 +97,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       order_id: idParam,
       status: newStatus,
       maintenance_created: maintenanceRecords.length,
+      comment_recorded: newStatus === 'annulee',
     });
   }
 
@@ -84,10 +120,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   let body: unknown;
   try { body = await req.json(); } catch { return badRequest('JSON invalide.'); }
 
-  const parsed = OrderStatusSchema.safeParse((body as any)?.status);
-  if (!parsed.success) return badRequest('Statut invalide.');
-
-  const newStatus = parsed.data;
+  const parsed = PatchBodySchema.safeParse(body);
+  if (!parsed.success) return badRequest('Corps invalide.');
+  const { status: newStatus, reason, cancelled_by } = parsed.data;
   const now = new Date().toISOString();
 
   try {
@@ -123,6 +158,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       trackingPatch.delivered_at = now;
     }
 
+    // Annulation : on consigne le profil de l'agent + date + motif dans `notes`
+    // (champ libre déjà utilisé pour les notes admin — on appende au contenu
+    // existant pour préserver l'historique).
+    if (newStatus === 'annulee') {
+      const comment = buildCancellationComment(cancelled_by, reason, now);
+      const existing = typeof order.notes === 'string' ? order.notes.trim() : '';
+      trackingPatch.notes = existing.length > 0 ? `${existing}\n\n---\n${comment}` : comment;
+    }
+
     const { error: updErr } = await admin
       .from('orders')
       .update(trackingPatch)
@@ -145,6 +189,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       order_id: idParam,
       status: newStatus,
       maintenance_created: maintenanceRecords.length,
+      comment_recorded: newStatus === 'annulee',
     });
   } catch (e) {
     return safeErrorResponse(e);

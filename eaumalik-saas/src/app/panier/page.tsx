@@ -62,20 +62,38 @@ export default function CartPage() {
       notes: String(fd.get('notes') ?? '') || undefined,
     };
 
-    // Checkout invité : création de compte à la volée (email + mot de passe).
-    let account: { email: string; password: string; full_name: string } | undefined;
+    // === PROSPECT : création de compte OBLIGATOIRE à l'achat (si pas déjà connecté).
+    // Champs exigés : Email, Téléphone, Ville, Mot de passe x2.
+    let account: { email: string; password: string; full_name: string; phone: string; city: string } | undefined;
     if (!session) {
       const email = String(fd.get('account_email') ?? '').trim();
       const password = String(fd.get('account_password') ?? '');
       const confirm = String(fd.get('account_confirm') ?? '');
+      const prospectPhone = String(fd.get('prospect_phone') ?? '').trim();
+      const prospectCity = String(fd.get('prospect_city') ?? '').trim();
+
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('Email invalide pour la création du compte.', 'error');
       if (password.length < 8) return toast('Le mot de passe doit contenir au moins 8 caractères.', 'error');
       if (password !== confirm) return toast('Les mots de passe ne correspondent pas.', 'error');
-      account = { email, password, full_name: data.client_name };
+      if (!PHONE_MA_REGEX.test(prospectPhone)) return toast('Numéro de téléphone invalide (format 0XXXXXXXXX).', 'error');
+      if (!prospectCity) return toast('Veuillez choisir une ville.', 'error');
+
+      // On utilise le nom du prospect comme full_name du compte (modifiable ensuite).
+      account = {
+        email,
+        password,
+        full_name: data.client_name || email.split('@')[0],
+        phone: prospectPhone,
+        city: prospectCity,
+      };
+      // On injecte aussi ces infos dans la commande (au cas où l'utilisateur
+      // n'a pas re-saisi le téléphone/ville dans les champs livraison).
+      if (!data.client_phone) data.client_phone = prospectPhone;
+      if (!data.client_city) data.client_city = prospectCity;
     }
 
     if (data.client_name.length < 3) return toast('Nom complet requis (min. 3 caractères)', 'error');
-    if (!PHONE_MA_REGEX.test(data.client_phone)) return toast('Téléphone invalide (format 06XXXXXXXX)', 'error');
+    if (!PHONE_MA_REGEX.test(data.client_phone)) return toast('Téléphone invalide (format 0XXXXXXXXX)', 'error');
     if (!data.client_city) return toast('Veuillez choisir une ville', 'error');
     if (data.client_address.trim().length < 5) return toast('Veuillez renseigner une adresse complète (min. 5 caractères)', 'error');
 
@@ -240,10 +258,10 @@ export default function CartPage() {
                 <div className="p-4 rounded-xl border border-brand-200 bg-brand-50/60 space-y-4">
                   <div>
                     <h4 className="font-display font-semibold text-sm text-brand-800 flex items-center gap-2">
-                      <UserPlus size={15} aria-hidden="true" /> Créez votre compte
+                      <UserPlus size={15} aria-hidden="true" /> Créer votre compte prospect
                     </h4>
                     <p className="text-xs text-brand-700/80 mt-1">
-                      Un compte client sera créé automatiquement pour suivre votre commande et vos alertes de maintenance.
+                      Pour finaliser votre commande, créez votre compte en quelques secondes. Vous pourrez suivre votre commande et vos alertes de maintenance depuis votre espace client.
                     </p>
                   </div>
                   <div>
@@ -252,12 +270,37 @@ export default function CartPage() {
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
+                      <label className="form-label" htmlFor="prospect_phone">Numéro de téléphone *</label>
+                      <input
+                        id="prospect_phone"
+                        name="prospect_phone"
+                        type="tel"
+                        required
+                        pattern="0[6-7][0-9]{8}"
+                        className="form-input"
+                        placeholder="06XXXXXXXX"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" htmlFor="prospect_city">Ville *</label>
+                      <SearchableCitySelect
+                        id="prospect_city"
+                        name="prospect_city"
+                        value={selectedCity}
+                        onChange={setSelectedCity}
+                        placeholder="Choisir une ville"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
                       <label className="form-label" htmlFor="account_password">Mot de passe *</label>
                       <input id="account_password" name="account_password" type="password" required minLength={8} className="form-input" placeholder="8+ caractères" />
                     </div>
                     <div>
-                      <label className="form-label" htmlFor="account_confirm">Confirmer *</label>
-                      <input id="account_confirm" name="account_confirm" type="password" required minLength={8} className="form-input" placeholder="Confirmer le mot de passe" />
+                      <label className="form-label" htmlFor="account_confirm">Confirmer le mot de passe *</label>
+                      <input id="account_confirm" name="account_confirm" type="password" required minLength={8} className="form-input" placeholder="Répéter le mot de passe" />
                     </div>
                   </div>
                 </div>

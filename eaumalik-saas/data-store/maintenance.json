@@ -9,24 +9,24 @@
       "user_id": null,
       "order_id": "o-1783788835623",
       "product_id": "p1",
-      "product_name": "Purificateur d'Eau Pro Mod\u00e8le 1",
+      "product_name": "Purificateur d'Eau Pro Modèle 1",
       "install_date": "2026-07-11",
       "next_service_date": "2027-07-11",
       "service_interval_months": 6,
       "status": "actif",
-      "notes": "Installation effectu\u00e9e par l'\u00e9quipe EAUMALIK. Client satisfait.",
+      "notes": "Installation effectuée par l'équipe EAUMALIK. Client satisfait.",
       "filter_types": [
         "Sediment",
         "Carbon",
         "RO Membrane",
         "Post-Carbon"
       ],
-      "last_service_date": "2026-07-13",
+      "last_service_date": "2026-07-14",
       "last_reminder_sent": null,
       "total_cost": 2698,
-      "intervention_count": 2,
+      "intervention_count": 3,
       "created_at": "2026-07-11T16:54:00.000Z",
-      "updated_at": "2026-07-13T17:52:18.312Z"
+      "updated_at": "2026-07-14T15:38:50.775Z"
     },
     {
       "id": "mr-002",
@@ -37,12 +37,12 @@
       "user_id": null,
       "order_id": "o-1783786830908",
       "product_id": "p1",
-      "product_name": "Purificateur d'Eau Pro Mod\u00e8le 1",
+      "product_name": "Purificateur d'Eau Pro Modèle 1",
       "install_date": "2026-07-11",
       "next_service_date": "2027-01-11",
       "service_interval_months": 6,
       "status": "actif",
-      "notes": "Premi\u00e8re installation. D\u00e9montage complet du filtre en pr\u00e9sence du client.",
+      "notes": "Première installation. Démontage complet du filtre en présence du client.",
       "filter_types": [
         "Sediment",
         "Carbon",
@@ -55,6 +55,34 @@
       "intervention_count": 1,
       "created_at": "2026-07-11T16:21:00.000Z",
       "updated_at": "2026-07-11T16:21:00.000Z"
+    },
+    {
+      "id": "mr-1784044600199-n1400b",
+      "client_name": "Oumalik",
+      "client_phone": "0687234567",
+      "client_city": "Azrou",
+      "client_address": "iwueryimfsd dfjsdkjfg",
+      "user_id": "u-1783786619901",
+      "order_id": "o-1784044468581",
+      "product_id": "p1",
+      "product_name": "Purificateur d'Eau Pro Modèle 1",
+      "install_date": "2026-07-14",
+      "next_service_date": "2027-01-14",
+      "service_interval_months": 6,
+      "status": "actif",
+      "notes": "Programme de maintenance créé suite à la livraison de la commande CMD-2026-5CF046.",
+      "filter_types": [
+        "Sediment",
+        "Carbon",
+        "RO Membrane",
+        "Post-Carbon"
+      ],
+      "last_service_date": "2026-07-14",
+      "last_reminder_sent": null,
+      "total_cost": 0,
+      "intervention_count": 0,
+      "created_at": "2026-07-14T15:56:40.199Z",
+      "updated_at": "2026-07-14T15:56:40.199Z"
     }
   ],
   "interventions": [
@@ -63,8 +91,8 @@
       "record_id": "mr-001",
       "intervention_type": "inspection",
       "performed_at": "2026-07-11T16:55:00.000Z",
-      "technician_name": "\u00c9quipe EAUMALIK",
-      "description": "Installation initiale et mise en service. Test de pression et qualit\u00e9 d'eau conformes (TDS < 50 ppm).",
+      "technician_name": "Équipe EAUMALIK",
+      "description": "Installation initiale et mise en service. Test de pression et qualité d'eau conformes (TDS < 50 ppm).",
       "parts_used": [],
       "cost": 0,
       "next_service_date": "2027-01-11",
@@ -76,8 +104,8 @@
       "record_id": "mr-002",
       "intervention_type": "inspection",
       "performed_at": "2026-07-11T16:25:00.000Z",
-      "technician_name": "\u00c9quipe EAUMALIK",
-      "description": "Installation initiale et mise en service. Configuration pH optimale, formation du client effectu\u00e9e.",
+      "technician_name": "Équipe EAUMALIK",
+      "description": "Installation initiale et mise en service. Configuration pH optimale, formation du client effectuée.",
       "parts_used": [],
       "cost": 0,
       "next_service_date": "2027-01-11",
@@ -96,6 +124,32 @@
       "next_service_date": "2027-07-11",
       "outcome": "completed",
       "created_at": "2026-07-13T17:52:18.312Z"
+    },
+    {
+      "id": "mi-1784043530775-rbtdlf",
+      "record_id": "mr-001",
+      "intervention_type": "inspection",
+      "performed_at": "2026-07-14T15:38:50.775Z",
+      "technician_name": "hassan",
+      "description": "Inspection",
+      "parts_used": [],
+      "cost": 0,
+      "next_service_date": "2027-07-11",
+      "outcome": "completed",
+      "created_at": "2026-07-14T15:38:50.775Z"
+    },
+    {
+      "id": "mi-1784044600199-v1qcjk",
+      "record_id": "mr-1784044600199-n1400b",
+      "intervention_type": "inspection",
+      "performed_at": "2026-07-14T15:56:40.199Z",
+      "technician_name": "Équipe EAUMALIK",
+      "description": "Installation et mise en service suite à la commande CMD-2026-5CF046.",
+      "parts_used": [],
+      "cost": 0,
+      "next_service_date": "2027-01-14",
+      "outcome": "completed",
+      "created_at": "2026-07-14T15:56:40.199Z"
     }
   ]
 }

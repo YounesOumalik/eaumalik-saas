@@ -307,15 +307,16 @@ function MaintenanceDetailModal({
       onClose={onClose}
       title={`Maintenance — ${record.product_name}`}
       icon={<Wrench size={18} />}
-      size="xl"
+      size="2xl"
+      maxHeight="tall"
       footer={
-        <div className="flex flex-col sm:flex-row gap-2 w-full">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {canManage && (
-            <button onClick={saveMeta} disabled={saving} className="btn-primary flex-1 justify-center py-2.5 inline-flex items-center gap-1.5">
-              <CheckCircle2 size={14} /> Enregistrer
+            <button onClick={saveMeta} disabled={saving} className="btn-primary btn-sm inline-flex items-center gap-1.5">
+              <CheckCircle2 size={13} /> Enregistrer
             </button>
           )}
-          <button onClick={onClose} className="btn-outline flex-1 justify-center py-2.5 sm:flex-none sm:min-w-[140px]">
+          <button onClick={onClose} className="btn-outline btn-sm">
             Fermer
           </button>
         </div>
@@ -334,17 +335,19 @@ function MaintenanceDetailModal({
       </div>
 
       {/* Filtres / types */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {record.filter_types?.map(f => (
-          <span key={f} className="badge badge-actif">{f}</span>
-        ))}
-      </div>
+      {record.filter_types && record.filter_types.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {record.filter_types.map(f => (
+            <span key={f} className="badge badge-actif">{f}</span>
+          ))}
+        </div>
+      )}
 
       {/* Historique des interventions */}
       <h3 className="font-display font-semibold text-sm mb-3 flex items-center gap-2">
         <CalendarClock size={14} /> Historique des interventions ({interventions.length})
       </h3>
-      <div className="space-y-2 mb-4 max-h-64 overflow-y-auto pr-1">
+      <div className="space-y-2 mb-4 max-h-72 overflow-y-auto pr-1">
         {interventions.length === 0 && (
           <div className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>Aucune intervention enregistrée.</div>
         )}
@@ -376,33 +379,87 @@ function MaintenanceDetailModal({
 
       {/* Formulaire d'ajout d'intervention */}
       {canManage && (
-        <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(8,145,178,0.06)', border: '1px solid rgba(8,145,178,0.18)' }}>
+        <div className="rounded-xl p-4 mb-4" style={{ background: 'rgba(8,145,178,0.06)', border: '1px solid rgba(8,145,178,0.18)' }}>
           {!showAdd ? (
-            <button onClick={() => setShowAdd(true)} className="btn-primary btn-sm inline-flex items-center gap-1.5 w-full justify-center">
+            <button onClick={() => setShowAdd(true)} className="btn-primary btn-sm inline-flex items-center gap-1.5">
               <Plus size={14} /> Ajouter une intervention
             </button>
           ) : (
-            <div className="space-y-3">
-              <div className="font-semibold text-sm">Nouvelle intervention</div>
-              <div className="grid sm:grid-cols-2 gap-2">
-                <select value={itType} onChange={e => setItType(e.target.value as InterventionType)} className="input">
-                  {Object.entries(INTERVENTION_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-                <input value={itTech} onChange={e => setItTech(e.target.value)} placeholder="Technicien" className="input" />
-                <input type="number" min={0} value={itCost} onChange={e => setItCost(e.target.value)} placeholder="Coût (DH)" className="input" />
-                <input type="date" value={itNext} onChange={e => setItNext(e.target.value)} className="input" />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-base">Nouvelle intervention</div>
+                <button onClick={() => setShowAdd(false)} className="btn-outline btn-sm">Annuler</button>
               </div>
-              <input value={itParts} onChange={e => setItParts(e.target.value)} placeholder="Pièces changées (séparées par virgule)" className="input" />
-              <textarea value={itDesc} onChange={e => setItDesc(e.target.value)} placeholder="Description de l'intervention..." rows={2} className="input" />
-              <div className="flex items-center gap-2">
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Résultat :</span>
-                {(['completed', 'pending', 'failed'] as InterventionOutcome[]).map(o => (
-                  <button key={o} onClick={() => setItOutcome(o)} className={itOutcome === o ? 'btn-primary btn-sm' : 'btn-outline btn-sm'}>{OUTCOME_LABELS[o]}</button>
-                ))}
-                <button onClick={addIntervention} disabled={saving} className="btn-success btn-sm ml-auto inline-flex items-center gap-1.5">
-                  <CheckCircle2 size={13} /> Enregistrer
+
+              {/* Ligne 1 : 4 champs alignes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="form-label">Type d&apos;intervention</label>
+                  <select value={itType} onChange={e => setItType(e.target.value as InterventionType)} className="form-input">
+                    {Object.entries(INTERVENTION_LABELS).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Technicien</label>
+                  <input value={itTech} onChange={e => setItTech(e.target.value)} placeholder="Nom du technicien" className="form-input" />
+                </div>
+                <div>
+                  <label className="form-label">Coût (DH)</label>
+                  <input type="number" min={0} value={itCost} onChange={e => setItCost(e.target.value)} placeholder="0" className="form-input" />
+                </div>
+                <div>
+                  <label className="form-label">Prochaine intervention</label>
+                  <input type="date" value={itNext} onChange={e => setItNext(e.target.value)} className="form-input" />
+                </div>
+              </div>
+
+              {/* Ligne 2 : Description sur toute la largeur, plus grande */}
+              <div>
+                <label className="form-label">Description de l&apos;intervention</label>
+                <textarea
+                  value={itDesc}
+                  onChange={e => setItDesc(e.target.value)}
+                  placeholder="Décrivez en détail l'intervention réalisée (problème constaté, actions menées, recommandations...)"
+                  rows={5}
+                  className="form-input resize-y min-h-[140px]"
+                />
+              </div>
+
+              {/* Ligne 3 : Pièces changées sur toute la largeur */}
+              <div>
+                <label className="form-label">Pièces changées</label>
+                <input
+                  value={itParts}
+                  onChange={e => setItParts(e.target.value)}
+                  placeholder="Filtre charbon 10 pouces, Joint torique, Membrane (séparées par virgule)"
+                  className="form-input"
+                />
+              </div>
+
+              {/* Ligne 4 : Résultat + Enregistrer */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Résultat :</span>
+                  {(['completed', 'pending', 'failed'] as InterventionOutcome[]).map(o => (
+                    <button
+                      key={o}
+                      type="button"
+                      onClick={() => setItOutcome(o)}
+                      className={itOutcome === o ? 'btn-primary btn-sm' : 'btn-outline btn-sm'}
+                    >
+                      {OUTCOME_LABELS[o]}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={addIntervention}
+                  disabled={saving}
+                  className="btn-success inline-flex items-center gap-1.5 px-5 py-2.5 sm:ml-auto"
+                >
+                  <CheckCircle2 size={14} /> Enregistrer l&apos;intervention
                 </button>
               </div>
             </div>
@@ -410,23 +467,6 @@ function MaintenanceDetailModal({
         </div>
       )}
 
-      {/* Notes + statut */}
-      {canManage && (
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Statut du programme</label>
-            <select value={status} onChange={e => setStatus(e.target.value as MaintenanceRecord['status'])} className="input mt-1">
-              {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Notes</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="input mt-1" placeholder="Notes internes..." />
-          </div>
-        </div>
-      )}
-    </Dialog>
+      </Dialog>
   );
 }

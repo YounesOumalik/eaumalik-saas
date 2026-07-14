@@ -75,20 +75,27 @@ export interface AuthUser {
   email: string;
   role: 'client' | 'admin';
   full_name: string | null;
+  /** Rôle métier réel (admin, client, technician, sales, stock_manager, admin_assistant…)
+   *  en mode dev/mock. Pour Supabase Auth réel, fallback sur `role`. */
+  real_role?: string;
+  permissions?: Record<string, boolean> | null;
 }
 
 /**Renvoie l'utilisateur authentifie via Supabase Auth (ou session dev en mode mock),
- * ou jette AuthError(401).
+ * ou jete AuthError(401).
  */
 export async function requireUser(): Promise<AuthUser> {
   const dev = await getDevUserFromCookie();
   if (dev) {
     // Le helper dev préserve le rôle métier réel ; on le normalise ici en
-    // 'admin' | 'client' pour l'API d'autorisation (requireAdmin, etc.).
+    // 'admin' | 'client' pour l'API d'autorisation (requireAdmin, etc.) mais
+    // on expose aussi `real_role` + `permissions` pour les gates par permission.
     return {
       id: dev.id,
       email: dev.email,
       role: dev.role === 'admin' ? 'admin' : 'client',
+      real_role: dev.role,
+      permissions: dev.permissions ?? null,
       full_name: dev.full_name,
     };
   }
@@ -129,3 +136,43 @@ export async function requireAdmin(): Promise<AuthUser> {
   }
   return user;
 }
+
+/** Renvoie les permissions effectives (admin = tout, sinon les booleens du profil). */
+function effectivePermissions(user: AuthUser): Record<string, boolean> {
+  const isAdmin = user.role === 'admin';
+  const p = (user.permissions ?? {}) as Record<string, boolean>;
+  const out: Record<string, boolean> = {};
+  for (const k of [
+    'can_view_products',
+    'can_edit_products',
+    'can_validate_orders',
+    'can_follow_prospects',
+    'can_view_comptabilite',
+    'can_view_stocks',
+  ]) {
+    // Admin : toujours true. Sinon : valeur explicite du profil (false / true),
+    // fallback à false si non renseigne. On n'utilise plus `?? isAdmin` qui
+    // laissait passer un `false` explicite quand meme (cf. user admin seed
+    // avec permissions=false) — comportement désormais attendu et cohérent.
+    out[k] = isAdmin ? true : p[k] === true;
+  }
+  return out;
+}
+
+/**
+ * Gate par permission : exige un utilisateur authentifie (admin OU ayant la
+ * permission demandée), sinon throw AuthError(403).
+ *
+ * Utilisé par les pages /crm/* pour accepter aussi du personnel non-admin
+ * (sales, technician…) lorsqu'il dispose de la permission correspondante.
+ */
+export async function requirePermission(permission: keyof ReturnType<typeof effectivePermissions>): Promise<AuthUser> {
+  const user = await requireUser();
+  const perms = effectivePermissions(user);
+  if (!perms[permission]) {
+    throw new AuthError('forbidden', `Permission requise : ${permission}.`);
+  }
+  return user;
+}
+
+export { effectivePermissions };

@@ -48,5 +48,5 @@ export function slugify(input: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** Validation numéro téléphone marocain (06/07, 10 chiffres) */
-export const PHONE_MA_REGEX = /^0[6-7][0-9]{8}$/;
+/** Validation numéro téléphone marocain (10 chiffres, commençant par 0) */
+export const PHONE_MA_REGEX = /^0[0-9]{9}$/;
