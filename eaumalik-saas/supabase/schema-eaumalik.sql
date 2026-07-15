@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS eaumalik.products (
   image_url TEXT,
   -- data: URL locale (mock ou upload différé). Nullable.
   image_url_local TEXT,
+  -- Prix d'achat en gros (gros DH). Réservé au super admin via Server Action.
+  -- Default 0 si non renseigné.
+  wholesale_price NUMERIC(10,2) NOT NULL DEFAULT 0,
   specs JSONB DEFAULT '[]'::jsonb,
   is_featured BOOLEAN DEFAULT false,
   stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
