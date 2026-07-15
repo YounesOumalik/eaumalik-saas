@@ -416,26 +416,41 @@ export default function StaffManager({
                     <td className="text-sm">{member.phone || '—'}</td>
                     <td>
                       <div className="flex flex-wrap gap-1 max-w-sm">
-                        {member.permissions?.can_view_products && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-success-soft text-success">Voir Catalogue</span>
-                        )}
-                        {member.permissions?.can_edit_products && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-success-soft text-success">Éditer Catalogue</span>
-                        )}
-                        {member.permissions?.can_validate_orders && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-primary-soft text-primary-light">Valider Commandes</span>
-                        )}
-                        {member.permissions?.can_follow_prospects && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-warning-soft text-warning">Prospection/CRM</span>
-                        )}
-                        {member.permissions?.can_view_stocks && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-500/15 text-purple-400">Voir Stocks</span>
-                        )}
-                        {member.permissions?.can_view_comptabilite && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/15 text-indigo-400">Voir Compta.</span>
-                        )}
-                        {(member.role === 'admin' || member.role === 'administrator') && (
+                        {member.role === 'admin' ? (
+                          // Superadmin : badge unique « Tous les Droits ».
                           <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-rose-500/15 text-rose-400 font-bold">Tous les Droits</span>
+                        ) : member.role === 'administrator' ? (
+                          // Administrateur : badge unique « Droits Étendus »,
+                          // plus la note « sauf Superadmin » pour clarifier.
+                          <>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/15 text-amber-400 font-bold">Droits Étendus</span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-rose-500/15 text-rose-400">Hors Superadmin</span>
+                          </>
+                        ) : (
+                          // Personnel classique : on liste les permissions activées.
+                          <>
+                            {member.permissions?.can_view_products && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-success-soft text-success">Voir Catalogue</span>
+                            )}
+                            {member.permissions?.can_edit_products && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-success-soft text-success">Éditer Catalogue</span>
+                            )}
+                            {member.permissions?.can_validate_orders && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-primary-soft text-primary-light">Valider Commandes</span>
+                            )}
+                            {member.permissions?.can_follow_prospects && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-warning-soft text-warning">Prospection/CRM</span>
+                            )}
+                            {member.permissions?.can_view_stocks && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-500/15 text-purple-400">Voir Stocks</span>
+                            )}
+                            {member.permissions?.can_view_comptabilite && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/15 text-indigo-400">Voir Compta.</span>
+                            )}
+                            {!member.permissions && (
+                              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
