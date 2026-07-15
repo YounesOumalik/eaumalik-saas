@@ -15,6 +15,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ShoppingBag,
+  ExternalLink,
   type LucideIcon,
 } from 'lucide-react';
 import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
@@ -156,7 +157,17 @@ export default function AdminShell({ title, children }: { title: string; childre
             })}
           </nav>
 
-          <div className="admin-sidebar__footer">
+          <d<Link
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sidebar-link"
+              title={collapsed ? 'Voir le site' : undefined}
+            >
+              <ExternalLink size={16} aria-hidden="true" className="shrink-0" />
+              {!collapsed && <span className="sidebar-link__label">Voir le site</span>}
+            </Link>
+            iv className="admin-sidebar__footer">
             {session ? (
               <button
                 type="button"
