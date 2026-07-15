@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS eaumalik.products (
   price NUMERIC(10,2) NOT NULL CHECK (price >= 0),
   category TEXT NOT NULL CHECK (category IN ('purificateurs','industriel','consommables')),
   image_url TEXT,
+  -- data: URL locale (mock ou upload différé). Nullable.
+  image_url_local TEXT,
   specs JSONB DEFAULT '[]'::jsonb,
   is_featured BOOLEAN DEFAULT false,
   stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
