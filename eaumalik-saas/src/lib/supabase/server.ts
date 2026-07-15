@@ -84,6 +84,19 @@ export interface AuthUser {
   permissions?: Record<string, boolean> | null;
 }
 
+/** Liste des rôles métier reconnus (synchro avec le CHECK constraint
+ *  users_role_check côté DB). */
+export const ALL_ROLES = [
+  'client',
+  'admin',
+  'administrator',
+  'sales',
+  'technician',
+  'stock_manager',
+  'admin_assistant',
+] as const;
+export type RealRole = (typeof ALL_ROLES)[number];
+
 /**Renvoie l'utilisateur authentifie via Supabase Auth (ou session dev en mode mock),
  * ou jete AuthError(401).
  */
@@ -158,7 +171,8 @@ export async function requireSuperAdmin(): Promise<AuthUser> {
 /** Renvoie les permissions effectives (admin ou administrator = tout, sinon les booleens du profil). */
 function effectivePermissions(user: AuthUser): Record<string, boolean> {
   // admin-staff (superadmin OU administrator) : tous les droits à true.
-  const isAdminStaff = user.role === 'admin' || user.role === 'administrator';
+  const r = user.real_role ?? user.role;
+  const isAdminStaff = r === 'admin' || r === 'administrator';
   const p = (user.permissions ?? {}) as Record<string, boolean>;
   const out: Record<string, boolean> = {};
   for (const k of [
