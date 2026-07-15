@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -34,6 +34,7 @@ const FormSchema = z.object({
   is_featured: z.boolean().optional(),
   is_out_of_stock: z.boolean().optional(),
   is_archived: z.boolean().optional(),
+  price_on_request: z.boolean().optional(),
 });
 type FormData = z.infer<typeof FormSchema>;
 
@@ -54,9 +55,10 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [imageUrl, setImageUrl] = useState<string>('');
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, reset, control, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(FormSchema),
   });
+  const priceOnRequest = useWatch({ control, name: 'price_on_request', defaultValue: false });
 
   // Reset form on open / product change
   useEffect(() => {
@@ -72,6 +74,7 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
           is_featured: product.is_featured,
           is_out_of_stock: !!product.is_out_of_stock,
           is_archived: !!product.is_archived,
+          price_on_request: !!product.price_on_request,
         });
         setImageUrl(product.image_url || '');
       } else {
@@ -85,6 +88,7 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
           is_featured: false,
           is_out_of_stock: false,
           is_archived: false,
+          price_on_request: false,
         });
         setImageUrl('');
       }
@@ -125,6 +129,7 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
         is_featured: !!data.is_featured,
         is_out_of_stock: !!data.is_out_of_stock,
         is_archived: !!data.is_archived,
+        price_on_request: !!data.price_on_request,
         // Image : soit on garde l'URL deja en place, soit on envoie un data:
         // URL (uniquement en mock pour eviter l'upload Supabase Storage).
         image_url_local: imageUrl.startsWith('data:') ? imageUrl : null,
@@ -212,16 +217,22 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
               {errors.stock && <p className="text-xs text-danger mt-1">{errors.stock.message}</p>}
             </div>
             <div>
-              <label className="form-label">Prix de vente (DH) *</label>
+              <label className="form-label">Prix de vente (DH) {priceOnRequest ? '' : '*'}</label>
               <input
                 type="number"
                 step="0.01"
                 min={0}
                 className="form-input"
-                placeholder="1999"
+                placeholder={priceOnRequest ? 'Sur devis' : '1999'}
+                disabled={priceOnRequest}
                 {...register('price')}
               />
-              {errors.price && <p className="text-xs text-danger mt-1">{errors.price.message}</p>}
+              {priceOnRequest && (
+                <p className="text-[10px] mt-1 font-semibold" style={{ color: 'var(--ocean-600)' }}>
+                  Le prix sera affiché « Sur devis » en boutique.
+                </p>
+              )}
+              {!priceOnRequest && errors.price && <p className="text-xs text-danger mt-1">{errors.price.message}</p>}
             </div>
             {canEditWholesalePrice && (
               <div>
@@ -290,6 +301,12 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
                 <input type="checkbox" {...register('is_featured')} />
                 <span className="text-sm flex items-center gap-1">
                   <Star size={12} className="text-warning" /> Produit phare
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" {...register('price_on_request')} />
+                <span className="text-sm flex items-center gap-1" style={{ color: 'var(--ocean-600)' }}>
+                  💰 Prix sur devis
                 </span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">

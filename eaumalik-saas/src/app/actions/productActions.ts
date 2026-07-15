@@ -37,6 +37,7 @@ const ProductInputSchema = z.object({
   stock_alert_threshold: z.number().int().nonnegative().optional(),
   filter_lifespan_months: z.number().int().positive().nullable().optional(),
   wholesale_price: z.number().nonnegative().optional(),
+  price_on_request: z.boolean().optional(),
   is_out_of_stock: z.boolean().optional(),
   is_archived: z.boolean().optional(),
 });
@@ -130,6 +131,7 @@ export async function createProductAction(raw: unknown) {
       stock_alert_threshold: safeData.stock_alert_threshold ?? 5,
       filter_lifespan_months: safeData.filter_lifespan_months ?? null,
       wholesale_price: safeData.wholesale_price ?? 0,
+      price_on_request: safeData.price_on_request ?? false,
       is_out_of_stock: safeData.is_out_of_stock ?? false,
       is_archived: safeData.is_archived ?? false,
     });

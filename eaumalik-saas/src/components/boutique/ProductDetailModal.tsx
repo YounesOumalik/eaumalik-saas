@@ -90,8 +90,8 @@ export default function ProductDetailModal({ product, onClose }: Props) {
           <h2 className="font-serif text-2xl md:text-3xl font-semibold leading-tight text-heading">
             {product.name}
           </h2>
-          <span className="text-2xl font-bold whitespace-nowrap" style={{ color: 'var(--primary)' }}>
-            {formatCurrency(product.price)}
+          <span className="text-2xl font-bold whitespace-nowrap" style={{ color: product.price_on_request ? 'var(--ocean-600)' : 'var(--primary)' }}>
+            {product.price_on_request ? 'Sur devis' : formatCurrency(product.price)}
           </span>
         </div>
 
@@ -117,18 +117,34 @@ export default function ProductDetailModal({ product, onClose }: Props) {
         </div>
 
         <div className="mt-8 flex flex-col sm:flex-row gap-4">
-          <a
-            href="#contact"
-            onClick={e => {
-              e.preventDefault();
-              onClose();
-              document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="flex-1 py-4 rounded-xl btn-primary text-sm font-bold uppercase tracking-wide text-center"
-          >
-            Demander un devis
-          </a>
-          <AddToCartButton product={product} size="lg" className="flex-1 justify-center" requireAuth />
+          {product.price_on_request ? (
+            <a
+              href="#contact"
+              onClick={e => {
+                e.preventDefault();
+                onClose();
+                document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex-1 py-4 rounded-xl btn-primary text-sm font-bold uppercase tracking-wide text-center"
+            >
+              Demander un devis
+            </a>
+          ) : (
+            <>
+              <a
+                href="#contact"
+                onClick={e => {
+                  e.preventDefault();
+                  onClose();
+                  document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="flex-1 py-4 rounded-xl btn-primary text-sm font-bold uppercase tracking-wide text-center"
+              >
+                Demander un devis
+              </a>
+              <AddToCartButton product={product} size="lg" className="flex-1 justify-center" requireAuth />
+            </>
+          )}
         </div>
       </div>
     </Dialog>

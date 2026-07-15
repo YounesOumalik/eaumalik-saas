@@ -29,11 +29,12 @@ export default function AddToCartButton({
   const { session } = useSupabaseAuth();
 
   const isOutOfStock = product.stock === 0 || product.is_out_of_stock;
+  const isPriceOnRequest = !!product.price_on_request;
 
   const onClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (disabled || isOutOfStock) return;
+    if (disabled || isOutOfStock || isPriceOnRequest) return;
 
     // Politique produit : un compte client est OBLIGATOIRE pour tout achat.
     if (requireAuth && !session) {
@@ -63,14 +64,16 @@ export default function AddToCartButton({
   return (
     <button
       onClick={onClick}
-      disabled={disabled || isOutOfStock}
+      disabled={disabled || isOutOfStock || isPriceOnRequest}
       className={`btn-primary inline-flex items-center gap-2 ${sizeClass} ${className} disabled:opacity-50 disabled:cursor-not-allowed`}
       aria-label={
-        isOutOfStock
-          ? 'Produit en rupture'
-          : showLoginLabel
-            ? `Se connecter pour ajouter ${product.name} au panier`
-            : `Ajouter ${product.name} au panier`
+        isPriceOnRequest
+          ? `${product.name} — prix sur devis`
+          : isOutOfStock
+            ? 'Produit en rupture'
+            : showLoginLabel
+              ? `Se connecter pour ajouter ${product.name} au panier`
+              : `Ajouter ${product.name} au panier`
       }
     >
       {showLoginLabel ? (
@@ -79,7 +82,7 @@ export default function AddToCartButton({
         <ShoppingCart size={size === 'sm' ? 12 : 14} aria-hidden="true" />
       )}
       <span>
-        {isOutOfStock ? 'Rupture' : showLoginLabel ? 'Se connecter' : 'Ajouter'}
+        {isPriceOnRequest ? 'Sur devis' : isOutOfStock ? 'Rupture' : showLoginLabel ? 'Se connecter' : 'Ajouter'}
       </span>
     </button>
   );

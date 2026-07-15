@@ -30,6 +30,7 @@ export default function ProductCard({ product }: { product: Product }) {
     e.preventDefault();
     e.stopPropagation();
     if (product.stock === 0 || product.is_out_of_stock) return;
+    if (product.price_on_request) return;
     // Politique produit : un compte client est obligatoire pour tout achat.
     if (!session) {
       toast('Veuillez vous connecter pour ajouter ce produit au panier.', 'info');
@@ -117,19 +118,29 @@ export default function ProductCard({ product }: { product: Product }) {
 
           <div className="mt-auto flex items-center justify-between">
             <div>
-              <span className="text-xs text-meta">A partir de</span>
-              <span className="text-2xl font-bold ml-1" style={{ color: 'var(--primary)' }}>
-                {outOfStock ? '-' : formatCurrency(product.price)}
-              </span>
+              {product.price_on_request ? (
+                <span className="text-2xl font-bold" style={{ color: 'var(--ocean-600)' }}>
+                  Sur devis
+                </span>
+              ) : (
+                <>
+                  <span className="text-xs text-meta">A partir de</span>
+                  <span className="text-2xl font-bold ml-1" style={{ color: 'var(--primary)' }}>
+                    {outOfStock ? '-' : formatCurrency(product.price)}
+                  </span>
+                </>
+              )}
             </div>
             <button
               type="button"
               onClick={handleAdd}
-              disabled={outOfStock}
+              disabled={outOfStock || !!product.price_on_request}
               aria-label={
-                session
-                  ? `Ajouter ${product.name} au panier`
-                  : `Se connecter pour ajouter ${product.name} au panier`
+                product.price_on_request
+                  ? `${product.name} — prix sur devis`
+                  : session
+                    ? `Ajouter ${product.name} au panier`
+                    : `Se connecter pour ajouter ${product.name} au panier`
               }
               className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: 'var(--primary-glow)', color: 'var(--primary)' }}
