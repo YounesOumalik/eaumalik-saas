@@ -157,7 +157,8 @@ export default function AdminShell({ title, children }: { title: string; childre
             })}
           </nav>
 
-          <d<Link
+          <div className="admin-sidebar__footer">
+            <Link
               href="/"
               target="_blank"
               rel="noopener noreferrer"
@@ -167,11 +168,19 @@ export default function AdminShell({ title, children }: { title: string; childre
               <ExternalLink size={16} aria-hidden="true" className="shrink-0" />
               {!collapsed && <span className="sidebar-link__label">Voir le site</span>}
             </Link>
-            iv className="admin-sidebar__footer">
             {session ? (
               <button
                 type="button"
-                onClick={async () => { await signOut(); }}
+                onClick={async () => {
+                  await signOut();
+                  // Force la navigation vers /login : un simple signOut() met à
+                  // jour l'état client, mais l'AdminLayout est un Server Component
+                  // qui ne re-vérifie requireAdmin() qu'au prochain render. Sans
+                  // navigation explicite, l'utilisateur reste sur la page admin
+                  // protégée jusqu'à un refresh manuel.
+                  router.replace('/login');
+                  router.refresh();
+                }}
                 className="sidebar-link w-full text-left"
                 title={collapsed ? 'Déconnexion' : undefined}
               >
