@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Droplets } from 'lucide-react';
@@ -24,6 +24,7 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -58,11 +59,16 @@ export default function Navbar() {
 
   // Rôle réel (admin, client, technician, sales…) prioritaire sur isAdmin.
   const userRole = role || (isAdmin ? 'admin' : 'client');
-  const hasAnyPermission = !!permissions && Object.values(permissions).some(Boolean);
-  // Un superadmin OU un administrator ou tout staff avec au moins une
-  // permission activée voit la barre d'administration.
-  const isStaff = userRole !== 'client'
-    && (userRole === 'admin' || userRole === 'administrator' || hasAnyPermission);
+  // L'interface d'administration (dropdown navbar + onglets AdminShell) est
+  // strictement réservée aux rôles admin-staff (superadmin + administrator).
+  // Le personnel classique (commercial, technicien, etc.) n'y a plus accès,
+  // même s'il dispose de permissions ciblées sur des sous-modules —
+  // l'interface d'admin reste unifiée.
+  const isAdminStaff = userRole === 'admin' || userRole === 'administrator';
+  // Conservé pour la compatibilité (utilisé ailleurs) : vrai si l'utilisateur
+  // est du personnel staff (rôle non-client). Devient équivalent à isAdminStaff
+  // désormais : le personnel classique ne voit plus le dropdown "Administration".
+  const isStaff = isAdminStaff;
 
   // Source de vérité partagée avec AdminShell — toute modification
   // (ajout, suppression, permission, libellé) se répercute ici aussi.
@@ -100,7 +106,15 @@ export default function Navbar() {
                 <Link href="/client" className={linkClass}>Mon Espace</Link>
               )}
               <button
-                onClick={async () => { await signOut(); window.location.href = '/'; }}
+                onClick={async () => {
+                  await signOut();
+                  // signOut() a déjà vidé le state React (mise à jour
+                  // optimiste). On force le re-fetch des server components
+                  // pour que les pages cachées (panier, compte, etc.)
+                  // re-rendent l'état « déconnecté », puis on redirige.
+                  router.refresh();
+                  router.push('/');
+                }}
                 className="px-3 py-2 rounded-full text-sm font-semibold transition-colors"
                 style={{ color: 'var(--danger)' }}
               >
@@ -158,7 +172,12 @@ export default function Navbar() {
                   <Link href="/client" className="mobile-link" onClick={() => setMobileOpen(false)}>Mon Espace</Link>
                 )}
                 <button
-                  onClick={async () => { await signOut(); window.location.href = '/'; setMobileOpen(false); }}
+                  onClick={async () => {
+                    setMobileOpen(false);
+                    await signOut();
+                    router.refresh();
+                    router.push('/');
+                  }}
                   className="mobile-link text-left font-semibold cursor-pointer w-full"
                   style={{ color: 'var(--danger)' }}
                 >
