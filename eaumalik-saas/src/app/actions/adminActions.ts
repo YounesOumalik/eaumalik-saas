@@ -114,8 +114,8 @@ export async function createStaffUserAction(raw: unknown) {
       };
     }
 
-    // 2) Création côté auth (peut échouer si l'utilisateur existe déjà dans
-    // auth.users alors qu'il a été supprimé du profil public → on rollback).
+    // 2) Création côté auth (le trigger handle_new_user va créer un profil
+    // 'client' automatique ; on le remplacera juste après).
     const { data, error } = await supabase.auth.admin.createUser({
       email: parsed.data.email,
       password: parsed.data.password,
@@ -131,16 +131,17 @@ export async function createStaffUserAction(raw: unknown) {
     }
     createdUserId = data.user.id;
 
-    // 3) Insertion du profil (insert simple, pas d'upsert : si conflit, on rollback l'auth).
-    const { error: insertErr } = await supabase.from('users').insert({
-      id: data.user.id,
+    // 3) Mise à jour du profil pour appliquer le bon rôle + permissions.
+    //    handle_new_user a déjà créé un profil 'client' ; on ne fait pas
+    //    d'INSERT (ça ferait users_pkey duplicate) mais un UPDATE.
+    const { error: updateErr } = await supabase.from('users').update({
       email: parsed.data.email,
       full_name: parsed.data.full_name,
       phone: parsed.data.phone || null,
       role: parsed.data.role,
       permissions: parsed.data.permissions,
-    });
-    if (insertErr) throw insertErr;
+    }).eq('id', data.user.id);
+    if (updateErr) throw updateErr;
     revalidatePath('/admin/personnels');
     return { success: true as const, staff: data.user };
   } catch (err: any) {
