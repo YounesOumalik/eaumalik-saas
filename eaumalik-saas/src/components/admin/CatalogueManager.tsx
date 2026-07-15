@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -409,6 +410,7 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
   const toast = useToast();
   const [permissions, setPermissions] = useState<any>(null);
   const [role, setRole] = useState<string>('');
+  const router = useRouter();
 
   useEffect(() => {
     getCurrentUserPermissionsAction().then(res => {
@@ -516,26 +518,50 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
   };
 
   /**
-   * Pousse l'ordre : applique la nouvelle liste au state puis appelle
-   * l'action serveur pour persister. Les sort_order sont réécrits en
-   * pas de 10 pour permettre des insertions ultérieures sans renuméroter.
+   * Pousse l'ordre : met à jour le state local, persiste via l'action
+   * serveur, puis déclenche un `router.refresh()` qui ré-exécute le
+   * Server Component parent (liste complète refetchée depuis Supabase
+   * avec le nouvel ordre) et re-passe `initialProducts` au client.
+   *
+   * Pas besoin de manipuler les sort_order des produits hors-filtrage :
+   * le `revalidatePath` côté serveur invalide le cache Next, et
+   * `router.refresh()` force le re-fetch de la liste globale.
+   *
+   * @param newVisibleOrder  liste des produits DANS LE NOUVEL ORDRE,
+   *                        restreinte au sous-ensemble visible
    */
-  const persistNewOrder = async (newOrder: Product[]) => {
+  const persistNewOrder = async (newVisibleOrder: Product[]) => {
     if (reordering) return;
     setReordering(true);
     try {
-      const items = newOrder.map((p, idx) => ({
+      // 1) Mise à jour optimiste : on réordonne la liste locale en gardant
+      //    l'ordre relatif des produits non visibles.
+      const visibleIds = new Set(newVisibleOrder.map(p => p.id));
+      const hidden = products.filter(p => !visibleIds.has(p.id));
+      const newLocalOrder = [...newVisibleOrder, ...hidden];
+      // On conserve les sort_order EXISTANTS des produits cachés pour
+      // ne pas les écraser inutilement (ils seront de toute façon
+      // rafraîchis après le router.refresh).
+      setProducts(newLocalOrder);
+
+      // 2) Persistance serveur : on n'envoie QUE les produits visibles
+      //    avec un sort_order = index * 10 dans la liste GLOBALE.
+      //    Si on n'est pas filtré, newLocalOrder === products et tout va bien.
+      //    Si on est filtré, on calcule les sort_order comme si la liste
+      //    complète était [visible réordonné, ...hidden].
+      const items = newLocalOrder.map((p, idx) => ({
         id: p.id,
         sort_order: idx * 10,
       }));
-      // Mise à jour optimiste du state local avec les nouveaux sort_order
-      setProducts(prev => prev.map(p => {
-        const it = items.find(i => i.id === p.id);
-        return it ? { ...p, sort_order: it.sort_order } : p;
-      }));
+
       const res = await reorderProductsAction(items);
       if (res.success) {
         toast('Ordre enregistré', 'success');
+        // 3) Re-fetch depuis le serveur pour aligner la state locale sur la
+        //    réalité DB (au cas où d'autres produits auraient bougé en //
+        //    et pour éviter toute divergence entre l'ordre optimiste et
+        //    l'ordre réel).
+        router.refresh();
       } else {
         toast('Erreur : ' + res.error, 'error');
       }
