@@ -106,8 +106,8 @@ export default function AdminShell({ title, children }: { title: string; childre
   }, []);
 
   return (
-    <div className="pt-0 min-h-[calc(100vh-4rem)]">
-      <div className="flex" style={{ minHeight: 'calc(100vh - 4rem)' }}>
+    <div className="pt-0 min-h-screen">
+      <div className="flex" style={{ minHeight: '100vh' }}>
         <aside
           className={`admin-sidebar ${collapsed ? 'is-collapsed' : ''}`}
           aria-label="Navigation administration"

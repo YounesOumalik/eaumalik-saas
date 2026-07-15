@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Providers from '@/components/shared/Providers';
-import Navbar from '@/components/shared/Navbar';
-import Footer from '@/components/shared/Footer';
+import SiteChrome from '@/components/shared/SiteChrome';
 
 export const metadata: Metadata = {
   title: {
@@ -80,9 +79,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <Providers>
-          <Navbar />
-          <main className="min-h-screen pt-16">{children}</main>
-          <Footer />
+          <SiteChrome>{children}</SiteChrome>
         </Providers>
       </body>
     </html>
