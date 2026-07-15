@@ -34,12 +34,52 @@ CREATE VIEW public.company_profile AS SELECT * FROM eaumalik.company_profile;
 CREATE VIEW public.maintenance_alerts AS SELECT * FROM eaumalik.maintenance_alerts;
 CREATE VIEW public.messages AS SELECT * FROM eaumalik.messages;
 CREATE VIEW public.news AS SELECT * FROM eaumalik.news;
+-- Bridge maintenance (ajoutés en 0004 mais absents du bridge initial)
+CREATE VIEW public.maintenance_records AS
+  SELECT id, client_name, client_phone, client_city, client_address,
+         user_id, order_id, product_id, product_name,
+         install_date, next_service_date, service_interval_months,
+         status, notes, filter_types, last_service_date,
+         last_reminder_sent, total_cost, intervention_count,
+         created_at, updated_at
+  FROM eaumalik.maintenance_records;
+CREATE VIEW public.maintenance_interventions AS
+  SELECT id, record_id, intervention_type, performed_at,
+         technician_name, description, parts_used, cost,
+         next_service_date, outcome, created_at
+  FROM eaumalik.maintenance_interventions;
 
 ALTER VIEW public.products          OWNER TO postgres;
 ALTER VIEW public.company_profile   OWNER TO postgres;
 ALTER VIEW public.maintenance_alerts OWNER TO postgres;
 ALTER VIEW public.messages          OWNER TO postgres;
 ALTER VIEW public.news              OWNER TO postgres;
+ALTER VIEW public.maintenance_records      OWNER TO postgres;
+ALTER VIEW public.maintenance_interventions OWNER TO postgres;
+
+-- Table d'archive personnel (créée par migration 0002 dans public.*)
+-- Cette table n'est PAS un bridge : c'est une vraie table dans public pour
+-- conserver l'historique des comptes supprimés.
+CREATE TABLE IF NOT EXISTS public.users_archive (
+  id UUID PRIMARY KEY,
+  email TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  phone TEXT,
+  role TEXT NOT NULL,
+  permissions JSONB DEFAULT '{}'::jsonb,
+  original_created_at TIMESTAMPTZ,
+  original_updated_at TIMESTAMPTZ,
+  archived_at TIMESTAMPTZ DEFAULT now(),
+  archived_reason TEXT,
+  archived_by UUID
+);
+CREATE INDEX IF NOT EXISTS idx_users_archive_archived_at ON public.users_archive(archived_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_archive_email       ON public.users_archive(email);
+ALTER TABLE public.users_archive ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS users_archive_admin_all ON public.users_archive;
+CREATE POLICY users_archive_admin_all ON public.users_archive
+  FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.users_archive TO anon, authenticated;
 
 -- ============================================================================
 -- USERS : vue upvotable pour permettre UPDATE depuis le client
