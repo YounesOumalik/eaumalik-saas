@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   address TEXT,
   city TEXT DEFAULT 'Casablanca',
   google_id TEXT UNIQUE,
-  role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('client','admin')),
+  role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('client','admin','administrator','sales','technician','stock_manager','admin_assistant')),
   nps_score INTEGER CHECK (nps_score BETWEEN 0 AND 10),
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()

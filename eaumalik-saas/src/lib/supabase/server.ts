@@ -75,8 +75,8 @@ export interface AuthUser {
   email: string;
   role: 'client' | 'admin';
   full_name: string | null;
-  /** Rôle métier réel (admin, client, technician, sales, stock_manager, admin_assistant…)
-   *  en mode dev/mock. Pour Supabase Auth réel, fallback sur `role`. */
+  /** Rôle métier réel (admin, administrator, client, technician, sales, stock_manager, admin_assistant…)
+   *  En mode dev/mock, préservé depuis le cookie. Pour Supabase Auth réel, lu depuis la table users. */
   real_role?: string;
   permissions?: Record<string, boolean> | null;
 }
@@ -93,7 +93,7 @@ export async function requireUser(): Promise<AuthUser> {
     return {
       id: dev.id,
       email: dev.email,
-      role: dev.role === 'admin' ? 'admin' : 'client',
+      role: (dev.role === 'admin' || dev.role === 'administrator') ? 'admin' : 'client',
       real_role: dev.role,
       permissions: dev.permissions ?? null,
       full_name: dev.full_name,
@@ -111,10 +111,12 @@ export async function requireUser(): Promise<AuthUser> {
     .select('role, full_name')
     .eq('id', user.id)
     .single();
+  const dbRole = profile?.role ?? 'client';
   return {
     id: user.id,
     email: user.email ?? '',
-    role: (profile?.role as 'client' | 'admin') ?? 'client',
+    role: (dbRole === 'admin' || dbRole === 'administrator') ? 'admin' : 'client',
+    real_role: dbRole,
     full_name: profile?.full_name ?? null,
   };
 }

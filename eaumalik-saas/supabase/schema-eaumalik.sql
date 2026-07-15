@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS eaumalik.users (
   address TEXT,
   city TEXT DEFAULT 'Casablanca',
   google_id TEXT UNIQUE,
-  role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('client','admin','sales')),
+  role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('client','admin','administrator','sales','technician','stock_manager','admin_assistant')),
   permissions JSONB DEFAULT '{}'::jsonb,
   referral_code TEXT UNIQUE,
   referred_by TEXT,
@@ -75,6 +75,9 @@ CREATE TABLE IF NOT EXISTS eaumalik.products (
   -- Prix d'achat en gros (gros DH). Réservé au super admin via Server Action.
   -- Default 0 si non renseigné.
   wholesale_price NUMERIC(10,2) NOT NULL DEFAULT 0,
+  -- Prix sur devis : si true, le prix n'est pas affiché en boutique
+  -- et le bouton "Ajouter au panier" est remplacé par "Demander un devis".
+  price_on_request BOOLEAN DEFAULT false,
   specs JSONB DEFAULT '[]'::jsonb,
   is_featured BOOLEAN DEFAULT false,
   stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),

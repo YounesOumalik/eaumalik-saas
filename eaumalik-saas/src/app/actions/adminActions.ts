@@ -53,7 +53,7 @@ async function gate() {
   // dev est déjà garantie par le middleware/admin layout. Cf. ensureAdminOrMock
   // dans productActions.ts pour le même pattern.
   if (isMockMode()) {
-    return { id: 'mock-admin', email: 'mock@admin.local', role: 'admin' as const, full_name: 'Mock Admin' };
+    return { id: 'mock-admin', email: 'mock@admin.local', role: 'admin' as const, real_role: 'admin', full_name: 'Mock Admin' };
   }
   return await requireAdmin();
 }
@@ -158,6 +158,27 @@ export async function deleteStaffUserAction(id: string) {
         success: false as const,
         error: 'Vous ne pouvez pas supprimer votre propre compte administrateur.',
       };
+    }
+
+    // Un Administrateur (non-super) ne peut pas supprimer un Superadministrateur
+    const adminRealRole = (admin as any).real_role ?? admin.role;
+    if (adminRealRole === 'administrator') {
+      // Vérifie le rôle de la cible avant suppression
+      let targetRole: string | null = null;
+      if (isMockMode()) {
+        const u = (await readUsersRaw()).find((x: any) => x.id === id);
+        targetRole = u?.role ?? null;
+      } else {
+        const supabase = createSupabaseServiceRoleClient();
+        const { data } = await supabase.from('users').select('role').eq('id', id).maybeSingle();
+        targetRole = data?.role ?? null;
+      }
+      if (targetRole === 'admin') {
+        return {
+          success: false as const,
+          error: 'Un Administrateur ne peut pas supprimer le Superadministrateur.',
+        };
+      }
     }
 
     // 1) Récupère le profil complet AVANT suppression (snapshot pour archive)

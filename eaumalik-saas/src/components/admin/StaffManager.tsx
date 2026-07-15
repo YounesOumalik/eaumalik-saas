@@ -15,6 +15,7 @@ import { formatCurrency } from '@/lib/utils';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Superadministrateur',
+  administrator: 'Administrateur',
   technician: 'Technicien',
   stock_manager: 'Gestionnaire de Stock',
   sales: 'Commercial',
@@ -92,6 +93,16 @@ export default function StaffManager({
     setRole(selectedRole);
     // Auto-suggest permissions based on role
     if (selectedRole === 'admin') {
+      setPermissions({
+        can_view_products: true,
+        can_edit_products: true,
+        can_validate_orders: true,
+        can_follow_prospects: true,
+        can_view_comptabilite: true,
+        can_view_stocks: true,
+      });
+    } else if (selectedRole === 'administrator') {
+      // Administrateur : tous les droits sauf suppression de superadmin
       setPermissions({
         can_view_products: true,
         can_edit_products: true,
@@ -363,7 +374,9 @@ export default function StaffManager({
                 </td>
                 <td>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                    member.role === 'admin' ? 'bg-danger-soft text-danger' : 'bg-primary-soft text-primary-light'
+                    member.role === 'admin' ? 'bg-danger-soft text-danger'
+                    : member.role === 'administrator' ? 'bg-amber-500/15 text-amber-400'
+                    : 'bg-primary-soft text-primary-light'
                   }`}>
                     {ROLE_LABELS[member.role] || member.role}
                   </span>
@@ -391,7 +404,7 @@ export default function StaffManager({
                         {member.permissions?.can_view_comptabilite && (
                           <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/15 text-indigo-400">Voir Compta.</span>
                         )}
-                        {member.role === 'admin' && (
+                        {(member.role === 'admin' || member.role === 'administrator') && (
                           <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-rose-500/15 text-rose-400 font-bold">Tous les Droits</span>
                         )}
                       </div>
@@ -544,6 +557,7 @@ export default function StaffManager({
                       <option value="technician">Technicien</option>
                       <option value="stock_manager">Gestionnaire de Stock</option>
                       <option value="admin_assistant">Assistante d&apos;Administration</option>
+                      <option value="administrator">Administrateur (Droits Étendus)</option>
                       <option value="admin">Superadministrateur (Accès Total)</option>
                     </select>
                   </div>
@@ -562,7 +576,7 @@ export default function StaffManager({
                   </div>
                 </div>
 
-                {role !== 'admin' && (
+                {role !== 'admin' && role !== 'administrator' && (
                   <div className="border-t border-[color:var(--border)] pt-4">
                     <span className="form-label font-bold block mb-3">Gestion des Droits &amp; Permissions d&apos;Accès</span>
                     <div className="grid sm:grid-cols-2 gap-3 text-xs">
