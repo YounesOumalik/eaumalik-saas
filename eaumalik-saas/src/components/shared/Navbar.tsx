@@ -59,24 +59,19 @@ export default function Navbar() {
 
   // Rôle réel (admin, client, technician, sales…) prioritaire sur isAdmin.
   const userRole = role || (isAdmin ? 'admin' : 'client');
-  // L'interface d'administration (dropdown navbar + onglets AdminShell) est
-  // strictement réservée aux rôles admin-staff (superadmin + administrator).
-  // Le personnel classique (commercial, technicien, etc.) n'y a plus accès,
-  // même s'il dispose de permissions ciblées sur des sous-modules —
-  // l'interface d'admin reste unifiée.
   const isAdminStaff = userRole === 'admin' || userRole === 'administrator';
-  // Conservé pour la compatibilité (utilisé ailleurs) : vrai si l'utilisateur
-  // est du personnel staff (rôle non-client). Devient équivalent à isAdminStaff
-  // désormais : le personnel classique ne voit plus le dropdown "Administration".
-  const isStaff = isAdminStaff;
-
-  // Source de vérité partagée avec AdminShell — toute modification
-  // (ajout, suppression, permission, libellé) se répercute ici aussi.
+  // `isStaff` = personnel (rôle non-client). Couvre à la fois l'admin-staff
+  // (superadmin + administrator) et le personnel classique (commercial,
+  // technicien, gestionnaire de stock, assistante d'administration).
+  const isStaff = isAdminStaff || userRole !== 'client';
+  // Personnage qui voit au moins UNE entrée admin (utile pour décider
+  // d'afficher le dropdown « Administration » au lieu de « Mon Espace »).
   const allowedAdminLinks = filterAdminNavItems(
     ADMIN_NAV_ITEMS,
     role || (isAdmin ? 'admin' : null),
     permissions,
   );
+  const hasAnyAdminEntry = allowedAdminLinks.length > 0;
 
   // Classe theme-aware : `nav-link` (cf. globals.css) gère les 2 modes via
   // var(--text-secondary) + var(--primary-light).
@@ -100,8 +95,12 @@ export default function Navbar() {
           <CartButton />
           {session ? (
             <div className="hidden lg:flex items-center gap-1">
-              {isStaff ? (
-                <DropdownMenu title="Administration" links={allowedAdminLinks} isActive={isActive('/admin')} />
+              {hasAnyAdminEntry ? (
+                <DropdownMenu
+                  title={isAdminStaff ? 'Administration' : 'Espace Staff'}
+                  links={allowedAdminLinks}
+                  isActive={isActive('/admin') || isActive('/crm') || isActive('/commandes')}
+                />
               ) : (
                 <Link href="/client" className={linkClass}>Mon Espace</Link>
               )}
@@ -164,9 +163,11 @@ export default function Navbar() {
             ))}
             {session ? (
               <>
-                {isStaff ? (
+                {hasAnyAdminEntry ? (
                   allowedAdminLinks.map(l => (
-                    <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>Admin - {l.label}</Link>
+                    <Link key={l.href} href={l.href} className="mobile-link" onClick={() => setMobileOpen(false)}>
+                      {isAdminStaff ? 'Admin' : 'Staff'} - {l.label}
+                    </Link>
                   ))
                 ) : (
                   <Link href="/client" className="mobile-link" onClick={() => setMobileOpen(false)}>Mon Espace</Link>

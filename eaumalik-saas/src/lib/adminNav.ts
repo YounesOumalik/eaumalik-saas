@@ -110,9 +110,17 @@ export type AdminPermissionsBag = Partial<Record<AdminPermissionKey, boolean>>;
  * l'utilisateur courant.
  *
  * Règles :
- *   - Les administrateurs voient tout (règle d'or : pas de granularité).
- *   - `requiredRole === 'admin'` masque l'entrée aux non-admins.
- *   - `permissionKey` est requis et doit être explicitement `true`.
+ *   - Le superadmin ('admin') voit tout (règle d'or : pas de granularité).
+ *   - L'administrateur « Droits Étendus » ('administrator') voit TOUT sauf
+ *     les sections superadmin-only (requiredRole === 'admin'). Comme il a
+ *     déjà les pleins pouvoirs côté RLS (effectivePermissions force tout à
+ *     true), il n'a pas besoin d'avoir la permission explicite.
+ *   - Pour les autres rôles (sales, technician, stock_manager,
+ *     admin_assistant, …) les entrées sont filtrées par `permissionKey`.
+ *     Une permission doit être explicitement `true`.
+ *   - `requiredRole === 'admin'` masque l'entrée aux non-superadmins.
+ *   - `requiredRole === 'admin-staff'` la rend visible aux superadmins ET
+ *     aux administrators.
  *   - Si `permissions` est `null` (chargement en cours), on reste
  *     optimiste : on affiche tout pour ne pas faire clignoter le menu.
  */
@@ -126,12 +134,27 @@ export function filterAdminNavItems(
   // Admin-staff = superadmin OU administrator (Droits Étendus, sans pouvoir
   // supprimer le superadmin).
   const isAdminStaff = role === 'admin' || role === 'administrator';
+  // Un superadmin OU un administrator voient TOUT (sauf 'admin'-only).
+  const seesEverything = isAdminStaff;
 
   return items.filter(item => {
     if (scope !== 'all' && item.scope !== scope) return false;
     if (item.requiredRole === 'admin' && !isAdmin) return false;
     if (item.requiredRole === 'admin-staff' && !isAdminStaff) return false;
+    // Superadmin : tout.
     if (isAdmin) return true;
+    // Administrator : tout SAUF si la règle 'admin' l'a coupé (déjà géré
+    // au-dessus) ou si la permission explicite est false (cas rare :
+    // permissions désactivées par un superadmin sur un administrator).
+    if (role === 'administrator') {
+      // Pour l'admin « Droits Étendus » on se base sur ses permissions
+      // explicites si elles sont chargées, sinon on autorise.
+      if (!permissions) return true;
+      if (item.permissionKey) return permissions[item.permissionKey] !== false;
+      return true;
+    }
+    // Rôle staff classique : filtrage strict par permission.
+    if (seesEverything) return true;
     if (!permissions) return true;
     if (item.permissionKey) return permissions[item.permissionKey] === true;
     return true;
