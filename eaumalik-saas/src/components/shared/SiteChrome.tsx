@@ -2,15 +2,15 @@
 
 import { usePathname } from 'next/navigation';
 import Navbar from '@/components/shared/Navbar';
-import Footer from '@/components/shared/Footer';
 
 /**
- * Préfixes de routes « admin » : le bandeau (Navbar) et le pied de page
- * (Footer) du site public sont masqués sur ces segments car ils ont
- * déjà leur propre shell (`AdminShell` avec sidebar dédiée).
+ * Préfixes de routes « admin » : le bandeau (Navbar) du site public est
+ * masqué sur ces segments car ils ont déjà leur propre shell
+ * (`AdminShell` avec sidebar dédiée).
  *
- * Toute route commençant par l'un de ces préfixes est considérée comme
- * une route d'administration.
+ * Note : le Footer est rendu par le RootLayout (server component) après
+ * ce wrapper, ce qui permet de conserver `import 'server-only'` dans
+ * repositories.ts (utilisé par Footer pour getCompanyProfile).
  */
 const ADMIN_PATH_PREFIXES = ['/admin', '/crm', '/commandes'] as const;
 
@@ -34,7 +34,6 @@ export default function SiteChrome({ children }: { children: React.ReactNode }) 
     <>
       <Navbar />
       <main className="min-h-screen pt-16">{children}</main>
-      <Footer />
     </>
   );
 }
