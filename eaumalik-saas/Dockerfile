@@ -142,7 +142,11 @@ EXPOSE 3100
 
 # tini = init propre (PID 1, gestion signaux, zombies)
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "server.js"]
+# Note : en mode standalone, `HOSTNAME=0.0.0.0` n'est PAS respecté
+# par Next.js (bug connu). Il faut passer --hostname 0.0.0.0
+# explicitement à `node server.js` pour écouter sur toutes les
+# interfaces (et non sur 127.0.0.1 uniquement).
+CMD ["node", "server.js", "--hostname", "0.0.0.0", "--port", "3100"]
 
 # Healthcheck : wget (déjà installé ci-dessus pour ne pas ajouter curl).
 # Pointe vers le port dynamique via $PORT, fallback 3100.
