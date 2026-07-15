@@ -37,6 +37,7 @@ export default function StaffManager({
   initialStaff,
   initialArchived = [],
   currentUserRole = null,
+  currentUserId = null,
 }: {
   initialStaff: any[];
   initialArchived?: any[];
@@ -44,6 +45,10 @@ export default function StaffManager({
    *  « Superadministrateur » aux administrators (qui n'ont pas le droit
    *  d'élever quelqu'un en superadmin — seul un superadmin le peut). */
   currentUserRole?: string | null;
+  /** ID de l'utilisateur connecté. Sert à filtrer la ligne du Superadmin et
+   *  à masquer le bouton d'archivage sur le propre compte de l'utilisateur
+   *  connecté (auto-suppression interdite). */
+  currentUserId?: string | null;
 }) {
   const [staffList, setStaffList] = useState<any[]>(initialStaff);
   const [archivedList, setArchivedList] = useState<any[]>(initialArchived);
@@ -300,12 +305,32 @@ export default function StaffManager({
     }
   };
 
+  const isViewerSuperAdmin = currentUserRole === 'admin';
+  const isViewerAdministrator = currentUserRole === 'administrator';
+
+  // Un Administrateur (non-super) ne doit pas voir la ligne du Superadmin
+  // dans la liste du personnel.
+  const visibleStaffList = useMemo(
+    () =>
+      isViewerAdministrator
+        ? staffList.filter((u: any) => u.role !== 'admin')
+        : staffList,
+    [staffList, isViewerAdministrator]
+  );
+  const visibleArchivedList = useMemo(
+    () =>
+      isViewerAdministrator
+        ? archivedList.filter((u: any) => u.role !== 'admin')
+        : archivedList,
+    [archivedList, isViewerAdministrator]
+  );
+
   const counts = useMemo(
     () => ({
-      active: staffList.length,
-      archived: archivedList.length,
+      active: visibleStaffList.length,
+      archived: visibleArchivedList.length,
     }),
-    [staffList.length, archivedList.length]
+    [visibleStaffList.length, visibleArchivedList.length]
   );
 
   return (
@@ -364,7 +389,7 @@ export default function StaffManager({
             </tr>
           </thead>
           <tbody>
-            {(tab === 'active' ? staffList : archivedList).map(member => (
+            {(tab === 'active' ? visibleStaffList : visibleArchivedList).map(member => (
               <tr key={member.id} className={tab === 'archived' ? 'opacity-70' : ''}>
                 <td>
                   <div className="flex items-center gap-3">
@@ -419,7 +444,10 @@ export default function StaffManager({
                         <button onClick={() => handleOpenEdit(member)} className="btn-outline btn-sm" aria-label="Modifier">
                           <Edit2 size={12} />
                         </button>
-                        {member.role !== 'admin' && (
+                        {/* Bouton Archiver masqué si :
+                              - la cible est un superadmin (ne jamais archiver un superadmin),
+                              - OU la cible est l'utilisateur connecté lui-même (auto-suppression interdite). */}
+                        {member.role !== 'admin' && member.id !== currentUserId && (
                           <button
                             onClick={() => handleDelete(member)}
                             className="btn-outline btn-sm text-danger hover:bg-danger-soft border-danger"
@@ -470,14 +498,14 @@ export default function StaffManager({
                 )}
               </tr>
             ))}
-            {tab === 'active' && staffList.length === 0 && (
+            {tab === 'active' && visibleStaffList.length === 0 && (
               <tr>
                 <td colSpan={5} className="text-center text-sm py-8" style={{ color: 'var(--text-muted)' }}>
                   Aucun membre du personnel enregistré.
                 </td>
               </tr>
             )}
-            {tab === 'archived' && archivedList.length === 0 && (
+            {tab === 'archived' && visibleArchivedList.length === 0 && (
               <tr>
                 <td colSpan={5} className="text-center text-sm py-8" style={{ color: 'var(--text-muted)' }}>
                   <Archive size={20} className="inline-block mr-2 opacity-50" />

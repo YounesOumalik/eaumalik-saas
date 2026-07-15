@@ -21,14 +21,17 @@ export default async function AdminPersonnelsPage() {
   const currentUser = await getOptionalUser();
   // Rôle réel (« admin » / « administrator » / « client »). `null` si pas
   // connecté. Sert à masquer l'option « Superadministrateur » aux
-  // administrators (qui n'ont pas le droit d'élever un autre en superadmin).
+  // administrators (qui n'ont pas le droit d'élever un autre en superadmin)
+  // et à masquer la ligne du Superadmin dans la liste personnel.
   const currentUserRole = (currentUser as any)?.real_role ?? currentUser?.role ?? null;
+  const currentUserId = currentUser?.id ?? null;
 
   return (
     <StaffManager
       initialStaff={staff}
       initialArchived={archived}
       currentUserRole={currentUserRole}
+      currentUserId={currentUserId}
     />
   );
 }

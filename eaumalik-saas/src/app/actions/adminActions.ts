@@ -405,10 +405,19 @@ export async function restoreArchivedStaffAction(raw: unknown) {
 /** Suppression définitive d'un compte archivé (action irréversible). */
 export async function purgeArchivedStaffAction(id: string) {
   try {
-    await gate();
+    const admin = await gate();
     const snap = await getArchivedStaff(id);
     if (!snap) {
       return { success: false as const, error: 'Compte archivé introuvable.' };
+    }
+    // Garde-fous superadmin : un Administrateur (non-super) ne peut pas
+    // supprimer définitivement un Superadmin, même archivé.
+    const adminRealRole = (admin as any).real_role ?? admin.role;
+    if (adminRealRole === 'administrator' && snap.role === 'admin') {
+      return {
+        success: false as const,
+        error: 'Un Administrateur ne peut pas supprimer définitivement le Superadministrateur.',
+      };
     }
     await removeArchivedStaff(id);
     revalidatePath('/admin/personnels');
