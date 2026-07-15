@@ -19,7 +19,7 @@
  * (`can_follow_prospects` minimum) ; le gating fin se fait ici côté UI.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Gift,
@@ -32,6 +32,7 @@ import {
   ShoppingBag,
   Users,
   Search,
+  Plus,
 } from 'lucide-react';
 import type { Order, OrderStatus, OrderItem, User } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -43,6 +44,7 @@ import {
   getCurrentUserAction,
   type CurrentAgentProfile,
 } from '@/app/actions/authActions';
+import ManualOrderDialog from '@/components/admin/ManualOrderDialog';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   en_attente: 'En attente',
@@ -54,6 +56,24 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 const STATUS_CYCLE: OrderStatus[] = ['en_attente', 'traitee', 'en_livraison', 'livree'];
 
 type SourceFilter = 'all' | 'direct' | 'parrainage';
+type StatusFilterKey = 'all' | OrderStatus;
+
+/** Style homogène pour les chips de filtre pleine largeur :
+ *  - actif   : fond plein dégradé, texte blanc, halo coloré
+ *  - inactif : fond teinté ultra-léger + bordure + texte dans la couleur thème. */
+const chipStyle = (active: boolean, color: string): CSSProperties =>
+  active
+    ? {
+        background: `linear-gradient(135deg, ${color}, ${color}cc)`,
+        color: '#fff',
+        borderColor: color,
+        boxShadow: `0 6px 20px ${color}40`,
+      }
+    : {
+        background: `${color}1a`,
+        color,
+        borderColor: `${color}55`,
+      };
 
 export default function OrdersView({
   initialOrders,
@@ -76,6 +96,10 @@ export default function OrdersView({
   const [permissions, setPermissions] = useState<any>(null);
   const [role, setRole] = useState<string>('');
   const [agent, setAgent] = useState<CurrentAgentProfile | null>(null);
+
+  // Modale « Nouvelle commande manuelle » : ouverte/fermée + état de
+  // rafraîchissement après création réussie.
+  const [manualOpen, setManualOpen] = useState(false);
 
   useEffect(() => {
     getCurrentUserPermissionsAction().then(res => {
@@ -263,6 +287,11 @@ export default function OrdersView({
     { label: 'Annulées',      val: counts.annulee ?? 0,    color: '#f87171',             bg: 'rgba(239,68,68,0.1)' },
   ];
 
+  // Bouton "Nouvelle commande manuelle" visible uniquement pour les agents
+  // autorisés à valider (sinon un commercial ne peut pas saisir).
+  const showManualOrderButton =
+    canValidate && (permissions == null || permissions.can_validate_orders === true || role === 'admin' || role === 'administrator');
+
   return (
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap mb-6">
@@ -272,6 +301,17 @@ export default function OrdersView({
             Commandes passées par les clients — y compris celles issues du <strong>parrainage</strong>.
           </p>
         </div>
+        {showManualOrderButton && (
+          <button
+            type="button"
+            onClick={() => setManualOpen(true)}
+            className="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 shadow-lg shadow-primary/20"
+            title="Saisir une commande manuellement (au comptoir ou par téléphone)"
+          >
+            <Plus size={16} aria-hidden="true" />
+            Nouvelle commande manuelle
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
@@ -287,23 +327,29 @@ export default function OrdersView({
         ))}
       </div>
 
-      {/* Filtres source : Direct vs Parrainage */}
-      <div className="flex flex-wrap items-center gap-2 mb-3" role="tablist" aria-label="Filtre par source">
-        <span className="text-xs font-bold uppercase tracking-wider mr-1" style={{ color: 'var(--text-muted)' }}>
+      {/* Filtres source : Direct vs Parrainage (pleine largeur, 1 thème / bouton) */}
+      <div
+        className="grid items-center gap-2 mb-3"
+        style={{ gridTemplateColumns: 'auto repeat(3, minmax(0, 1fr))' }}
+        role="tablist"
+        aria-label="Filtre par source"
+      >
+        <span className="text-xs font-bold uppercase tracking-wider pr-2" style={{ color: 'var(--text-muted)' }}>
           Source&nbsp;:
         </span>
-        {[
-          { id: 'all' as SourceFilter,        label: 'Toutes',     icon: Users },
-          { id: 'direct' as SourceFilter,     label: 'Directes',   icon: ShoppingBag },
-          { id: 'parrainage' as SourceFilter, label: 'Parrainage', icon: Gift },
-        ].map(btn => {
+        {([
+          { id: 'all' as SourceFilter,        label: 'Toutes',     icon: Users,       color: '#0ea5e9' },
+          { id: 'direct' as SourceFilter,     label: 'Directes',   icon: ShoppingBag, color: '#22d3ee' },
+          { id: 'parrainage' as SourceFilter, label: 'Parrainage', icon: Gift,        color: '#a78bfa' },
+        ] as const).map(btn => {
           const Icon = btn.icon;
           const active = filterSource === btn.id;
           return (
             <button
               key={btn.id}
               onClick={() => setFilterSource(btn.id)}
-              className={`btn-chip gap-1.5 ${active ? 'active btn-chip-fill' : ''}`}
+              className="btn-chip w-full"
+              style={chipStyle(active, btn.color)}
               role="tab"
               aria-selected={active}
             >
@@ -313,20 +359,38 @@ export default function OrdersView({
         })}
       </div>
 
-      {/* Filtres statut */}
-      <div className="flex flex-wrap items-center gap-2 mb-4" role="tablist" aria-label="Filtre par statut">
-        <span className="text-xs font-bold uppercase tracking-wider mr-1" style={{ color: 'var(--text-muted)' }}>
+      {/* Filtres statut (pleine largeur, 1 thème / bouton) */}
+      <div
+        className="grid items-center gap-2 mb-4"
+        style={{ gridTemplateColumns: 'auto repeat(6, minmax(0, 1fr))' }}
+        role="tablist"
+        aria-label="Filtre par statut"
+      >
+        <span className="text-xs font-bold uppercase tracking-wider pr-2" style={{ color: 'var(--text-muted)' }}>
           Statut&nbsp;:
         </span>
-        {(['all', ...STATUS_CYCLE, 'annulee'] as const).map(s => (
-          <button
-            key={s}
-            onClick={() => setFilterStatus(s)}
-            className={`btn-chip ${filterStatus === s ? (s === 'all' ? 'active btn-chip-fill' : 'active') : ''}`}
-          >
-            {s === 'all' ? 'Tous' : STATUS_LABELS[s]}
-          </button>
-        ))}
+        {([
+          { id: 'all' as StatusFilterKey,          label: 'Tous',         color: '#0ea5e9' },
+          { id: 'en_attente' as StatusFilterKey,   label: 'En attente',   color: '#f59e0b' },
+          { id: 'traitee' as StatusFilterKey,      label: 'Traitée',      color: '#06b6d4' },
+          { id: 'en_livraison' as StatusFilterKey, label: 'En livraison', color: '#fb923c' },
+          { id: 'livree' as StatusFilterKey,       label: 'Livrée',       color: '#22c55e' },
+          { id: 'annulee' as StatusFilterKey,      label: 'Annulée',      color: '#ef4444' },
+        ] as const).map(s => {
+          const active = filterStatus === s.id;
+          return (
+            <button
+              key={s.id}
+              onClick={() => setFilterStatus(s.id)}
+              className="btn-chip w-full"
+              style={chipStyle(active, s.color)}
+              role="tab"
+              aria-selected={active}
+            >
+              {s.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Recherche */}
@@ -548,6 +612,17 @@ export default function OrdersView({
           </div>
         </Dialog>
       )}
+
+      {/* ===================== MODALE NOUVELLE COMMANDE MANUELLE ===================== */}
+      <ManualOrderDialog
+        open={manualOpen}
+        onClose={() => setManualOpen(false)}
+        onCreated={orderNumber => {
+          // La server action a déjà revalidé `/commandes` ; on force un
+          // rafraîchissement pour récupérer la nouvelle commande dans la liste.
+          router.refresh();
+        }}
+      />
     </>
   );
 }
