@@ -60,11 +60,22 @@ export async function listProducts(filters?: {
         p.name.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q)
       );
     }
-    return list;
+    // Tri manuel : sort_order ASC puis created_at DESC pour les égalités.
+    return list.slice().sort((a, b) => {
+      const sa = a.sort_order ?? 0;
+      const sb = b.sort_order ?? 0;
+      if (sa !== sb) return sa - sb;
+      return (b.created_at ?? '').localeCompare(a.created_at ?? '');
+    });
   }
 
   const supabase = await getSupabase();
-  let query = supabase.from('products').select('*').order('created_at', { ascending: false });
+  // Tri par ordre manuel (sort_order ASC), puis plus récent en premier.
+  let query = supabase
+    .from('products')
+    .select('*')
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false });
   if (!filters?.includeArchived) {
     query = query.or('is_archived.is.null,is_archived.eq.false');
   }

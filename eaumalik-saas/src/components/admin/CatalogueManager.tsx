@@ -8,6 +8,7 @@ import { z } from 'zod';
 import {
   Plus, Pencil, Trash2, Star, Save, LayoutGrid, List,
   Search, Archive, RotateCcw, AlertTriangle, Upload,
+  ChevronUp, ChevronDown, GripVertical,
 } from 'lucide-react';
 import type { Product, ProductCategory } from '@/types';
 import { formatCurrency } from '@/lib/utils';
@@ -20,6 +21,7 @@ import {
   deleteProductAction,
   restoreProductAction,
   purgeProductAction,
+  reorderProductsAction,
 } from '@/app/actions/productActions';
 
 const CATEGORIES: ProductCategory[] = ['purificateurs', 'industriel', 'consommables'];
@@ -28,6 +30,7 @@ const FormSchema = z.object({
   name: z.string().min(2, 'Nom trop court').max(120),
   price: z.coerce.number().min(0, 'Prix invalide'),
   wholesale_price: z.coerce.number().min(0).optional(),
+  sort_order: z.coerce.number().int().min(0).optional(),
   stock: z.coerce.number().int().min(0),
   category: z.enum(['purificateurs', 'industriel', 'consommables']),
   description: z.string().max(2000).optional(),
@@ -68,6 +71,7 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
           name: product.name,
           price: product.price,
           wholesale_price: product.wholesale_price || 0,
+          sort_order: product.sort_order ?? 0,
           stock: product.stock,
           category: product.category,
           description: product.description ?? '',
@@ -82,6 +86,7 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
           name: '',
           price: 0,
           wholesale_price: 0,
+          sort_order: 0,
           stock: 0,
           category: 'purificateurs',
           description: '',
@@ -130,6 +135,7 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
         is_out_of_stock: !!data.is_out_of_stock,
         is_archived: !!data.is_archived,
         price_on_request: !!data.price_on_request,
+        sort_order: data.sort_order ?? 0,
         // Image : soit on garde l'URL deja en place, soit on envoie un data:
         // URL (uniquement en mock pour eviter l'upload Supabase Storage).
         image_url_local: imageUrl.startsWith('data:') ? imageUrl : null,
@@ -215,6 +221,20 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
                 {...register('stock')}
               />
               {errors.stock && <p className="text-xs text-danger mt-1">{errors.stock.message}</p>}
+            </div>
+            <div>
+              <label className="form-label">Ordre d&apos;affichage</label>
+              <input
+                type="number"
+                min={0}
+                step={10}
+                className="form-input"
+                placeholder="0"
+                {...register('sort_order')}
+              />
+              <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                Plus la valeur est petite, plus le produit apparaît en haut.
+              </p>
             </div>
             <div>
               <label className="form-label">Prix de vente (DH) {priceOnRequest ? '' : '*'}</label>
@@ -381,6 +401,10 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
     confirmLabel?: string;
     onConfirm: () => Promise<void> | void;
   }>(null);
+  // Drag-and-drop natif HTML5
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
 
   const toast = useToast();
   const [permissions, setPermissions] = useState<any>(null);
@@ -489,6 +513,86 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
     } else {
       toast('Erreur : ' + res.error, 'error');
     }
+  };
+
+  /**
+   * Pousse l'ordre : applique la nouvelle liste au state puis appelle
+   * l'action serveur pour persister. Les sort_order sont réécrits en
+   * pas de 10 pour permettre des insertions ultérieures sans renuméroter.
+   */
+  const persistNewOrder = async (newOrder: Product[]) => {
+    if (reordering) return;
+    setReordering(true);
+    try {
+      const items = newOrder.map((p, idx) => ({
+        id: p.id,
+        sort_order: idx * 10,
+      }));
+      // Mise à jour optimiste du state local avec les nouveaux sort_order
+      setProducts(prev => prev.map(p => {
+        const it = items.find(i => i.id === p.id);
+        return it ? { ...p, sort_order: it.sort_order } : p;
+      }));
+      const res = await reorderProductsAction(items);
+      if (res.success) {
+        toast('Ordre enregistré', 'success');
+      } else {
+        toast('Erreur : ' + res.error, 'error');
+      }
+    } finally {
+      setReordering(false);
+    }
+  };
+
+  /**
+   * Déplace un produit d'une position vers le haut ou le bas dans la liste
+   * actuellement filtrée, puis persiste le nouvel ordre.
+   */
+  const moveProduct = (id: string, direction: 'up' | 'down') => {
+    const current = [...visibleProducts];
+    const idx = current.findIndex(p => p.id === id);
+    if (idx === -1) return;
+    const target = direction === 'up' ? idx - 1 : idx + 1;
+    if (target < 0 || target >= current.length) return;
+    const a = current[idx];
+    const b = current[target];
+    current[idx] = b;
+    current[target] = a;
+    void persistNewOrder(current);
+  };
+
+  // Handlers drag-and-drop HTML5
+  const onDragStart = (e: React.DragEvent<HTMLTableRowElement>, id: string) => {
+    setDragId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    // Firefox a besoin d'un type MIME pour démarrer le drag
+    try { e.dataTransfer.setData('text/plain', id); } catch { /* ignore */ }
+  };
+  const onDragOver = (e: React.DragEvent<HTMLTableRowElement>, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (id !== dragOverId) setDragOverId(id);
+  };
+  const onDragLeave = (id: string) => {
+    if (dragOverId === id) setDragOverId(null);
+  };
+  const onDrop = (e: React.DragEvent<HTMLTableRowElement>, dropId: string) => {
+    e.preventDefault();
+    setDragOverId(null);
+    const srcId = dragId ?? e.dataTransfer.getData('text/plain');
+    setDragId(null);
+    if (!srcId || srcId === dropId) return;
+    const current = [...visibleProducts];
+    const srcIdx = current.findIndex(p => p.id === srcId);
+    const dstIdx = current.findIndex(p => p.id === dropId);
+    if (srcIdx === -1 || dstIdx === -1) return;
+    const [moved] = current.splice(srcIdx, 1);
+    current.splice(dstIdx, 0, moved);
+    void persistNewOrder(current);
+  };
+  const onDragEnd = () => {
+    setDragId(null);
+    setDragOverId(null);
   };
 
   return (
@@ -633,6 +737,7 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
           <table className="data-table">
             <thead>
               <tr>
+                {canEdit && tab === 'active' && <th style={{ width: '90px' }}>Ordre</th>}
                 <th>Produit</th>
                 <th>Catégorie</th>
                 <th>Prix Vente</th>
@@ -643,8 +748,59 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
               </tr>
             </thead>
             <tbody>
-              {visibleProducts.map(p => (
-                <tr key={p.id}>
+              {visibleProducts.map((p, idx) => {
+                const isFirst = idx === 0;
+                const isLast = idx === visibleProducts.length - 1;
+                const isDragOver = dragOverId === p.id && dragId && dragId !== p.id;
+                return (
+                <tr
+                  key={p.id}
+                  draggable={canEdit && tab === 'active'}
+                  onDragStart={canEdit && tab === 'active' ? (e) => onDragStart(e, p.id) : undefined}
+                  onDragOver={canEdit && tab === 'active' ? (e) => onDragOver(e, p.id) : undefined}
+                  onDragLeave={canEdit && tab === 'active' ? () => onDragLeave(p.id) : undefined}
+                  onDrop={canEdit && tab === 'active' ? (e) => onDrop(e, p.id) : undefined}
+                  onDragEnd={canEdit && tab === 'active' ? onDragEnd : undefined}
+                  className={[
+                    canEdit && tab === 'active' ? 'cursor-grab active:cursor-grabbing' : '',
+                    isDragOver ? 'product-row-drop-target' : '',
+                    dragId === p.id ? 'product-row-dragging' : '',
+                  ].filter(Boolean).join(' ')}
+                  style={isDragOver ? { boxShadow: 'inset 0 2px 0 0 var(--primary)' } : undefined}
+                >
+                  {canEdit && tab === 'active' && (
+                    <td>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveProduct(p.id, 'up')}
+                          disabled={isFirst || reordering}
+                          className="btn-icon"
+                          title="Monter"
+                          aria-label={`Monter ${p.name}`}
+                        >
+                          <ChevronUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveProduct(p.id, 'down')}
+                          disabled={isLast || reordering}
+                          className="btn-icon"
+                          title="Descendre"
+                          aria-label={`Descendre ${p.name}`}
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                        <span
+                          className="ml-1 text-[10px] inline-flex items-center"
+                          style={{ color: 'var(--text-muted)' }}
+                          title="Glisser-déposer pour réorganiser"
+                        >
+                          <GripVertical size={14} />
+                        </span>
+                      </div>
+                    </td>
+                  )}
                   <td>
                     <div className="flex items-center gap-3">
                       {p.image_url && (
@@ -745,7 +901,8 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

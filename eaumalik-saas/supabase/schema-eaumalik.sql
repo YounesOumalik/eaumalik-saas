@@ -78,6 +78,9 @@ CREATE TABLE IF NOT EXISTS eaumalik.products (
   -- Prix sur devis : si true, le prix n'est pas affiché en boutique
   -- et le bouton "Ajouter au panier" est remplacé par "Demander un devis".
   price_on_request BOOLEAN DEFAULT false,
+  -- Ordre d'affichage en boutique (plus petit = affiché en premier).
+  -- 0 par défaut : les nouveaux produits apparaissent en tête de liste.
+  sort_order INTEGER NOT NULL DEFAULT 0,
   specs JSONB DEFAULT '[]'::jsonb,
   is_featured BOOLEAN DEFAULT false,
   stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),

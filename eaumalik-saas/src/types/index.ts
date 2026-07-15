@@ -19,6 +19,7 @@ export interface Product {
   filter_lifespan_months: number | null;
   wholesale_price?: number; // MAD
   price_on_request?: boolean; // Prix sur devis
+  sort_order?: number; // Ordre d'affichage (plus petit = plus haut)
   is_out_of_stock?: boolean;
   is_archived?: boolean;
   created_at: string;

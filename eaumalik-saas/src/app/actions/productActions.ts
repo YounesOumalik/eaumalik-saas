@@ -38,6 +38,7 @@ const ProductInputSchema = z.object({
   filter_lifespan_months: z.number().int().positive().nullable().optional(),
   wholesale_price: z.number().nonnegative().optional(),
   price_on_request: z.boolean().optional(),
+  sort_order: z.number().int().optional(),
   is_out_of_stock: z.boolean().optional(),
   is_archived: z.boolean().optional(),
 });
@@ -132,6 +133,7 @@ export async function createProductAction(raw: unknown) {
       filter_lifespan_months: safeData.filter_lifespan_months ?? null,
       wholesale_price: safeData.wholesale_price ?? 0,
       price_on_request: safeData.price_on_request ?? false,
+      sort_order: safeData.sort_order ?? 0,
       is_out_of_stock: safeData.is_out_of_stock ?? false,
       is_archived: safeData.is_archived ?? false,
     });
@@ -230,5 +232,54 @@ export async function listArchivedProductsAction() {
     return { success: true as const, products: products.filter(p => p.is_archived) };
   } catch (err: any) {
     return { success: false as const, error: err.message ?? 'Erreur.', products: [] };
+  }
+}
+
+/**
+ * Réordonne plusieurs produits d'un coup (utilisé après un drag-and-drop
+ * ou un déplacement haut/bas dans le tableau admin).
+ *
+ * @param items Liste [{ id: string, sort_order: number }, ...]
+ *              dans le NOUVEL ordre souhaité. L'ordre fourni est appliqué tel quel.
+ */
+export async function reorderProductsAction(
+  items: Array<{ id: string; sort_order: number }>,
+) {
+  const auth = await ensureAdminOrMock();
+  if (!auth.ok) return { success: false as const, error: auth.error! };
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return { success: false as const, error: 'Liste vide.' };
+  }
+
+  try {
+    // Mise à jour séquentielle : une erreur sur un produit n'interrompt pas la boucle,
+    // mais on retourne le détail des succès/échecs.
+    const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+    for (const item of items) {
+      try {
+        if (!item?.id || typeof item.sort_order !== 'number') {
+          results.push({ id: item?.id ?? '?', ok: false, error: 'Payload invalide.' });
+          continue;
+        }
+        await updateProduct(item.id, { sort_order: item.sort_order });
+        results.push({ id: item.id, ok: true });
+      } catch (err: any) {
+        results.push({ id: item.id, ok: false, error: err?.message ?? 'Erreur.' });
+      }
+    }
+    const failed = results.filter(r => !r.ok);
+    revalidatePath('/boutique');
+    revalidatePath('/admin/catalogue');
+    if (failed.length > 0) {
+      return {
+        success: false as const,
+        error: `${failed.length} produit(s) non mis à jour.`,
+        results,
+      };
+    }
+    return { success: true as const, results };
+  } catch (err: any) {
+    return { success: false as const, error: err.message ?? 'Erreur réordonnancement.' };
   }
 }
