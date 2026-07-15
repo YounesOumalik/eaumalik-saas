@@ -130,18 +130,30 @@ export async function getOptionalUser(): Promise<AuthUser | null> {
   }
 }
 
-/** Renvoie l'utilisateur authentifie si admin, sinon throw AuthError(403). */
+/** Renvoie l'utilisateur authentifie si admin (superadmin ou administrator),
+ *  sinon throw AuthError(403). Le superadmin-only check est fait via
+ *  `requireSuperAdmin()`. */
 export async function requireAdmin(): Promise<AuthUser> {
   const user = await requireUser();
-  if (user.role !== 'admin') {
+  if (user.role !== 'admin' && user.role !== 'administrator') {
     throw new AuthError('forbidden', 'Droits administrateur requis.');
   }
   return user;
 }
 
-/** Renvoie les permissions effectives (admin = tout, sinon les booleens du profil). */
+/** Réservé aux superadmins (rôle 'admin' strict). */
+export async function requireSuperAdmin(): Promise<AuthUser> {
+  const user = await requireUser();
+  if (user.role !== 'admin') {
+    throw new AuthError('forbidden', 'Droits superadministrateur requis.');
+  }
+  return user;
+}
+
+/** Renvoie les permissions effectives (admin ou administrator = tout, sinon les booleens du profil). */
 function effectivePermissions(user: AuthUser): Record<string, boolean> {
-  const isAdmin = user.role === 'admin';
+  // admin-staff (superadmin OU administrator) : tous les droits à true.
+  const isAdminStaff = user.role === 'admin' || user.role === 'administrator';
   const p = (user.permissions ?? {}) as Record<string, boolean>;
   const out: Record<string, boolean> = {};
   for (const k of [
@@ -152,11 +164,9 @@ function effectivePermissions(user: AuthUser): Record<string, boolean> {
     'can_view_comptabilite',
     'can_view_stocks',
   ]) {
-    // Admin : toujours true. Sinon : valeur explicite du profil (false / true),
-    // fallback à false si non renseigne. On n'utilise plus `?? isAdmin` qui
-    // laissait passer un `false` explicite quand meme (cf. user admin seed
-    // avec permissions=false) — comportement désormais attendu et cohérent.
-    out[k] = isAdmin ? true : p[k] === true;
+    // Admin-staff : toujours true. Sinon : valeur explicite du profil (false / true),
+    // fallback à false si non renseigne.
+    out[k] = isAdminStaff ? true : p[k] === true;
   }
   return out;
 }

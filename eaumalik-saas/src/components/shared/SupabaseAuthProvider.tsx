@@ -42,7 +42,11 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
       .select('role, full_name')
       .eq('id', uid)
       .single();
-    setIsAdmin((data?.role as string) === 'admin');
+    // `isAdmin` couvre superadmin ET administrator (droits étendus).
+    // Pour les opérations super-admin only (ex. supprimer superadmin), on
+    // utilise `isSuperAdmin` calculé via role === 'admin'.
+    const r = (data?.role as string) ?? '';
+    setIsAdmin(r === 'admin' || r === 'administrator');
     setDisplayName(
       (data?.full_name as string | undefined) ?? user?.email ?? ''
     );
@@ -125,7 +129,8 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
           user: devUser ? ({ id: devUser.id, email: devUser.email, user_metadata: { full_name: devUser.full_name } } as any) : null,
           session: devUser ? ({ user: { id: devUser.id, email: devUser.email } } as any) : null,
           loading,
-          isAdmin: devUser?.role === 'admin',
+          // Dev session : superadmin OU administrator = isAdmin (droits étendus).
+          isAdmin: devUser?.role === 'admin' || devUser?.role === 'administrator',
           refresh: async () => {
             try {
               const res = await fetch('/api/auth/dev-session', { cache: 'no-store' });

@@ -421,8 +421,13 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
     });
   }, []);
 
-  const canEdit = !permissions || role === 'admin' || permissions.can_edit_products;
-  // Seul le super admin peut voir / modifier le prix d'achat en gros.
+  // Un superadmin ET un administrator peuvent tout éditer sur le catalogue
+  // (les perms du profil sont passées en OR au cas où ils seraient à false).
+  const canEdit = !permissions
+    || role === 'admin'
+    || role === 'administrator'
+    || permissions.can_edit_products;
+  // Seul le superadmin peut voir / modifier le prix d'achat en gros.
   const isSuperAdmin = role === 'admin';
 
   // Filtrage local

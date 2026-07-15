@@ -97,7 +97,17 @@ export async function createStaffUserAction(raw: unknown) {
   }
   let createdUserId: string | null = null;
   try {
-    await gate();
+    const admin = await gate();
+    const adminRealRole = (admin as any).real_role ?? admin.role;
+
+    // Un Administrateur (non-super) ne peut pas créer un superadmin.
+    if (parsed.data.role === 'admin' && adminRealRole !== 'admin') {
+      return {
+        success: false as const,
+        error: 'Seul un Superadministrateur peut attribuer le rôle Superadministrateur.',
+      };
+    }
+
     const supabase = createSupabaseServiceRoleClient();
 
     // 1) Pré-vérif : si l'email existe déjà côté profil public, on évite de
@@ -165,7 +175,18 @@ export async function updateStaffUserAction(id: string, raw: unknown) {
     return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Validation échouée.' };
   }
   try {
-    await gate();
+    const admin = await gate();
+    const adminRealRole = (admin as any).real_role ?? admin.role;
+
+    // Un Administrateur (non-super) ne peut pas élever quelqu'un (y compris
+    // lui-même) au rang de superadmin. Seul un superadmin le peut.
+    if (parsed.data.role === 'admin' && adminRealRole !== 'admin') {
+      return {
+        success: false as const,
+        error: 'Seul un Superadministrateur peut attribuer le rôle Superadministrateur.',
+      };
+    }
+
     const supabase = createSupabaseServiceRoleClient();
     const update: Record<string, unknown> = {
       email: parsed.data.email,

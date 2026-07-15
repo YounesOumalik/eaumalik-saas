@@ -39,7 +39,8 @@ export default function CrmShell({ children }: { children: ReactNode }) {
 
   const allowedTabs = TABS.filter(t => {
     if (!permissions) return true; // permissions pas encore chargées : on ne masque rien
-    if (role === 'admin') return true; // admin a tout, peu importe les booleens
+    // Superadmin OU Administrateur « Droits Étendus » : accès à tout.
+    if (role === 'admin' || role === 'administrator') return true;
     const perm = (t as any).permission;
     return !perm || permissions[perm] === true;
   });

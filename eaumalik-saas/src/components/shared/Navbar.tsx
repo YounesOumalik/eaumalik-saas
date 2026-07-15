@@ -59,7 +59,10 @@ export default function Navbar() {
   // Rôle réel (admin, client, technician, sales…) prioritaire sur isAdmin.
   const userRole = role || (isAdmin ? 'admin' : 'client');
   const hasAnyPermission = !!permissions && Object.values(permissions).some(Boolean);
-  const isStaff = userRole !== 'client' && (userRole === 'admin' || hasAnyPermission);
+  // Un superadmin OU un administrator ou tout staff avec au moins une
+  // permission activée voit la barre d'administration.
+  const isStaff = userRole !== 'client'
+    && (userRole === 'admin' || userRole === 'administrator' || hasAnyPermission);
 
   // Source de vérité partagée avec AdminShell — toute modification
   // (ajout, suppression, permission, libellé) se répercute ici aussi.

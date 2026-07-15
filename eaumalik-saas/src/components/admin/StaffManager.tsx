@@ -36,9 +36,14 @@ type Tab = 'active' | 'archived';
 export default function StaffManager({
   initialStaff,
   initialArchived = [],
+  currentUserRole = null,
 }: {
   initialStaff: any[];
   initialArchived?: any[];
+  /** Rôle réel de l'utilisateur connecté. Sert à masquer l'option
+   *  « Superadministrateur » aux administrators (qui n'ont pas le droit
+   *  d'élever quelqu'un en superadmin — seul un superadmin le peut). */
+  currentUserRole?: string | null;
 }) {
   const [staffList, setStaffList] = useState<any[]>(initialStaff);
   const [archivedList, setArchivedList] = useState<any[]>(initialArchived);
@@ -558,7 +563,9 @@ export default function StaffManager({
                       <option value="stock_manager">Gestionnaire de Stock</option>
                       <option value="admin_assistant">Assistante d&apos;Administration</option>
                       <option value="administrator">Administrateur (Droits Étendus)</option>
-                      <option value="admin">Superadministrateur (Accès Total)</option>
+                      {currentUserRole === 'admin' && (
+                        <option value="admin">Superadministrateur (Accès Total)</option>
+                      )}
                     </select>
                   </div>
                   <div>

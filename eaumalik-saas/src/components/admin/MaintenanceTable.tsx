@@ -66,7 +66,11 @@ export default function MaintenanceTable({ initialRecords }: { initialRecords: M
     });
   }, []);
 
-  const canManage = !permissions || role === 'admin' || permissions.can_view_comptabilite;
+  // Administrator et superadmin peuvent gérer la maintenance.
+  const canManage = !permissions
+    || role === 'admin'
+    || role === 'administrator'
+    || permissions.can_view_comptabilite;
 
   const refresh = async () => {
     setLoading(true);

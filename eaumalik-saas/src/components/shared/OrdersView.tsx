@@ -91,8 +91,12 @@ export default function OrdersView({
 
   // L'utilisateur peut faire avancer / annuler une commande uniquement s'il
   // dispose de la permission `can_validate_orders` (les simples commerciaux
-  // voient le suivi mais ne valident pas).
-  const canValidate = !permissions || role === 'admin' || permissions.can_validate_orders === true;
+  // voient le suivi mais ne valident pas). Un Administrateur « Droits Étendus »
+  // peut aussi valider sans avoir la perm explicite.
+  const canValidate = !permissions
+    || role === 'admin'
+    || role === 'administrator'
+    || permissions.can_validate_orders === true;
 
   // Index clients (par id, et par téléphone pour les commandes invité sans user_id).
   const clientsById = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);

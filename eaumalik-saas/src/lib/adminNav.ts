@@ -35,8 +35,10 @@ export type AdminNavItem = {
    * Le dropdown global du Navbar consomme tout ; la sidebar filtre `admin`.
    */
   scope: AdminNavScope;
-  /** Si défini à 'admin', l'entrée n'apparaît que pour les administrateurs. */
-  requiredRole?: 'admin';
+  /** Si défini à 'admin', l'entrée n'apparaît QUE pour les superadmins.
+   *  Si défini à 'admin-staff', l'entrée apparaît pour les superadmins ET les
+   *  administrateurs (Administrateur « Droits Étendus »). */
+  requiredRole?: 'admin' | 'admin-staff';
   /** Permission Supabase nécessaire à l'affichage (ignoré si l'utilisateur est admin). */
   permissionKey?: AdminPermissionKey;
 };
@@ -88,14 +90,14 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
     label: 'Publier Actualité',
     href: '/admin/publications',
     scope: 'admin',
-    requiredRole: 'admin',
+    requiredRole: 'admin-staff',
   },
   {
     id: 'personnels',
     label: 'Personnels',
     href: '/admin/personnels',
     scope: 'admin',
-    requiredRole: 'admin',
+    requiredRole: 'admin-staff',
   },
 ];
 
@@ -121,10 +123,14 @@ export function filterAdminNavItems(
   scope: AdminScopeFilter = 'all',
 ): AdminNavItem[] {
   const isAdmin = role === 'admin';
+  // Admin-staff = superadmin OU administrator (Droits Étendus, sans pouvoir
+  // supprimer le superadmin).
+  const isAdminStaff = role === 'admin' || role === 'administrator';
 
   return items.filter(item => {
     if (scope !== 'all' && item.scope !== scope) return false;
     if (item.requiredRole === 'admin' && !isAdmin) return false;
+    if (item.requiredRole === 'admin-staff' && !isAdminStaff) return false;
     if (isAdmin) return true;
     if (!permissions) return true;
     if (item.permissionKey) return permissions[item.permissionKey] === true;
