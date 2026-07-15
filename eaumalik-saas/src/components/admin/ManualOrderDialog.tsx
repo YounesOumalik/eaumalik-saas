@@ -45,9 +45,9 @@ import { formatCurrency } from '@/lib/utils';
 import {
   createManualOrderAction,
   getReferrerProfileAction,
+  getCatalogProductsLiteAction,
   type ReferrerProfile,
 } from '@/app/actions/ordersActions';
-import { getAvailableProductsForNewsAction } from '@/app/actions/clientActions';
 
 // ============================================================================
 // Types locaux
@@ -105,7 +105,11 @@ export default function ManualOrderDialog({
   const [productsOpen, setProductsOpen] = useState(true);
 
   // ============================================================================
-  // Chargement initial (produits + parrain)
+  // Chargement initial (produits + parrain) — en PARALLÈLE pour minimiser
+  // le temps d'affichage de la modale (cf. getCatalogProductsLiteAction :
+  // projection stricte + cache mémoire 60s, donc réponse quasi-instantanée
+  // au 2e appel). `Promise.allSettled` évite qu'un échec de l'une bloque
+  // l'autre.
   // ============================================================================
   useEffect(() => {
     if (!open) return;
@@ -119,19 +123,19 @@ export default function ManualOrderDialog({
     setProductSearch('');
     setSubmitting(false);
 
-    getAvailableProductsForNewsAction()
-      .then(res => {
-        if (res.success) setProducts(res.products);
-        setProductsLoaded(true);
-      })
-      .catch(() => setProductsLoaded(true));
-
-    getReferrerProfileAction()
-      .then(p => {
-        setReferrer(p);
-        setReferrerLoaded(true);
-      })
-      .catch(() => setReferrerLoaded(true));
+    Promise.allSettled([
+      getCatalogProductsLiteAction(),
+      getReferrerProfileAction(),
+    ]).then(([prodRes, refRes]) => {
+      if (prodRes.status === 'fulfilled' && prodRes.value.success) {
+        setProducts(prodRes.value.products ?? []);
+      }
+      setProductsLoaded(true);
+      if (refRes.status === 'fulfilled') {
+        setReferrer(refRes.value);
+      }
+      setReferrerLoaded(true);
+    });
   }, [open]);
 
   // ============================================================================

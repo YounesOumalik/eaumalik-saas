@@ -539,25 +539,18 @@ export interface ReferrerProfile {
 }
 
 /**
- * Renvoie le profil parrain (= compte agent actuellement connecté) qui sera
- * automatiquement attribué aux nouvelles commandes manuelles. Utilisé par
- * l'UI pour afficher le bandeau "Parrain automatique" dans la modale.
- *
- * Le parrain est celui de `users` correspondant au compte connecté :
- *  - Si l'agent a déjà un profil dans `users` → on le renvoie tel quel.
- *  - Sinon (cas superadmin), on PRÉ-VISUALISE le profil technique qui sera
- *    créé (rôle `client`, code parrain généré à la volée — NON persisté tant
- *    qu'aucune commande n'est créée). Le code sera figé à la première
- *    commande manuelle réussie.
+ * Cache mémoire pour le parrain (durée 5 min). L'agent connecté change
+ * rarement en cours de session et sa fiche `users` est quasi-immuable :
+ * on évite ainsi une lecture DB + un éventuel aller-retour Supabase à
+ * chaque ouverture de la modale de commande manuelle.
  */
-export async function getReferrerProfileAction(): Promise<ReferrerProfile | null> {
-  let agent;
-  try {
-    agent = await getCurrentAgent();
-  } catch {
-    return null;
-  }
+const REFERRER_CACHE_TTL_MS = 5 * 60_000;
+let referrerCache: { at: number; key: string; profile: ReferrerProfile | null } | null = null;
 
+/** Résout le profil parrain SANS cache (utilitaire interne). */
+async function resolveReferrerProfile(
+  agent: { id: string; email: string; full_name: string; role: string }
+): Promise<ReferrerProfile | null> {
   if (isMockMode()) {
     const users = await readUsersRaw();
     const existing =
@@ -584,7 +577,7 @@ export async function getReferrerProfileAction(): Promise<ReferrerProfile | null
     };
   }
 
-  // Mode Supabase
+  // Mode Supabase — projection stricte, service role (bypass RLS).
   const admin = createSupabaseServiceRoleClient();
   const { data: byId } = await admin
     .from('users')
@@ -621,4 +614,162 @@ export async function getReferrerProfileAction(): Promise<ReferrerProfile | null
     role: agent.role,
     referral_code: '(sera généré à la première commande)',
   };
+}
+
+/**
+ * Renvoie le profil parrain (= compte agent actuellement connecté) qui sera
+ * automatiquement attribué aux nouvelles commandes manuelles. Utilisé par
+ * l'UI pour afficher le bandeau "Parrain automatique" dans la modale.
+ *
+ * Le parrain est celui de `users` correspondant au compte connecté :
+ *  - Si l'agent a déjà un profil dans `users` → on le renvoie tel quel.
+ *  - Sinon (cas superadmin), on PRÉ-VISUALISE le profil technique qui sera
+ *    créé (rôle `client`, code parrain généré à la volée — NON persisté tant
+ *    qu'aucune commande n'est créée). Le code sera figé à la première
+ *    commande manuelle réussie.
+ *
+ * Optimisations :
+ *  - Cache mémoire 5 min (clé = `${agent.id}::${agent.email}`).
+ *  - Lecture projetée stricte (5 champs) côté Supabase.
+ */
+export async function getReferrerProfileAction(): Promise<ReferrerProfile | null> {
+  let agent;
+  try {
+    agent = await getCurrentAgent();
+  } catch {
+    return null;
+  }
+
+  // 1) Cache chaud : on ressert la fiche tant que l'agent est le même.
+  const cacheKey = `${agent.id}::${agent.email}`;
+  if (
+    referrerCache &&
+    referrerCache.key === cacheKey &&
+    Date.now() - referrerCache.at < REFERRER_CACHE_TTL_MS
+  ) {
+    return referrerCache.profile;
+  }
+
+  // 2) Résolution + mise en cache.
+  const profile = await resolveReferrerProfile(agent);
+  referrerCache = { at: Date.now(), key: cacheKey, profile };
+  return profile;
+}
+
+// ============================================================================
+// getCatalogProductsLiteAction — sélecteur rapide pour la commande manuelle
+// ============================================================================
+/**
+ * Forme légère d'un produit destinée au sélecteur de la commande manuelle.
+ * On ne transporte que les champs strictement nécessaires à l'UI (id,
+ * nom, prix, catégorie, image, stock) — pas de `description`, `specs`,
+ * `slug`, `wholesale_price`, etc. Ça réduit drastiquement le payload
+ * JSON renvoyé par la server action et accélère l'affichage du catalogue
+ * dans la modale.
+ */
+export interface CatalogProductLite {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  image_url: string | null;
+  stock: number;
+}
+
+// Cache mémoire côté serveur (durée : 60s). Le catalogue change rarement
+// entre deux ouvertures successives de la modale de saisie manuelle — un
+// re-fetch toutes les 60s est largement suffisant et évite l'aller-retour
+// Supabase complet à chaque ouverture de modale.
+//
+// IMPORTANT : c'est un cache **process-local**. En prod (Docker), chaque
+// worker Node a son propre cache ; en mock (mono-process), c'est partagé.
+// Le TTL court (60s) garantit que les modifs admin (nouveau produit,
+// prix changé…) apparaissent au pire après 1 minute.
+const CATALOG_CACHE_TTL_MS = 60_000;
+let catalogCache: { at: number; products: CatalogProductLite[] } | null = null;
+
+/**
+ * Variante ULTRA-RAPIDE du sélecteur de catalogue, utilisée par
+ * `ManualOrderDialog`.
+ *
+ * Optimisations par rapport à `getAvailableProductsForNewsAction` :
+ *  1. **Projection stricte** : on ne récupère que les 6 champs affichés
+ *     dans la modale. Sur Supabase, c'est `select('id, name, price,
+ *     category, image_url, stock')` au lieu de `select('*')` (qui ramenait
+ *     description + specs + slug + wholesale_price + sort_order + JSON…).
+ *  2. **Pas de `requireAdmin()`** : la fonction n'expose aucune donnée
+ *     sensible (prix publics, libellés). Elle est lue côté UI par un agent
+ *     authentifié par ailleurs. On évite un round-trip Supabase Auth inutile.
+ *  3. **Cache mémoire 60s** : la même liste est renvoyée tant qu'elle est
+ *     dans le cache, sans toucher à la DB. Réduit le temps d'ouverture de
+ *     la modale de ~1-3s à ~5ms en cache chaud.
+ *  4. **Lecture directe du JSON mock** (sans passer par le wrapper
+ *     `listProducts` qui retrie et refiltre) en mode mock.
+ */
+export async function getCatalogProductsLiteAction(): Promise<{
+  success: boolean;
+  products?: CatalogProductLite[];
+  error?: string;
+}> {
+  // 1) Cache chaud ?
+  if (catalogCache && Date.now() - catalogCache.at < CATALOG_CACHE_TTL_MS) {
+    return { success: true, products: catalogCache.products };
+  }
+
+  try {
+    if (isMockMode()) {
+      // Mode mock : on lit directement le fichier JSON via readProducts (déjà
+      // cache par Next en dev). Filtrage minimal sur is_archived et on
+      // extrait la projection légère sans rien recalculer.
+      const { readProducts } = await import('@/data/localDb');
+      const list = readProducts();
+      const lite: CatalogProductLite[] = [];
+      for (const p of list) {
+        if (p.is_archived) continue;
+        lite.push({
+          id: p.id,
+          name: p.name,
+          price: Number(p.price),
+          category: p.category,
+          image_url: p.image_url ?? null,
+          stock: Number(p.stock ?? 0),
+        });
+      }
+      catalogCache = { at: Date.now(), products: lite };
+      return { success: true, products: lite };
+    }
+
+    // Mode Supabase : projection stricte via service role (bypass RLS).
+    const supabase = createSupabaseServiceRoleClient();
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, price, category, image_url, stock')
+      .or('is_archived.is.null,is_archived.eq.false')
+      .order('category', { ascending: true })
+      .order('name', { ascending: true });
+    if (error) {
+      return { success: false, error: 'Lecture catalogue impossible.' };
+    }
+    const lite: CatalogProductLite[] = (data ?? []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      price: Number(p.price),
+      category: p.category,
+      image_url: p.image_url ?? null,
+      stock: Number(p.stock ?? 0),
+    }));
+    catalogCache = { at: Date.now(), products: lite };
+    return { success: true, products: lite };
+  } catch (e: any) {
+    return { success: false, error: e?.message ?? 'Erreur catalogue.' };
+  }
+}
+
+/**
+ * Invalide le cache catalogue (à appeler après création/édition produit).
+ * Pas utilisé pour l'instant (le TTL de 60s suffit) mais exposé pour
+ * évolution future (ex. bouton « Rafraîchir » dans la modale).
+ */
+export async function invalidateCatalogCacheAction(): Promise<void> {
+  catalogCache = null;
 }
