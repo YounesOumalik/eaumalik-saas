@@ -73,6 +73,9 @@ export class AuthError extends Error {
 export interface AuthUser {
   id: string;
   email: string;
+  /** Rôle d'autorisation: 'client' (par défaut) ou 'admin' (admin-staff :
+   *  superadmin + administrator). L'élévation stricte au statut
+   *  « superadmin » se vérifie via `real_role === 'admin'`. */
   role: 'client' | 'admin';
   full_name: string | null;
   /** Rôle métier réel (admin, administrator, client, technician, sales, stock_manager, admin_assistant…)
@@ -135,7 +138,8 @@ export async function getOptionalUser(): Promise<AuthUser | null> {
  *  `requireSuperAdmin()`. */
 export async function requireAdmin(): Promise<AuthUser> {
   const user = await requireUser();
-  if (user.role !== 'admin' && user.role !== 'administrator') {
+  const r = user.real_role ?? user.role;
+  if (r !== 'admin' && r !== 'administrator') {
     throw new AuthError('forbidden', 'Droits administrateur requis.');
   }
   return user;
@@ -144,7 +148,8 @@ export async function requireAdmin(): Promise<AuthUser> {
 /** Réservé aux superadmins (rôle 'admin' strict). */
 export async function requireSuperAdmin(): Promise<AuthUser> {
   const user = await requireUser();
-  if (user.role !== 'admin') {
+  const r = user.real_role ?? user.role;
+  if (r !== 'admin') {
     throw new AuthError('forbidden', 'Droits superadministrateur requis.');
   }
   return user;
