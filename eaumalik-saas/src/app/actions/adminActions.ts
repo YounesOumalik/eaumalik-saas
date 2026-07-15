@@ -29,7 +29,7 @@ const StaffCreateSchema = z.object({
     .regex(/[A-Z]/, 'Doit contenir une majuscule.')
     .regex(/[0-9]/, 'Doit contenir un chiffre.'),
   full_name: z.string().min(3).max(100),
-  phone: z.string().regex(/^0[6-7][0-9]{8}$/, 'Numéro marocain invalide.'),
+  phone: z.string().regex(/^0[6-7][0-9]{8}$/, 'Numéro marocain invalide.').optional().or(z.literal('')),
   role: z.string().min(1).max(40),
   permissions: PermissionsSchema,
 });
@@ -37,7 +37,7 @@ const StaffCreateSchema = z.object({
 const StaffUpdateSchema = z.object({
   email: z.string().email(),
   full_name: z.string().min(3).max(100),
-  phone: z.string().regex(/^0[6-7][0-9]{8}$/),
+  phone: z.string().regex(/^0[6-7][0-9]{8}$/).optional().or(z.literal('')),
   role: z.string().min(1).max(40),
   password: z.string()
     .min(8, 'Mot de passe trop court (min. 8 caractères).')
