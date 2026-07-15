@@ -186,7 +186,7 @@ export default function StaffManager({
 
       const res = await createStaffUserAction({
         email,
-        passwordHash: password,
+        password,
         full_name: fullName,
         phone,
         role,
