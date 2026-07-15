@@ -9,6 +9,11 @@ interface AuthContextValue {
   session: Session | null;
   loading: boolean;
   isAdmin: boolean;
+  /** Rôle métier réel (admin, administrator, client, technician, sales…).
+   *  Alimenté par le fetch de profil au login, ou par la session dev. */
+  role: string | null;
+  /** Permissions effectives du profil (null si non chargé). */
+  permissions: Record<string, boolean> | null;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
   /** Nom ou email à afficher. */
@@ -22,6 +27,11 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  // Rôle métier + permissions effectives du profil, partagés avec toute la
+  // sidebar (lib/adminNav) : source de vérité unique pour ne pas voir la
+  // liste des pages clignoter au mount.
+  const [role, setRole] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<Record<string, boolean> | null>(null);
   const [displayName, setDisplayName] = useState('');
 
   // Mode dev (sans Supabase) : session factice écrite par /api/auth/dev-login
@@ -39,14 +49,16 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
     const { data } = await supabase
       .from('users')
-      .select('role, full_name')
+      .select('role, permissions, full_name')
       .eq('id', uid)
       .single();
     // `isAdmin` couvre superadmin ET administrator (droits étendus).
     // Pour les opérations super-admin only (ex. supprimer superadmin), on
     // utilise `isSuperAdmin` calculé via role === 'admin'.
     const r = (data?.role as string) ?? '';
+    setRole(r || null);
     setIsAdmin(r === 'admin' || r === 'administrator');
+    setPermissions((data?.permissions as Record<string, boolean> | null) ?? null);
     setDisplayName(
       (data?.full_name as string | undefined) ?? user?.email ?? ''
     );
@@ -63,7 +75,9 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     if (data.session?.user) {
       await fetchProfile(data.session.user.id);
     } else {
+      setRole(null);
       setIsAdmin(false);
+      setPermissions(null);
       setDisplayName('');
     }
     setLoading(false);
@@ -82,6 +96,8 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
         void fetchProfile(newSession.user.id);
       } else {
         setIsAdmin(false);
+        setRole(null);
+        setPermissions(null);
         setDisplayName('');
       }
     });
@@ -131,6 +147,8 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
           loading,
           // Dev session : superadmin OU administrator = isAdmin (droits étendus).
           isAdmin: devUser?.role === 'admin' || devUser?.role === 'administrator',
+          role: devUser?.role ?? null,
+          permissions: devUser?.permissions ?? null,
           refresh: async () => {
             try {
               const res = await fetch('/api/auth/dev-session', { cache: 'no-store' });
@@ -145,8 +163,21 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
             }
           },
           async signOut() {
+            // 1) Mise à jour optimiste du state → l'UI passe immédiatement
+            //    en "déconnecté" (Connexion au lieu de Déconnexion) sans
+            //    attendre la fin du fetch ni un hard reload.
+            setDevUser(null);
+            setIsAdmin(false);
+            setRole(null);
+            setPermissions(null);
+            setDisplayName('');
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new Event('eaumalik:dev-session-change'));
+            }
+            // 2) Suppression effective du cookie httpOnly (fire-and-forget :
+            //    on ne bloque PAS la nav si le réseau rame).
             try {
-              await fetch('/api/auth/dev-session', { method: 'DELETE' });
+              fetch('/api/auth/dev-session', { method: 'DELETE' }).catch(() => {});
             } catch {
               /* noop */
             }
@@ -164,10 +195,28 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     session,
     loading,
     isAdmin,
+    role,
+    permissions,
     refresh,
     async signOut() {
-      await supabase.auth.signOut();
-      // refresh() sera appelé par l'auth listener.
+      // Mise à jour optimiste : on vide le state React IMMÉDIATEMENT pour
+      // que l'UI bascule sur "Connexion" sans dépendre du listener
+      // Supabase (qui peut mettre du temps à tirer sur réseau lent, ou ne
+      // pas tirer du tout si la requête `/logout` échoue).
+      setUser(null);
+      setSession(null);
+      setIsAdmin(false);
+      setRole(null);
+      setPermissions(null);
+      setDisplayName('');
+      // Suppression effective côté Supabase (best-effort). Si elle échoue,
+      // l'utilisateur reste déconnecté côté UI et la prochaine navigation
+      // re-vérifiera l'état réel.
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        /* noop : on reste déconnecté côté UI */
+      }
     },
     displayName,
   };

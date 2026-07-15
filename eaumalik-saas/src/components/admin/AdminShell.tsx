@@ -18,7 +18,6 @@ import {
   ExternalLink,
   type LucideIcon,
 } from 'lucide-react';
-import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
 import BrandLogo from '@/components/shared/BrandLogo';
 import { ADMIN_NAV_ITEMS, filterAdminNavItems, type AdminNavItem } from '@/lib/adminNav';
@@ -43,10 +42,12 @@ const STORAGE_KEY = 'eaumalik.admin.sidebar.collapsed';
 export default function AdminShell({ title, children }: { title: string; children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { session, signOut, isAdmin } = useSupabaseAuth();
+  // Lecture unique des infos auth depuis le contexte partagé. Plus de
+  // double fetch (Server Action + AuthProvider) qui causait un clignotement
+  // de la sidebar à chaque navigation : la sidebar reste stable dès le
+  // premier rendu.
+  const { session, signOut, isAdmin, role, permissions } = useSupabaseAuth();
 
-  const [permissions, setPermissions] = useState<any>(null);
-  const [role, setRole] = useState<string>('');
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
@@ -72,24 +73,15 @@ export default function AdminShell({ title, children }: { title: string; childre
     }
   }, [collapsed, hydrated]);
 
-  useEffect(() => {
-    getCurrentUserPermissionsAction().then(res => {
-      if (res.success) {
-        setPermissions(res.permissions);
-        setRole(res.role || '');
-      }
-    });
-  }, []);
-
   // La sidebar affiche EXACTEMENT les mêmes entrées que le dropdown
   // "Administration" du Navbar (même source, même ordre, même filtrage).
   // Cela inclut '/commandes', qui pointe vers la page autonome dédiée.
-  // On utilise le même fallback `isAdmin` que le Navbar pour que les
-  // entrées admin-only (publications, personnels) soient visibles dès le
-  // premier rendu, avant que `role` ne soit hydraté.
+  // On utilise le `role` du AuthContext (source de vérité unique) ; tant
+  // qu'il n'est pas chargé on retombe sur `isAdmin` qui couvre déjà
+  // superadmin ET administrator — pas de flash "vide → plein".
   const allowedTabs = filterAdminNavItems(
     ADMIN_NAV_ITEMS,
-    role || (isAdmin ? 'admin' : null),
+    role ?? (isAdmin ? 'admin' : null),
     permissions,
   );
 
