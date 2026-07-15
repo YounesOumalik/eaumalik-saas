@@ -551,7 +551,7 @@ export async function listNews(options?: {
   const supabase = await getSupabase();
   let query = supabase.from('news').select('*').order('created_at', { ascending: false });
   if (options?.promotionOnly) {
-    query = query.or('is_promotion.eq.true,price.gt.0,not.product_ids.eq.{}');
+    query = query.or('is_promotion.eq.true,price.gt.0,product_ids.neq.{}');
   }
   if (options?.archivedOnly) {
     query = query.eq('is_archived', true);

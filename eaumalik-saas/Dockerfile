@@ -110,6 +110,12 @@ RUN apk add --no-cache libc6-compat tini wget && \
     addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
+# sharp : requis en mode standalone pour l'optimisation d'images Next.js.
+# Sans lui, toute page utilisant next/image renvoie HTTP 500
+# ("'sharp' is required to be installed in standalone mode").
+# Installé en root avant USER nextjs.
+RUN npm install --no-save sharp@0.33.5
+
 # .next/standalone contient le serveur Node.js + uniquement les
 # dépendances runtime (node_modules filtré par file tracing).
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -149,6 +155,7 @@ ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "server.js", "--hostname", "0.0.0.0", "--port", "3100"]
 
 # Healthcheck : wget (déjà installé ci-dessus pour ne pas ajouter curl).
-# Pointe vers le port dynamique via $PORT, fallback 3100.
+# Pointe vers /api/auth/captcha (léger, sans optimisation d'image)
+# plutôt que vers / qui dépend de sharp.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- "http://127.0.0.1:${PORT:-3100}/" >/dev/null || exit 1
+  CMD wget -qO- "http://127.0.0.1:${PORT:-3100}/api/auth/captcha" >/dev/null || exit 1
