@@ -7,8 +7,15 @@ out
 .gitignore
 .env
 .env.local
-.env.production
 .env*.local
+
+# NOTE: .env.production DOIT être dans le contexte de
+# build car le Dockerfile le COPY explicitement avant
+# 'npm run build' pour que @next/env l'incline dans
+# le bundle client. Sans ça, le bundle webpack a
+# process.env.NEXT_PUBLIC_SUPABASE_URL = '' et la
+# page /login bascule en mode dev en prod.
+!.env.production
 data-store/*.json
 !data-store/.gitkeep
 .DS_Store

@@ -1,5 +1,61 @@
 [
   {
+    "id": "o-1784073147006",
+    "order_number": "CMD-2026-46A1A0",
+    "user_id": null,
+    "client_name": "Administrateur EAUMALIK",
+    "client_phone": "0977686877",
+    "client_address": "kjhkjhkh",
+    "client_city": "Al Hoceima",
+    "status": "en_attente",
+    "subtotal": 11176.5,
+    "delivery_fee": 0,
+    "total": 11176.5,
+    "notes": null,
+    "payment_method": "cash_on_delivery",
+    "invoice_generated": false,
+    "created_at": "2026-07-14T23:52:27.006Z",
+    "updated_at": "2026-07-14T23:52:27.006Z",
+    "items": [
+      {
+        "id": "o-1784073147006-item-0",
+        "order_id": "o-1784073147006",
+        "product_id": "kit-3-filtres-regeno",
+        "product_name": "Kit 3 Filtres REGENO (Replacement Filter Pack)",
+        "unit_price": 180,
+        "quantity": 1,
+        "line_total": 180
+      },
+      {
+        "id": "o-1784073147006-item-1",
+        "order_id": "o-1784073147006",
+        "product_id": "sys-ro-compact",
+        "product_name": "Osmoseur Compact Premium EauMalik",
+        "unit_price": 1999,
+        "quantity": 2,
+        "line_total": 3998
+      },
+      {
+        "id": "o-1784073147006-item-2",
+        "order_id": "o-1784073147006",
+        "product_id": "sys-osmoseur-premium-10",
+        "product_name": "Osmoseur Premium 10 Étapes",
+        "unit_price": 1999.5,
+        "quantity": 1,
+        "line_total": 1999.5
+      },
+      {
+        "id": "o-1784073147006-item-3",
+        "order_id": "o-1784073147006",
+        "product_id": "font-vitalis-ts101b",
+        "product_name": "Fontaine VITALIS TS-101B (Desktop Noire)",
+        "unit_price": 4999,
+        "quantity": 1,
+        "line_total": 4999
+      }
+    ]
+  },
+  {
     "id": "o-1784045105936",
     "order_number": "CMD-2026-F5DE5C",
     "user_id": "u-1784045105936",

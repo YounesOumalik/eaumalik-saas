@@ -1,6 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // `output: 'standalone'` génère un bundle minimal autonome dans
+  // .next/standalone (uniquement les fichiers et node_modules requis
+  // au runtime). C'est la voie officielle recommandée pour Docker
+  // (voir examples/with-docker/Dockerfile de Next.js) : l'image finale
+  // passe de ~1 GB à ~150 MB, et le démarrage du container est ~3x
+  // plus rapide car le serveur n'a plus à charger tout node_modules.
+  // Note : pdfkit est listé dans serverComponentsExternalPackages
+  // (voir plus bas), donc il est exclus du bundle et ses polices
+  // AFM (Helvetica/Courier/Times) seront copiées via COPY.
+  output: 'standalone',
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'picsum.photos' },
