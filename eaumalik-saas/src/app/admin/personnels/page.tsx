@@ -5,6 +5,10 @@ export const metadata = {
   title: 'Gestion des Personnels — EAUMALIK',
 };
 
+// Empêche le prerender statique : la page a besoin de SUPABASE_SERVICE_ROLE_KEY
+// au runtime, pas au build time.
+export const dynamic = 'force-dynamic';
+
 export default async function AdminPersonnelsPage() {
   const users = await readUsersRaw();
   const staff = users.filter(u => u.role !== 'client');
