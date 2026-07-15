@@ -28,9 +28,11 @@ const SignInSchema = z.object({
 
 export async function POST(req: NextRequest) {
   // Route inactive en mode mock : la connexion y passe par /api/auth/dev-login.
-  if (isMockMode()) {
-    return NextResponse.json({ error: 'Route inactive en mode démo.' }, { status: 404 });
-  }
+  // ⚠️ DÉSACTIVÉ TEMPORAIREMENT pour debug : la vérification estMockMode()
+  // renvoie true à tort même quand NEXT_PUBLIC_SUPABASE_URL est défini.
+  // if (isMockMode()) {
+  //   return NextResponse.json({ error: 'Route inactive en mode démo.' }, { status: 404 });
+  // }
 
   let parsed: z.infer<typeof SignInSchema>;
   try {
