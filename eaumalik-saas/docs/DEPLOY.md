@@ -186,18 +186,183 @@ Le script garde le tag de l'image précédente dans `/opt/eaumalik/.last_image`.
 
 ---
 
-## Déploiement automatisé (GitHub Actions)
+## Déploiement automatisé (Webhook GitHub)
 
-Le workflow `.github/workflows/deploy.yml` reproduit **à l'identique** `scripts/deploy.sh`
-(build Docker → tar.gz → SCP → `docker load` → `run` → healthcheck) à chaque `push` sur `main`.
-Il peut aussi être lancé manuellement depuis l'onglet **Actions** (bouton *Run workflow*).
+**Approche actuelle** (depuis 2026-07-15) : webhook GitHub → service Node.js sur le VPS → git pull + docker build + restart. **Aucune dépendance externe**, **zéro token**, **zéro runner à maintenir**. Aussi simple que Vercel/Hostinger.
 
-### Secrets GitHub requis (Settings → Secrets → Actions)
+```
+┌──────────────┐         HTTPS POST                ┌─────────────────────┐
+│  git push    │ ─────────────────────────────────► │ eaumalik.com/webhook│
+│  origin main │   HMAC SHA-256 signé              │   (Caddy → :9000)   │
+│              │                                    │  Node.js service    │
+└──────────────┘                                    └──────────┬──────────┘
+                                                              │ vérifie
+                                                              ▼
+                                                    ┌─────────────────────┐
+                                                    │  deploy-on-push.sh  │
+                                                    │  - git fetch+reset  │
+                                                    │  - docker build     │
+                                                    │  - docker run       │
+                                                    │  - healthcheck      │
+                                                    │  - smoke test       │
+                                                    └──────────┬──────────┘
+                                                              ▼
+                                                    eaumalik-app (port 3100)
+                                                    sur réseau supabase-prod-net
+```
 
-| Secret | Valeur |
-|--------|--------|
-| `DEPLOY_SSH_KEY` | Contenu de `~/.ssh/id_smartserveur` (clé privée, bloc SSH `smartserveur`) |
-| `DEPLOY_HOST` | `164.68.97.103` (HostName du bloc `smartserveur`) |
+### Pourquoi un webhook plutôt que GitHub Actions ?
+
+| Critère | Webhook (actuel) | GitHub Actions runner |
+|---------|------------------|------------------------|
+| Coût | Gratuit | Minutes GitHub consommées |
+| Latence | 1-3 min | 3-7 min (queue + build VM) |
+| Complexité | 1 service systemd | Runner + PAT + secrets + reviewer |
+| Logs | `journalctl -u eaumalik-webhook` | UI GitHub |
+| Visibilité UI | ❌ Pas de badge | ✅ Badge sur le commit |
+| Rollback | Re-tag + redeploy manuel | Bouton Re-run |
+
+→ Pour un projet solo/dev, le webhook est imbattable. Garder GitHub Actions serait utile seulement pour des matrices multi-OS ou une review visuelle par PR.
+
+### Installation (une seule fois)
+
+#### Prérequis côté VPS
+- Docker Engine ≥ 24.0
+- Docker Compose v2 (plugin)
+- Accès `sudo`
+- Caddy déjà configuré (déjà le cas ici)
+- Le réseau Docker `supabase-prod-net` existant (déjà le cas)
+
+#### Étape 1 — Installation du service webhook
+
+```bash
+# Sur le VPS, en tant que root :
+cd /opt/eaumalik
+bash install-webhook.sh
+```
+
+Ce script :
+1. Clone le repo dans `/opt/eaumalik/repo`
+2. Crée `/etc/eaumalik/webhook-secret` (HMAC 32 bytes hex)
+3. Installe le service systemd `eaumalik-webhook.service`
+4. Démarre le service et affiche les instructions
+
+#### Étape 2 — Configuration Caddy (route `/webhook`)
+
+Ajouter dans `/etc/caddy/eaumalik.conf` :
+
+```caddy
+eaumalik.com, www.eaumalik.com {
+    encode zstd gzip
+
+    @webhook path /webhook /health
+    handle @webhook {
+        reverse_proxy 127.0.0.1:9000
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:3100 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}
+```
+
+Recharger : `sudo systemctl reload caddy`
+
+#### Étape 3 — Configuration GitHub
+
+1. Ouvre : `https://github.com/YounesOumalik/eaumalik-saas/settings/hooks/new`
+2. Remplis :
+   - **Payload URL** : `https://eaumalik.com/webhook`
+   - **Content type** : `application/json`
+   - **Secret** : contenu de `/etc/eaumalik/webhook-secret` (32 bytes hex)
+   - **Which events** : ☑ Just the `push` event
+   - **Active** : ✅
+3. **Add webhook**
+
+### Utilisation au quotidien
+
+```bash
+# Depuis ton poste local :
+cd /chemin/vers/eaumalik-saas
+# ... fais tes modifs ...
+git add .
+git commit -m "feat: ma nouvelle fonctionnalité"
+git push origin main
+# → 1-3 min plus tard : site mis à jour sur https://eaumalik.com
+```
+
+### Surveillance
+
+```bash
+# Logs webhook (déclenchements push)
+sudo journalctl -u eaumalik-webhook -f
+
+# Logs du dernier deploy (build Docker, healthcheck, smoke test)
+sudo ls -t /var/log/eaumalik-deploy/ | head -1 | xargs sudo tail -f
+
+# Healthcheck externe
+curl https://eaumalik.com/health
+# → {"status":"ok","service":"eaumalik-webhook"}
+
+# Container status
+sudo docker ps --filter name=eaumalik-app
+```
+
+### Fallback manuel (si webhook tombe)
+
+Le script `scripts/deploy.sh` historique reste fonctionnel :
+
+```bash
+cd eaumalik-saas
+./scripts/deploy.sh              # deploy normal
+./scripts/deploy.sh --rollback   # rollback
+./scripts/deploy.sh --no-build   # réutilise l'image :latest locale
+```
+
+### Rollback manuel
+
+Le script `deploy-on-push.sh` garde les **3 derniers tags** pour permettre un rollback :
+
+```bash
+ssh smartserveur
+# Lister les tags disponibles
+sudo docker images eaumalik-saas --format "{{.Tag}} {{.CreatedAt}}" | head -5
+
+# Restaurer un tag spécifique
+sudo docker rm -f eaumalik-app
+sudo docker run -d --name eaumalik-app \
+  --network supabase-prod-net \
+  --env-file /opt/eaumalik/.env \
+  -e HOSTNAME=0.0.0.0 -e PORT=3100 \
+  -p 127.0.0.1:3100:3100 \
+  --restart unless-stopped \
+  eaumalik-saas:<TAG_A_RESTAUER>
+```
+
+### Troubleshooting
+
+| Symptôme | Cause probable | Fix |
+|----------|---------------|-----|
+| Push ne déclenche rien | Webhook GitHub non configuré ou erreur 4xx | Onglet **Webhooks** du repo → **Recent deliveries** |
+| `HTTP 401 Invalid signature` dans les logs | Secret HMAC désynchronisé entre GitHub et le VPS | Vérifier `sudo cat /etc/eaumalik/webhook-secret` correspond à celui configuré dans GitHub |
+| `EACCES: permission denied, mkdir '/app/data-store'` | Dockerfile pas à jour | Pull + rebuild : `cd /opt/eaumalik/repo && git pull && bash deploy-on-push.sh HEAD` |
+| `npm ci: package-lock.json missing` | `package-lock.json` gitignoré volontairement | Dockerfile utilise `npm install` (pas `npm ci`), vérifier la dernière version |
+| `Connection reset by peer` sur / | Container écoute sur 127.0.0.1 au lieu de 0.0.0.0 | Vérifier `-e HOSTNAME=0.0.0.0` dans `deploy-on-push.sh` |
+| Container crash immédiatement | Mauvais .env ou NEXT_PUBLIC_* manquant | `docker logs eaumalik-app --tail 50` |
+| Build trop long (>5 min) | Cache BuildKit non réutilisé | `docker builder prune -af` puis rebuild |
+| Disk plein (image accumulées) | Vieux tags non nettoyés | `docker image prune -af` (⚠️ supprime tout) |
+
+### Sécurité du webhook
+
+- ✅ **HMAC SHA-256** : chaque requête est signée avec un secret partagé. Une requête non signée est rejetée en `401`.
+- ✅ **Branch filter** : seuls les pushes sur `main` déclenchent un deploy.
+- ✅ **Service systemd** : tourne en user `younes`, pas root. Pas de capabilities excessives.
+- ✅ **Pas de token GitHub** : impossible de compromettre le compte GitHub via ce canal.
+- ✅ **Logs auditables** : chaque deploy laisse un fichier `/var/log/eaumalik-deploy/deploy-*.log` complet.
 | `DEPLOY_USER` | `younes` (User du bloc `smartserveur`) |
 | `ENV_PROD` | Contenu **exact** de `.env.prod` local (contient les clés Supabase service-role) |
 
