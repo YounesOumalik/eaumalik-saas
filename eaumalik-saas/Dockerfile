@@ -128,6 +128,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 # complet pour que la résolution de chemin fonctionne.
 COPY --from=builder /app/node_modules/pdfkit ./node_modules/pdfkit
 
+# data-store : fallback JSON local utilisé par localDb.ts quand
+# Supabase n'est pas accessible. Le dossier doit appartenir à
+# nextjs pour qu'il puisse écrire dedans à l'exécution.
+# On crée le dossier + un .gitkeep et on fixe le owner.
+RUN mkdir -p /app/data-store && \
+    chown -R nextjs:nodejs /app/data-store && \
+    echo '{"_comment":"dossier data-store monté au runtime si nécessaire"}' > /app/data-store/.gitkeep && \
+    chown nextjs:nodejs /app/data-store/.gitkeep
+
 USER nextjs
 EXPOSE 3100
 
