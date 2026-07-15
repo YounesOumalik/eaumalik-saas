@@ -83,23 +83,32 @@ export async function listProducts(filters?: {
 }
 
 export async function createProduct(product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> {
-  const id = `p-${Date.now()}`;
   const now = new Date().toISOString();
-  const newProduct: Product = {
-    id,
-    created_at: now,
-    updated_at: now,
-    ...product,
-    slug: product.slug || product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-  };
+  const slug = product.slug || product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
   if (shouldUseMocks()) {
+    // Mode mock : IDs strings (compatibilité localDb.ts / products.json).
+    const id = `p-${Date.now()}`;
+    const newProduct: Product = {
+      id,
+      created_at: now,
+      updated_at: now,
+      ...product,
+      slug,
+    };
     const list = readProducts();
     list.push(newProduct);
     writeProducts(list);
     return newProduct;
   }
 
+  // Mode Supabase : la colonne id a DEFAULT gen_random_uuid() — ne pas envoyer un id invalide.
+  const newProduct = {
+    created_at: now,
+    updated_at: now,
+    ...product,
+    slug,
+  };
   const supabase = await getSupabase();
   const { data, error } = await supabase.from('products').insert(newProduct).select().single();
   if (error) throw error;
