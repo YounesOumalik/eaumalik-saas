@@ -1,9 +1,14 @@
 node_modules/
 .next/
 out/
+
+# === Secrets — JAMAIS COMMITER ===
+# Bloque .env, .env.local, .env.prod, .env.production, .env.*.local, .env.example.staging, etc.
+# Seuls les fichiers *.example (sans suffixe prod/local) restent versionnés.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.*.example
+
 *.log
 .DS_Store
 .vercel
