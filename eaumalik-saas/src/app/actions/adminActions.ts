@@ -95,31 +95,65 @@ export async function createStaffUserAction(raw: unknown) {
   if (!parsed.success) {
     return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Validation échouée.' };
   }
+  let createdUserId: string | null = null;
   try {
     await gate();
     const supabase = createSupabaseServiceRoleClient();
+
+    // 1) Pré-vérif : si l'email existe déjà côté profil public, on évite de
+    // créer un compte Auth orphelin.
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', parsed.data.email)
+      .maybeSingle();
+    if (existing) {
+      return {
+        success: false as const,
+        error: 'Un compte existe déjà avec cet email. Utilisez la modification plutôt que la création.',
+      };
+    }
+
+    // 2) Création côté auth (peut échouer si l'utilisateur existe déjà dans
+    // auth.users alors qu'il a été supprimé du profil public → on rollback).
     const { data, error } = await supabase.auth.admin.createUser({
       email: parsed.data.email,
       password: parsed.data.password,
       email_confirm: true,
       user_metadata: { full_name: parsed.data.full_name, phone: parsed.data.phone },
     });
-    if (error || !data.user) throw error ?? new Error('Création échouée.');
-    const { error: upsertErr } = await supabase.from('users').upsert(
-      {
-        id: data.user.id,
-        email: parsed.data.email,
-        full_name: parsed.data.full_name,
-        phone: parsed.data.phone || null,
-        role: parsed.data.role,
-        permissions: parsed.data.permissions,
-      },
-      { onConflict: 'id' }
-    );
-    if (upsertErr) throw upsertErr;
+    if (error || !data.user) {
+      // Email déjà pris côté auth : message plus clair.
+      const msg = String(error?.message ?? '').toLowerCase().includes('already')
+        ? 'Cet email est déjà enregistré côté authentification.'
+        : (error?.message ?? 'Création échouée.');
+      throw new Error(msg);
+    }
+    createdUserId = data.user.id;
+
+    // 3) Insertion du profil (insert simple, pas d'upsert : si conflit, on rollback l'auth).
+    const { error: insertErr } = await supabase.from('users').insert({
+      id: data.user.id,
+      email: parsed.data.email,
+      full_name: parsed.data.full_name,
+      phone: parsed.data.phone || null,
+      role: parsed.data.role,
+      permissions: parsed.data.permissions,
+    });
+    if (insertErr) throw insertErr;
     revalidatePath('/admin/personnels');
     return { success: true as const, staff: data.user };
   } catch (err: any) {
+    // Rollback : si l'auth user a été créé mais que le profil a échoué, on le supprime
+    // pour éviter les comptes orphelins.
+    if (createdUserId) {
+      try {
+        const supabase = createSupabaseServiceRoleClient();
+        await supabase.auth.admin.deleteUser(createdUserId);
+      } catch {
+        /* best-effort rollback */
+      }
+    }
     return { success: false as const, error: err.message ?? 'Erreur.' };
   }
 }
