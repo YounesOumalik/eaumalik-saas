@@ -6,8 +6,16 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import BrandLogo from '@/components/shared/BrandLogo';
 import CaptchaChallenge from '@/components/shared/CaptchaChallenge';
-import { isMockMode } from '@/lib/api-guard';
 import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
+
+// ⚠️ Client-safe mock check (NE PAS importer @/lib/api-guard ici :
+// il contient 'server-only' qui casserait le build webpack).
+function isClientMockMode(): boolean {
+  if (process.env.NEXT_PUBLIC_USE_MOCKS === 'true') return true;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  return !url || !key || url.trim() === '' || key.trim() === '';
+}
 
 export default function ResetPasswordPage() {
   return (
@@ -24,7 +32,7 @@ function ResetInner() {
   // Mode MOCK : token en query string (?token=...)
   // Mode SUPABASE : hash fragment (#access_token=...&type=recovery&...)
   //   → @supabase/ssr détecte la session automatiquement, on valide via getSession().
-  const mock = isMockMode();
+  const mock = isClientMockMode();
   const queryToken = mock ? searchParams.get('token') || '' : '';
   const [recoveryReady, setRecoveryReady] = useState(mock); // en mock, prêt tout de suite
   const [recoveryError, setRecoveryError] = useState('');
