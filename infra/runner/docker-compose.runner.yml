@@ -1,0 +1,90 @@
+# ============================================================================
+# EAUMALIK — GitHub Actions self-hosted runner (VPS SmartServeur)
+#
+# Pourquoi self-hosted : le runner s'exécute SUR le VPS où tourne
+# déjà Docker → il peut faire `docker build` + `docker run` sans
+# aucun transfert réseau. Économise les minutes GitHub, accélère
+# drastiquement les builds, et permet d'utiliser le cache BuildKit
+# du serveur de manière persistante entre déploiements.
+#
+# SÉCURITÉ :
+#   - user: 1001:1001 (non-root, user dédié `runner`)
+#   - privileged: false (pas de capabilities Linux excessives)
+#   - cap_drop: ALL + cap_add: NET_BIND_SERVICE (le strict minimum)
+#   - read_only: true sur le FS racine, sauf /work et /home/runner
+#   - Docker socket monté en rw (nécessaire pour `docker build`)
+#     ⚠️  C'est le point d'attention sécurité principal : tout job
+#     du runner peut exécuter `docker run --privileged` sur l'hôte.
+#     Mitigation : n'utiliser ce runner QUE pour ce repo (label
+#     vps-eaumalik) et garder le workflow_dispatch avec approbation.
+# ============================================================================
+services:
+  runner:
+    image: myoung34/github-runner:latest
+    container_name: github-runner
+    restart: unless-stopped
+
+    # Process isolé : pas de privilèges excessifs
+    privileged: false
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE  # Pour pouvoir bind sur des ports bas si besoin
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # le runner a besoin d'écrire dans /work et /home/runner
+
+    # L'image myoung34/github-runner supporte nativement le user non-root.
+    # On force UID 1001 (runner) pour que les volumes montés (runner-work,
+    # runner-home) soient accessibles en écriture. RUN_AS_ROOT=false dit à
+    # l'image de ne PAS tenter de faire du docker build en root.
+    # Le socket Docker (/var/run/docker.sock) est monté en rw ci-dessous,
+    # ce qui suffit pour que les jobs puissent lancer `docker build/run`.
+    user: "1001:1001"
+    environment:
+      RUN_AS_ROOT: "false"
+      # Organisation ou repo GitHub (sans https://)
+      REPO_URL: "https://github.com/Oumalik/Eaumalik"
+      # Labels utilisés par `runs-on:` dans les workflows
+      RUNNER_LABELS: "self-hosted,linux,x64,vps-eaumalik"
+      # Nom affiché dans l'UI GitHub
+      RUNNER_NAME: "vps-eaumalik-prod"
+      # Groupe d'appartenance du runner
+      RUNNER_GROUP: "Default"
+      # Token d'enregistrement (généré via l'UI GitHub, secret en prod)
+      # À fournir via `.env` ou secret manager (NON commité)
+      RUNNER_TOKEN: "${RUNNER_TOKEN:-}"
+      # Désactive l'update auto (on contrôle manuellement les MAJ)
+      DISABLE_RUNNER_UPDATE: "true"
+      # Cache des outils (npm, etc.) entre les jobs
+      ACTIONS_CACHE_URL: ""
+
+    volumes:
+      # Socket Docker de l'hôte → nécessaire pour docker build/run
+      # dans les jobs. C'est un point de confiance : limiter l'accès
+      # via labels de runner + reviewers obligatoires côté GitHub.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Workdir persistant : évite de tout retélécharger à chaque job
+      - runner-work:/work
+      - runner-home:/home/runner
+
+    networks:
+      - runner-net
+
+    # Healthcheck : le runner expose un endpoint interne qui répond
+    # tant qu'il est connecté au service GitHub. Pas critique car
+    # systemd supervise déjà le container.
+    healthcheck:
+      test: ["CMD", "test", "-f", "/home/runner/.runner"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+networks:
+  runner-net:
+    driver: bridge
+
+volumes:
+  runner-work:
+  runner-home:

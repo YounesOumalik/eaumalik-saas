@@ -1,0 +1,77 @@
+# ============================================================================
+# EAUMALIK — CI : lint + typecheck + build
+#
+# Tourne sur runner GitHub-hosted (ubuntu-latest), pas sur le VPS :
+#   - rapide (~3-5 min) pour avoir un feedback PR immédiat
+#   - isole la CI du CD (cf. deploy.yml) : un échec de lint ne
+#     déclenche pas un déploiement raté et vice-versa
+#
+# Déclenché à chaque PR et push sur main.
+# ============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Évite 2 CI simultanés sur la même ref (les branches de PR sont peu
+# coûteuses mais on n'est pas à l'abri d'un double-trigger accidentel).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint / Typecheck / Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 (cache npm)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: eaumalik-saas/package-lock.json
+
+      - name: Install dependencies
+        working-directory: eaumalik-saas
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        working-directory: eaumalik-saas
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: eaumalik-saas
+        run: npm run typecheck
+
+      # Le build ne s'exécute que si lint + typecheck passent.
+      # On simule les NEXT_PUBLIC_* avec des placeholders neutres
+      # pour que webpack DefinePlugin ne plante pas. Les vraies
+      # valeurs sont injectées au moment du deploy (build du Dockerfile).
+      - name: Build (smoke test)
+        working-directory: eaumalik-saas
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          NEXT_PUBLIC_USE_MOCKS: 'true'
+        run: npm run build
+
+      # Upload du .next en artifact pour debug rapide si le build échoue
+      # côté deploy. Pas utilisé par deploy.yml (qui rebuild lui-même),
+      # mais utile pour les devs qui veulent inspecter le bundle.
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build-${{ github.sha }}
+          path: eaumalik-saas/.next/
+          retention-days: 3
+          if-no-files-found: ignore

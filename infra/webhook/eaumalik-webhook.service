@@ -1,0 +1,36 @@
+# ============================================================================
+# EAUMALIK — systemd unit pour le webhook receiver GitHub
+#
+# Installation :
+#   sudo cp eaumalik-webhook.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now eaumalik-webhook
+# ============================================================================
+[Unit]
+Description=EAUMALIK GitHub Webhook Receiver
+Documentation=https://docs.github.com/webhooks
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/eaumalik/webhook
+ExecStart=/usr/bin/node /opt/eaumalik/webhook/server.js
+Restart=always
+RestartSec=5
+
+# Logs journald (consultables avec journalctl -u eaumalik-webhook)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=eaumalik-webhook
+
+# Sécurité raisonnable
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/var/log/eaumalik-webhook.log /var/log/eaumalik-deploy
+
+[Install]
+WantedBy=multi-user.target

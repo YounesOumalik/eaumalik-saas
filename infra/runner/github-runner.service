@@ -1,0 +1,57 @@
+# ============================================================================
+# EAUMALIK — systemd unit pour GitHub Actions self-hosted runner
+#
+# Installation :
+#   1. Copier ce fichier vers /etc/systemd/system/github-runner.service
+#      (sudo cp github-runner.service /etc/systemd/system/)
+#   2. Recharger systemd :
+#      sudo systemctl daemon-reload
+#   3. Activer le démarrage auto + démarrer :
+#      sudo systemctl enable --now github-runner
+#   4. Vérifier le statut :
+#      sudo systemctl status github-runner
+#      sudo journalctl -u github-runner -f
+#
+# Pourquoi docker-compose plutôt que docker run :
+#   - Gestion déclarative du réseau/volumes/labels
+#   - Rollback facile via `docker compose down && git checkout`
+#   - docker-compose v2 est intégré à Docker Engine (plugin)
+# ============================================================================
+[Unit]
+Description=EAUMALIK GitHub Actions self-hosted runner
+Documentation=https://docs.github.com/en/actions/hosting-your-runners/managing-self-hosted-runners
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=runner
+Group=docker
+WorkingDirectory=/opt/github-runner
+EnvironmentFile=-/opt/github-runner/.env
+ExecStartPre=-/usr/bin/docker compose -f /opt/github-runner/docker-compose.runner.yml down --remove-orphans
+ExecStart=/usr/bin/docker compose -f /opt/github-runner/docker-compose.runner.yml up
+ExecStop=/usr/bin/docker compose -f /opt/github-runner/docker-compose.runner.yml down
+ExecReload=/usr/bin/docker compose -f /opt/github-runner/docker-compose.runner.yml restart
+Restart=always
+RestartSec=10
+
+# Limites de ressources : empêche le runner de consommer toute la RAM
+# en cas de build pathologique. Adapter à la taille du VPS (ici 4 GB).
+MemoryMax=2G
+CPUQuota=200%
+
+# Sécurité supplémentaire
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+# Logs : journald s'en charge, pas besoin de fichier dédié
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=github-runner
+
+[Install]
+WantedBy=multi-user.target

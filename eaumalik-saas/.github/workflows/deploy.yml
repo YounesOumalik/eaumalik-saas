@@ -1,14 +1,29 @@
-# filepath: eaumalik-saas/.github/workflows/deploy.yml
 # ============================================================================
 # EAUMALIK — Déploiement automatisé sur SmartServeur (Contabo)
-# Miroir EXACT de scripts/deploy.sh (build Docker -> tar.gz -> SCP -> load -> run -> healthcheck)
-# Déclenché à chaque push sur `main` (ou manuellement via workflow_dispatch).
 #
-# Secrets GitHub requis (Settings -> Secrets -> Actions) :
-#   DEPLOY_SSH_KEY  Contenu de ~/.ssh/id_smartserveur (clé privée)
-#   DEPLOY_HOST     164.68.97.103
-#   DEPLOY_USER     younes
-#   ENV_PROD        Contenu exact de .env.prod local
+# Architecture :
+#   - Runner self-hosted Docker installé sur le VPS (cf. docs/DEPLOY.md).
+#     Le runner a accès au socket Docker du VPS → il peut faire
+#     `docker build` + `docker run` localement, SANS transfert réseau.
+#   - Ancien pipeline (GitHub-hosted → SCP tar.gz → load) supprimé :
+#     inutile désormais puisque le runner est sur le serveur.
+#
+# Deux modes de déclenchement :
+#   1. Push sur `main` (si la CI passe) → déploiement automatique
+#   2. workflow_dispatch manuel → permet de choisir le mode :
+#        - "deploy"   : build + redeploy (par défaut)
+#        - "rollback" : restaure le tag précédent sans rebuild
+#
+# Prérequis côté GitHub (Settings → Environments → production) :
+#   - Required reviewers : younes (empêche un push accidentel)
+#   - Deployment branches : main uniquement
+#   - Environment secret   : ENV_PROD (contenu de .env.prod)
+#
+# Prérequis côté VPS :
+#   - Self-hosted runner enregistré avec les labels
+#     [self-hosted, linux, x64, vps-eaumalik]
+#   - Réseau Docker `supabase-prod-net` existant
+#   - Dossier /opt/eaumalik/ créé et accessible au runner
 # ============================================================================
 name: Deploy EAUMALIK to SmartServeur
 
@@ -16,8 +31,19 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Mode de déploiement'
+        required: true
+        type: choice
+        default: deploy
+        options:
+          - deploy
+          - rollback
 
-# Évite 2 deploys simultanés (le 2e ferait `docker rm -f` pendant le 1er).
+# Un seul deploy à la fois — `cancel-in-progress: false` car
+# on ne veut PAS interrompre un déploiement en cours (le container
+# serait dans un état "à demi-rollback" impossible à diagnostiquer).
 concurrency:
   group: deploy-smartserveur
   cancel-in-progress: false
@@ -29,88 +55,199 @@ env:
   SERVER_DIR: /opt/eaumalik
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1 : déploiement (build + run)
+  # Tourne sur le runner self-hosted car il a besoin de Docker.
+  # ---------------------------------------------------------------------------
   deploy:
-    runs-on: ubuntu-latest
+    name: Build & Deploy
+    runs-on: [self-hosted, linux, x64, vps-eaumalik]
+    environment:
+      name: production
+      url: https://eaumalik.com
+    timeout-minutes: 30
+
     steps:
+      - name: Determine mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "action=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "action=deploy" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rollback (skip remaining steps)
+        if: steps.mode.outputs.action == 'rollback'
+        run: |
+          set -euo pipefail
+          cd "$SERVER_DIR"
+
+          PREV_TAG="$(cat .last_image 2>/dev/null || true)"
+          if [[ -z "$PREV_TAG" ]]; then
+            echo "❌ Aucun tag précédent dans .last_image — premier deploy ?"
+            exit 1
+          fi
+          echo "↩️  Rollback vers : $PREV_TAG"
+
+          docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+          docker run -d \
+            --name "$CONTAINER_NAME" \
+            --restart unless-stopped \
+            --network "$NETWORK_NAME" \
+            --env-file .env \
+            -p "127.0.0.1:${PORT:-3100}:${PORT:-3100}" \
+            --log-driver json-file \
+            --log-opt max-size=20m \
+            --log-opt max-file=5 \
+            "$IMAGE_NAME:$PREV_TAG"
+
+      # ----- Branche "deploy" (par défaut) -----
+
       - name: Checkout
+        if: steps.mode.outputs.action == 'deploy'
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Set up SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
-
-      - name: Add server to known_hosts
+      - name: Sync .env.prod to server
+        # Idempotent : recrée /opt/eaumalik/.env à chaque déploiement
+        # depuis le secret d'environnement ENV_PROD. Le chmod 600 est
+        # critique : ce fichier contient la service_role_key Supabase.
+        if: steps.mode.outputs.action == 'deploy'
         run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+          set -euo pipefail
+          mkdir -p "$SERVER_DIR"
+          # Échapper le contenu du secret pour le passer via une variable
+          # d'env (le stdin directe via <<< évite l'interprétation shell).
+          ENV_CONTENT="$ENV_PROD"
+          printf '%s\n' "$ENV_CONTENT" > "$SERVER_DIR/.env"
+          chmod 600 "$SERVER_DIR/.env"
+          echo "✅ .env synchronisé ($(wc -l < "$SERVER_DIR/.env") lignes)"
+        env:
+          ENV_PROD: ${{ secrets.ENV_PROD }}
 
-      - name: Build Docker image
+      - name: Build image (standalone, BuildKit cache)
+        if: steps.mode.outputs.action == 'deploy'
         working-directory: eaumalik-saas
         run: |
-          BUILD_TAG="$(date +%Y%m%d-%H%M%S)"
+          set -euo pipefail
+          BUILD_TAG="${GITHUB_SHA::7}-$(date +%Y%m%d-%H%M%S)"
           echo "BUILD_TAG=$BUILD_TAG" >> "$GITHUB_ENV"
-          docker build -t "${IMAGE_NAME}:${BUILD_TAG}" -t "${IMAGE_NAME}:latest" .
 
-      - name: Export & transfer image
+          # Vérifie que l'env contient au moins NEXT_PUBLIC_APP_URL
+          # (sinon on risque de pousser une image avec un bundle
+          # client NEXT_PUBLIC_* = undefined, cf. note Dockerfile).
+          grep -q '^NEXT_PUBLIC_APP_URL=' "$SERVER_DIR/.env" \
+            || { echo "❌ NEXT_PUBLIC_APP_URL manquant dans .env"; exit 1; }
+
+          # Copie locale .env.prod → .env.production pour @next/env
+          cp "$SERVER_DIR/.env" .env.production
+          cp "$SERVER_DIR/.env" .env.prod  # fallback nom historique
+
+          DOCKER_BUILDKIT=1 docker build \
+            --build-arg CACHE_BUST="$(date +%s)" \
+            --tag "$IMAGE_NAME:$BUILD_TAG" \
+            --tag "$IMAGE_NAME:latest" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            .
+
+          # Cleanup du fichier temporaire (le secret ne doit pas rester
+          # dans le contexte de build au-delà de cette étape)
+          rm -f .env.production .env.prod
+
+          echo "✅ Image built: $IMAGE_NAME:$BUILD_TAG"
+          docker images "$IMAGE_NAME" --format "  → {{.Repository}}:{{.Tag}} {{.Size}}"
+
+      - name: Save previous image tag (rollback safety net)
+        if: steps.mode.outputs.action == 'deploy'
         run: |
-          TMP_TAR="/tmp/${IMAGE_NAME}-${BUILD_TAG}.tar.gz"
-          echo "TMP_TAR=$TMP_TAR" >> "$GITHUB_ENV"
-          docker save "${IMAGE_NAME}:${BUILD_TAG}" | gzip > "$TMP_TAR"
-          scp "$TMP_TAR" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:$TMP_TAR"
+          set -euo pipefail
+          cd "$SERVER_DIR"
+          PREV=$(docker inspect --format '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || echo '')
+          echo "$PREV" > .last_image
+          echo "↩️  Tag précédent sauvegardé : $PREV"
 
-      - name: Sync .env to server
-        # Idempotent : recrée /opt/eaumalik/.env depuis le secret ENV_PROD à chaque déploiement.
+      - name: Deploy (stop old → run new)
+        if: steps.mode.outputs.action == 'deploy'
         run: |
-          echo "${{ secrets.ENV_PROD }}" | ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "mkdir -p ${SERVER_DIR} && cat > ${SERVER_DIR}/.env"
+          set -euo pipefail
+          cd "$SERVER_DIR"
 
-      - name: Deploy on server
+          # Récupère le PORT depuis le .env (cf. deploy.sh historique)
+          PORT=$(grep '^PORT=' .env | cut -d= -f2 | tr -d '[:space:]' || echo 3100)
+          export PORT
+
+          docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+          docker run -d \
+            --name "$CONTAINER_NAME" \
+            --restart unless-stopped \
+            --network "$NETWORK_NAME" \
+            --env-file .env \
+            -p "127.0.0.1:${PORT}:${PORT}" \
+            --log-driver json-file \
+            --log-opt max-size=20m \
+            --log-opt max-file=5 \
+            "$IMAGE_NAME:$BUILD_TAG"
+
+          echo "✅ Container démarré : $CONTAINER_NAME ($IMAGE_NAME:$BUILD_TAG)"
+
+      - name: Wait for healthcheck
+        if: steps.mode.outputs.action == 'deploy' || steps.mode.outputs.action == 'rollback'
         run: |
-          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "
-            set -e
-            cd ${SERVER_DIR}
-            docker load -i ${TMP_TAR}
-            rm -f ${TMP_TAR}
-
-            # Sauvegarde du tag précédent pour rollback
-            PREV=\$(docker inspect --format '{{.Config.Image}}' ${CONTAINER_NAME} 2>/dev/null || echo '')
-            echo \$PREV > ${SERVER_DIR}/.last_image.tmp
-
-            docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
-            PORT=\$(grep '^PORT=' .env | cut -d= -f2 | tr -d '[:space:]' || echo 3000)
-            docker run -d \
-              --name ${CONTAINER_NAME} \
-              --restart unless-stopped \
-              --network ${NETWORK_NAME} \
-              --env-file .env \
-              -p 127.0.0.1:\${PORT}:\${PORT} \
-              --log-driver json-file \
-              --log-opt max-size=20m \
-              --log-opt max-file=5 \
-              ${IMAGE_NAME}:${BUILD_TAG}
-
-            echo \${PREV} > ${SERVER_DIR}/.last_image
-            docker image prune -f
-          "
-
-      - name: Healthcheck
-        run: |
+          set -euo pipefail
           for i in $(seq 1 30); do
-            STATUS=$(ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "docker inspect --format '{{.State.Health.Status}}' ${CONTAINER_NAME} 2>/dev/null || echo starting")
+            STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo 'starting')
+            echo "  [$i/30] healthcheck status = $STATUS"
             if [ "$STATUS" = "healthy" ]; then
-              echo "✅ Container ${CONTAINER_NAME} healthy"
-              break
+              echo "✅ Container $CONTAINER_NAME is healthy"
+              exit 0
             fi
             if [ "$i" -eq 30 ]; then
-              echo "⚠️ Healthcheck timeout — vérifie : ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'docker logs ${CONTAINER_NAME}'"
+              echo "❌ Healthcheck timeout après 60s"
+              echo "--- last 50 log lines ---"
+              docker logs "$CONTAINER_NAME" --tail 50
               exit 1
             fi
             sleep 2
           done
 
-      - name: Cleanup local tar
+      - name: Smoke test (HTTP 200)
+        if: steps.mode.outputs.action == 'deploy' || steps.mode.outputs.action == 'rollback'
+        run: |
+          set -euo pipefail
+          PORT=$(grep '^PORT=' "$SERVER_DIR/.env" | cut -d= -f2 | tr -d '[:space:]' || echo 3100)
+          HTTP_CODE=$(curl -fsS -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/" || echo "000")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Smoke test failed: HTTP $HTTP_CODE"
+            docker logs "$CONTAINER_NAME" --tail 50
+            exit 1
+          fi
+          echo "✅ Smoke test OK (HTTP $HTTP_CODE)"
+
+      - name: Cleanup old images
+        if: steps.mode.outputs.action == 'deploy' && always()
+        run: |
+          # Garde les 3 derniers tags pour permettre des rollbacks
+          # plus loin que l'immédiat précédent.
+          docker images "$IMAGE_NAME" --format '{{.Tag}} {{.CreatedAt}}' \
+            | grep -v 'latest' \
+            | sort -k2 -r \
+            | tail -n +4 \
+            | awk '{print $1}' \
+            | xargs -r -n1 docker rmi "$IMAGE_NAME:" || true
+
+      - name: Post deploy summary
         if: always()
-        run: rm -f "$TMP_TAR"
+        run: |
+          echo "### 🐳 EAUMALIK Deploy Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Champ | Valeur |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Mode | ${{ steps.mode.outputs.action }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | $IMAGE_NAME:$BUILD_TAG |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Container | $CONTAINER_NAME |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Network | $NETWORK_NAME |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Server dir | $SERVER_DIR |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | \`$GITHUB_SHA\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| URL | https://eaumalik.com |" >> "$GITHUB_STEP_SUMMARY"
