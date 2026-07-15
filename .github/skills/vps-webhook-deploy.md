@@ -298,6 +298,33 @@ echo "════════════════════════�
 
 ## Checklist installation nouveau projet
 
+### Méthode rapide (recommandée) : `setup-new-project.sh`
+
+Ce script automatise TOUT (templates, Caddy, secret, systemd, clone repo) en une seule commande :
+
+```bash
+# Sur ton poste local
+./infra/webhook/setup-new-project.sh \
+  --app portfolio \
+  --domain younesoumalik.smartefp.com \
+  --repo https://github.com/YounesOumalik/portfolio.git \
+  --port 3000
+```
+
+Le script affiche à la fin :
+- Le **secret HMAC** à coller dans GitHub
+- L'URL du webhook à configurer
+- Les instructions complètes
+
+**Options** :
+- `--staging` : déploie sur push `develop` vers `staging.<domain>`
+- `--network supabase-prod-net` : si l'app doit rejoindre le réseau Docker existant
+- `--port <N>` : port de l'app (défaut 3000)
+- `--dry-run` : affiche tout sans rien exécuter
+- `--vps-host <host>` : alias SSH custom (défaut `smartserveur`)
+
+### Méthode manuelle (sans le script)
+
 - [ ] Créer le dossier `infra/webhook/` dans le repo
 - [ ] Copier les 4 fichiers (server.js, deploy-on-push.sh, *.service, install.sh)
 - [ ] Adapter les variables (APP, IMAGE_NAME, DOMAIN, REPO_URL, PORT)
