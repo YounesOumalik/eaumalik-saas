@@ -105,14 +105,17 @@ export async function createStaffUserAction(raw: unknown) {
       user_metadata: { full_name: parsed.data.full_name, phone: parsed.data.phone },
     });
     if (error || !data.user) throw error ?? new Error('Création échouée.');
-    const { error: upsertErr } = await supabase.from('users').upsert({
-      id: data.user.id,
-      email: parsed.data.email,
-      full_name: parsed.data.full_name,
-      phone: parsed.data.phone,
-      role: parsed.data.role,
-      permissions: parsed.data.permissions,
-    });
+    const { error: upsertErr } = await supabase.from('users').upsert(
+      {
+        id: data.user.id,
+        email: parsed.data.email,
+        full_name: parsed.data.full_name,
+        phone: parsed.data.phone || null,
+        role: parsed.data.role,
+        permissions: parsed.data.permissions,
+      },
+      { onConflict: 'id' }
+    );
     if (upsertErr) throw upsertErr;
     revalidatePath('/admin/personnels');
     return { success: true as const, staff: data.user };
