@@ -120,7 +120,11 @@ export async function createProduct(product: Omit<Product, 'id' | 'created_at' |
     ...product,
     slug,
   };
-  const supabase = await getSupabase();
+  // Les écritures sur `products` passent par le client service role : la RLS exige
+  // `is_admin()`, mais le rôle n'est pas toujours reflété immédiatement dans le JWT
+  // (cache session / promotion récente). Les Server Actions ont déjà autorisé
+  // l'appelant via `ensureAdminOrMock()` avant d'arriver ici.
+  const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase.from('products').insert(newProduct).select().single();
   if (error) throw error;
   return data as Product;
@@ -139,7 +143,8 @@ export async function updateProduct(id: string, product: Partial<Omit<Product, '
     throw new Error('Product not found in mocks');
   }
 
-  const supabase = await getSupabase();
+  // Écriture admin → service role (cf. note de createProduct ci-dessus).
+  const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase.from('products').update({ ...product, updated_at: now }).eq('id', id).select().single();
   if (error) throw error;
   return data as Product;
@@ -157,7 +162,8 @@ export async function deleteProduct(id: string): Promise<void> {
     throw new Error('Product not found in mocks');
   }
 
-  const supabase = await getSupabase();
+  // Suppression admin → service role (cf. note de createProduct).
+  const supabase = await getSupabaseAdmin();
   const { error } = await supabase.from('products').delete().eq('id', id);
   if (error) throw error;
 }
@@ -172,7 +178,9 @@ export async function updateProductStock(productId: string, delta: number): Prom
     }
     return;
   }
-  const supabase = await getSupabase();
+  // Décrément/incrément de stock — appelé depuis la création de commande (admin)
+  // et depuis la confirmation de paiement (client). Service role évite l'erreur RLS.
+  const supabase = await getSupabaseAdmin();
   const { data } = await supabase.from('products').select('stock').eq('id', productId).single();
   if (!data) return;
   await supabase.from('products').update({ stock: Math.max(0, data.stock + delta) }).eq('id', productId);
@@ -226,7 +234,8 @@ export async function updateOrderStatus(orderId: string, status: Order['status']
     }
     return;
   }
-  const supabase = await getSupabase();
+  // Update de statut commande par admin → service role (politique `Orders admin all`).
+  const supabase = await getSupabaseAdmin();
   await supabase.from('orders').update({ status, updated_at: new Date().toISOString() }).eq('id', orderId);
 }
 
@@ -278,9 +287,13 @@ export async function createOrder(input: {
     return order;
   }
 
-  const supabase = await getSupabase();
-  const { data: userData } = await supabase.auth.getUser();
-  const { data, error } = await supabase.from('orders')
+  // Création de commande (admin via ManualOrderDialog OU checkout client).
+  // Policy : `Orders anonymous insert` autorise user_id NULL ou = auth.uid().
+  // Si l'appelant est admin (ManualOrderDialog), auth.uid() != user_id → le
+  // client anonyme refuse. On force donc le service role pour bypasser la policy.
+  const adminSupabase = await getSupabaseAdmin();
+  const { data: userData } = await adminSupabase.auth.getUser();
+  const { data, error } = await adminSupabase.from('orders')
     .insert({
       order_number,
       user_id: userData?.user?.id ?? null,
@@ -297,7 +310,7 @@ export async function createOrder(input: {
     .single();
   if (error || !data) throw error ?? new Error('Insert order failed');
 
-  await supabase.from('order_items').insert(
+  await adminSupabase.from('order_items').insert(
     input.items.map(i => ({
       order_id: data.id,
       product_id: i.product_id,
@@ -409,7 +422,8 @@ export async function archiveStaff(
     return entry;
   }
 
-  const supabase = await getSupabase();
+  // Snapshot archive staff (admin) → service role.
+  const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase.from('users_archive').insert(entry).select().single();
   if (error) throw error;
   return data as ArchivedStaff;
@@ -438,7 +452,8 @@ export async function removeArchivedStaff(id: string): Promise<void> {
     writeArchivedUsers(list);
     return;
   }
-  const supabase = await getSupabase();
+  // Suppression snapshot archive (admin) → service role.
+  const supabase = await getSupabaseAdmin();
   const { error } = await supabase.from('users_archive').delete().eq('id', id);
   if (error) throw error;
 }
@@ -465,7 +480,8 @@ export async function updateMaintenanceStatus(id: string, status: MaintenancePro
     }
     return;
   }
-  const supabase = await getSupabase();
+  // Update statut fiche maintenance (admin via MaintenanceTable) → service role.
+  const supabase = await getSupabaseAdmin();
   await supabase
     .from('maintenance_records')
     .update({ status, updated_at: new Date().toISOString() })
@@ -619,7 +635,8 @@ export async function createNews(input: Omit<News, 'id' | 'created_at'>): Promis
     return normalized;
   }
 
-  const supabase = await getSupabase();
+  // Écriture admin news → service role (voir note sur createProduct).
+  const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase.from('news').insert(record).select().single();
   if (error) throw error;
   return normalizeNews(data as RawNews);
@@ -637,7 +654,8 @@ export async function updateNews(id: string, patch: Partial<Omit<News, 'id' | 'c
     return normalizeNews(updated);
   }
 
-  const supabase = await getSupabase();
+  // Écriture admin news → service role.
+  const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase.from('news').update(patch).eq('id', id).select().single();
   if (error) throw error;
   return normalizeNews(data as RawNews);
@@ -665,7 +683,8 @@ export async function archiveNews(id: string, reason: string | null = null): Pro
     return normalizeNews(updated);
   }
 
-  const supabase = await getSupabase();
+  // Archivage admin → service role.
+  const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase
     .from('news')
     .update({ is_archived: true, archived_at, archived_reason: reason ?? null })
@@ -695,7 +714,8 @@ export async function unarchiveNews(id: string): Promise<News> {
     return normalizeNews(updated);
   }
 
-  const supabase = await getSupabase();
+  // Désarchivage admin → service role.
+  const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase
     .from('news')
     .update({ is_archived: false, archived_at: null, archived_reason: null })
@@ -714,7 +734,8 @@ export async function deleteNews(id: string): Promise<void> {
     return;
   }
 
-  const supabase = await getSupabase();
+  // Suppression admin news → service role.
+  const supabase = await getSupabaseAdmin();
   const { error } = await supabase.from('news').delete().eq('id', id);
   if (error) throw error;
 }
@@ -907,7 +928,7 @@ export async function updateMaintenanceRecordStatus(
     }
     return;
   }
-  const supabase = await getSupabase();
+  const supabase = await getSupabaseAdmin();
   await supabase
     .from('maintenance_records')
     .update({ status, updated_at: new Date().toISOString() })
@@ -963,7 +984,8 @@ export async function addMaintenanceIntervention(input: {
     return intervention;
   }
 
-  const supabase = await getSupabase();
+  // Ajout intervention maintenance (admin) → service role (policy admin all).
+  const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase.from('maintenance_interventions').insert(intervention).select().single();
   if (error) throw error;
   return data as MaintenanceIntervention;
@@ -977,7 +999,8 @@ export async function updateMaintenanceNotes(id: string, notes: string): Promise
     if (r) { r.notes = notes; r.updated_at = new Date().toISOString(); writeMaintenance(bundle); }
     return;
   }
-  const supabase = await getSupabase();
+  // Notes maintenance (admin) → service role.
+  const supabase = await getSupabaseAdmin();
   await supabase.from('maintenance_records').update({ notes, updated_at: new Date().toISOString() }).eq('id', id);
 }
 
