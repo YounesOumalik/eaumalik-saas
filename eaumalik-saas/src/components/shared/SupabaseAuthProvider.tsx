@@ -199,21 +199,29 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     permissions,
     refresh,
     async signOut() {
-      // Mise à jour optimiste : on vide le state React IMMÉDIATEMENT pour
-      // que l'UI bascule sur "Connexion" sans dépendre du listener
-      // Supabase (qui peut mettre du temps à tirer sur réseau lent, ou ne
-      // pas tirer du tout si la requête `/logout` échoue).
+      // 1) Vidage OPTIMISTE du state React — instantané, sans dépendre du
+      //    réseau. L'UI bascule immédiatement sur "Connexion" et tous les
+      //    composants dépendants (Navbar, AdminShell) se re-rendent avec
+      //    session=null avant même le 1er octet envoyé à Supabase.
       setUser(null);
       setSession(null);
       setIsAdmin(false);
       setRole(null);
       setPermissions(null);
       setDisplayName('');
-      // Suppression effective côté Supabase (best-effort). Si elle échoue,
-      // l'utilisateur reste déconnecté côté UI et la prochaine navigation
-      // re-vérifiera l'état réel.
+      // 2) Purge locale du client Supabase (memory + localStorage + cookie
+      //    SB) en fire-and-forget pour ne PAS bloquer la navigation. C'est
+      //    synchrone côté Supabase v2 (clearSession) mais on l'isole pour
+      //    garantir la réactivité de l'UI.
       try {
-        await supabase.auth.signOut();
+        if (typeof supabase.auth.signOut === 'function') {
+          // signOut() retourne une Promise mais on ne l'attend pas pour
+          // garantir la déconnexion côté UI : si le réseau rame, l'UI est
+          // déjà passée en "déconnecté" et la requête réseau part en
+          // arrière-plan. Si elle échoue, l'utilisateur reste déconnecté
+          // côté client et la prochaine nav revérifiera côté serveur.
+          void supabase.auth.signOut();
+        }
       } catch {
         /* noop : on reste déconnecté côté UI */
       }

@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Droplets } from 'lucide-react';
 import { useSupabaseAuth } from './SupabaseAuthProvider';
+import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
 import ThemeToggle from './ThemeToggle';
 import CartButton from './CartButton';
 import BrandLogo from './BrandLogo';
@@ -57,6 +58,64 @@ export default function Navbar() {
     return pathname.startsWith(href.split('?')[0]);
   };
 
+  /**
+   * Déconnexion instantanée :
+   *  1. Vider le state React (`signOut()` du Provider) — UI bascule tout de suite.
+   *  2. Purger manuellement les cookies Supabase (`sb-*-auth-token`, etc.)
+   *     côté document.cookie avant la nav — sinon le middleware Next.js
+   *     peut renvoyer l'utilisateur sur la route protégée si le navigateur
+   *     met du temps à appliquer la suppression faite par signOut().
+   *  3. router.refresh() pour invalider le cache RSC puis navigation vers '/'.
+   *  4. signOut() réseau (best-effort, fire-and-forget).
+   *
+   * Cette séquence garantit que l'utilisateur est visuellement déconnecté
+   * en <16 ms (1 frame) — pas d'attente sur Supabase.
+   */
+  const handleSignOut = () => {
+    const supabase = maybeSupabaseBrowserClient();
+
+    // Étape 2 (cookies) : on purge les cookies SB et `eaumalik_dev_session`
+    // SYNCHRONEMENT avant toute navigation. document.cookie est sync.
+    if (typeof document !== 'undefined') {
+      const cookies = document.cookie.split(';');
+      for (const c of cookies) {
+        const eq = c.indexOf('=');
+        const name = (eq > -1 ? c.slice(0, eq) : c).trim();
+        if (!name) continue;
+        if (
+          name.startsWith('sb-') ||
+          name === 'eaumalik_dev_session' ||
+          name.startsWith('supabase-auth-token')
+        ) {
+          // Supprime pour / ET le domaine actuel (certaines paires
+          // Supabase sont posées sur le Host-only + Domain).
+          document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0`;
+          document.cookie = `${name}=; Path=/; Domain=${window.location.hostname}; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0`;
+        }
+      }
+    }
+
+    // Étape 1 : state React vide IMMÉDIATEMENT (signOut du Provider est sync
+    // pour la partie state, seul le réseau est async).
+    void signOut();
+
+    // Étape 3 : refresh du RSC + redirection vers / (home publique).
+    // refresh() invalide le cache des Server Components (sinon les pages
+    // cachées continueraient à voir la session), push('/') navigue.
+    router.refresh();
+    router.push('/');
+
+    // Étape 4 : force le signOut() Supabase en arrière-plan (best-effort).
+    // Si la requête échoue, l'utilisateur reste déconnecté côté client.
+    try {
+      if (supabase) {
+        void supabase.auth.signOut().catch(() => {});
+      }
+    } catch {
+      /* noop */
+    }
+  };
+
   // Rôle réel (admin, client, technician, sales…) prioritaire sur isAdmin.
   const userRole = role || (isAdmin ? 'admin' : 'client');
   const isAdminStaff = userRole === 'admin' || userRole === 'administrator';
@@ -105,14 +164,8 @@ export default function Navbar() {
                 <Link href="/client" className={linkClass}>Mon Espace</Link>
               )}
               <button
-                onClick={async () => {
-                  await signOut();
-                  // signOut() a déjà vidé le state React (mise à jour
-                  // optimiste). On force le re-fetch des server components
-                  // pour que les pages cachées (panier, compte, etc.)
-                  // re-rendent l'état « déconnecté », puis on redirige.
-                  router.refresh();
-                  router.push('/');
+                onClick={() => {
+                  handleSignOut();
                 }}
                 className="px-3 py-2 rounded-full text-sm font-semibold transition-colors"
                 style={{ color: 'var(--danger)' }}
@@ -173,11 +226,9 @@ export default function Navbar() {
                   <Link href="/client" className="mobile-link" onClick={() => setMobileOpen(false)}>Mon Espace</Link>
                 )}
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     setMobileOpen(false);
-                    await signOut();
-                    router.refresh();
-                    router.push('/');
+                    handleSignOut();
                   }}
                   className="mobile-link text-left font-semibold cursor-pointer w-full"
                   style={{ color: 'var(--danger)' }}
