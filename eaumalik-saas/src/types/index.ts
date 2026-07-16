@@ -4,6 +4,12 @@
 // ============================================================================
 
 export type ProductCategory = 'purificateurs' | 'industriel' | 'consommables';
+
+export const CATEGORY_LABELS: Record<ProductCategory, string> = {
+  purificateurs: 'Osmoseurs & Filtration domestique',
+  industriel: "Traitement de l'eau professionnel",
+  consommables: 'Filtres de rechange & Pièces',
+};
 export interface Product {
   id: string;
   name: string;

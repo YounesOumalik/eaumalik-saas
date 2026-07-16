@@ -1,6 +1,6 @@
 'use client';
 
-import { LogIn, UserPlus, KeyRound, User, Gift, Phone, MapPin, Home, Mail, Loader2 } from 'lucide-react';
+import { LogIn, UserPlus, KeyRound, User, Gift, Phone, MapPin, Home, Mail, Loader2, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -41,6 +41,9 @@ function LoginInner() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
@@ -96,6 +99,10 @@ function LoginInner() {
         if (json.created) {
           setSuccess('Compte créé avec succès. Vous pouvez maintenant vous connecter.');
           setIsSignUp(false);
+          setPassword('');
+          setConfirmPassword('');
+          setShowPassword(false);
+          setShowConfirmPassword(false);
           setLoading(false);
           setCaptchaAnswer('');
           return;
@@ -120,6 +127,7 @@ function LoginInner() {
       if (!fullName || fullName.length < 3) { setError('Nom complet obligatoire (min. 3 caractères).'); setLoading(false); return; }
       if (!PHONE_MA_REGEX.test(phone)) { setError('Numéro de téléphone invalide (ex: 0XXXXXXXXX).'); setLoading(false); return; }
       if (!city) { setError('La ville est obligatoire.'); setLoading(false); return; }
+      if (password !== confirmPassword) { setError('Les mots de passe ne correspondent pas.'); setLoading(false); return; }
       const pwd = PasswordSchema.safeParse(password);
       if (!pwd.success) { setError(pwd.error.issues[0]?.message ?? 'Mot de passe invalide.'); setLoading(false); return; }
 
@@ -158,6 +166,10 @@ function LoginInner() {
         setPhone('');
         setCity('');
         setAddress('');
+        setPassword('');
+        setConfirmPassword('');
+        setShowPassword(false);
+        setShowConfirmPassword(false);
         setReferralCode('');
         setCaptchaAnswer('');
         setLoading(false);
@@ -253,8 +265,50 @@ function LoginInner() {
           </div>
           <div>
             <label className="form-label text-left flex items-center gap-1.5"><KeyRound size={12} /> Mot de passe *</label>
-            <input type="password" required minLength={8} className="form-input" value={password} onChange={e => setPassword(e.target.value)} placeholder="8+ caractères, 1 majuscule, 1 chiffre" />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                minLength={8}
+                className="form-input pr-10"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder={isSignUp ? "8+ caractères, 1 majuscule, 1 chiffre" : "Votre mot de passe"}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
+                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
+          {isSignUp && (
+            <div>
+              <label className="form-label text-left flex items-center gap-1.5"><KeyRound size={12} /> Confirmer le mot de passe *</label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  required
+                  minLength={8}
+                  className="form-input pr-10"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Confirmez votre mot de passe"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
+                  aria-label={showConfirmPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+          )}
           {isSignUp && (
             <div>
               <label className="form-label text-left flex items-center gap-1.5"><Gift size={12} /> Code de parrainage (Optionnel)</label>
@@ -273,7 +327,7 @@ function LoginInner() {
               Mot de passe oublié ?
             </Link>
           ) : <span />}
-          <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(''); setSuccess(''); setCaptchaAnswer(''); }} className="text-primary-400 hover:text-primary-300 font-semibold">
+          <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(''); setSuccess(''); setCaptchaAnswer(''); setPassword(''); setConfirmPassword(''); setShowPassword(false); setShowConfirmPassword(false); }} className="text-primary-400 hover:text-primary-300 font-semibold">
             {isSignUp ? 'Déjà un compte ? Connectez-vous' : 'Pas de compte ? Créez-en un ici'}
           </button>
         </div>

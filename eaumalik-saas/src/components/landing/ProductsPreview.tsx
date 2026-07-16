@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { CATEGORY_LABELS } from '@/types';
 import type { Product } from '@/types';
 import AddToCartButton from '@/components/boutique/AddToCartButton';
 import { formatCurrency } from '@/lib/utils';
@@ -33,7 +34,7 @@ export default function ProductsPreview({ products }: { products: Product[] }) {
               </div>
               <div className="p-5">
                 <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--primary-light)' }}>
-                  {p.category === 'purificateurs' ? 'Purificateur' : p.category}
+                  {CATEGORY_LABELS[p.category] ?? p.category}
                 </div>
                 <h3 className="font-display font-bold text-base mb-1">{p.name}</h3>
                 <p className="text-sm mb-4 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{p.description}</p>

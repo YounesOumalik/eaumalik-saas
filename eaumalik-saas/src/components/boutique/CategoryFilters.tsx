@@ -1,12 +1,13 @@
 'use client';
 
+import { CATEGORY_LABELS } from '@/types';
 import type { ProductCategory } from '@/types';
 
 const CATEGORIES: { key: 'all' | ProductCategory; label: string }[] = [
   { key: 'all',            label: 'Tous' },
-  { key: 'purificateurs',  label: 'Systemes RO' },
-  { key: 'industriel',     label: 'Industriel' },
-  { key: 'consommables',   label: 'Filtres' },
+  { key: 'purificateurs',  label: CATEGORY_LABELS.purificateurs },
+  { key: 'industriel',     label: CATEGORY_LABELS.industriel },
+  { key: 'consommables',   label: CATEGORY_LABELS.consommables },
 ];
 
 interface Props {

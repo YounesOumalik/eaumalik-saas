@@ -8,9 +8,9 @@ import { formatCurrency } from '@/lib/utils';
 import { submitPublicInquiryAction } from '@/app/actions/contactActions';
 
 const CATEGORY_LABELS: Record<ProductCategory, string> = {
-  purificateurs: 'Purificateurs',
-  industriel: 'Industriel',
-  consommables: 'Consommables',
+  purificateurs: 'Osmoseurs & Filtration domestique',
+  industriel: "Traitement de l'eau professionnel",
+  consommables: 'Filtres de rechange & Pièces',
 };
 
 export default function CatalogSection({ products }: { products: Product[] }) {

@@ -12,6 +12,7 @@ import {
   ChevronUp, ChevronDown, GripVertical,
 } from 'lucide-react';
 import type { Product, ProductCategory } from '@/types';
+import { CATEGORY_LABELS } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/shared/ToastProvider';
 import Dialog from '@/components/ui/Dialog';
@@ -207,7 +208,7 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
               <select className="form-input" {...register('category')}>
                 {CATEGORIES.map(c => (
                   <option key={c} value={c}>
-                    {c === 'purificateurs' ? 'Purificateurs' : c === 'industriel' ? 'Industriel' : 'Consommables'}
+                    {CATEGORY_LABELS[c]}
                   </option>
                 ))}
               </select>
@@ -704,7 +705,7 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
           <option value="all">Toutes catégories</option>
           {CATEGORIES.map(c => (
             <option key={c} value={c}>
-              {c === 'purificateurs' ? 'Purificateurs' : c === 'industriel' ? 'Industriel' : 'Consommables'}
+              {CATEGORY_LABELS[c]}
             </option>
           ))}
         </select>
@@ -848,7 +849,7 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                     </div>
                   </td>
                   <td className="text-sm capitalize">
-                    {p.category === 'purificateurs' ? 'Purificateur' : p.category === 'industriel' ? 'Industriel' : 'Consommable'}
+                    {CATEGORY_LABELS[p.category]}
                   </td>
                   <td className="font-semibold text-sm">{formatCurrency(p.price)}</td>
                   {isSuperAdmin && (
@@ -967,7 +968,7 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
               <div className="p-4 flex flex-col flex-1">
                 <h4 className="font-display font-bold text-sm line-clamp-2 mb-1">{p.name}</h4>
                 <p className="text-[10px] uppercase tracking-wider font-bold mb-2" style={{ color: 'var(--text-muted)' }}>
-                  {p.category === 'purificateurs' ? 'Purificateur' : p.category === 'industriel' ? 'Industriel' : 'Consommable'}
+                  {CATEGORY_LABELS[p.category]}
                 </p>
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-bold gradient-text">{formatCurrency(p.price)}</span>
