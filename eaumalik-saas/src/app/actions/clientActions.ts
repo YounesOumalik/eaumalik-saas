@@ -17,16 +17,7 @@ import {
   readProductsRaw,
 } from '@/data/repositories';
 
-// ============================================================================
-// Helpers — bascule mock ↔ Supabase
-// ============================================================================
-function isMockMode(): boolean {
-  return (
-    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
-  );
-}
+import { isMockMode } from '@/lib/api-guard';
 
 // ============================================================================
 // Schémas Zod (validation stricte des payloads)

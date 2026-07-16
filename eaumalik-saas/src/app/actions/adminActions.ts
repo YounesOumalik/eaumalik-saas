@@ -58,14 +58,7 @@ async function gate() {
   return await requireAdmin();
 }
 
-/** En mode mock on n'instancie jamais le Service Role (qui throw sans clé). */
-function isMockMode(): boolean {
-  return (
-    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
-  );
-}
+import { isMockMode } from '@/lib/api-guard';
 
 function getSupabaseOrThrow() {
   if (isMockMode()) {

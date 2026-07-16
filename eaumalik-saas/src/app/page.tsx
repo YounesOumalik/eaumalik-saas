@@ -1,4 +1,6 @@
 import HeroSection from '@/components/landing/HeroSection';
+
+export const revalidate = 60;
 import FiltrationSection from '@/components/landing/FiltrationSection';
 import BoutiquePromotions from '@/components/boutique/BoutiquePromotions';
 import ProductsPreview from '@/components/landing/ProductsPreview';

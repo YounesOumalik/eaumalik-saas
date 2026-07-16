@@ -28,16 +28,15 @@ function isProtected(pathname: string) {
 }
 
 export async function updateSupabaseSession(request: NextRequest) {
-  // Pré-crée la réponse pour pouvoir modifier ses headers/cookies.
-  let response = NextResponse.next({ request: { headers: request.headers } });
-
   // Expose le pathname courant aux Server Components (utile pour /crm/layout
   // qui doit reconstruire un callbackUrl précis quand il redirige vers /login).
   // On passe par `request.headers` (forwardé au RSC) pour ne pas dépendre
   // d'une extension propriétaire.
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-crm-pathname', request.nextUrl.pathname + request.nextUrl.search);
-  response = NextResponse.next({ request: { headers: requestHeaders } });
+
+  // Pré-crée la réponse pour pouvoir modifier ses headers/cookies.
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -52,12 +51,12 @@ export async function updateSupabaseSession(request: NextRequest) {
       },
       set(name: string, value: string, options: CookieOptions) {
         request.cookies.set({ name, value, ...options });
-        response = NextResponse.next({ request: { headers: request.headers } });
+        response = NextResponse.next({ request: { headers: requestHeaders } });
         response.cookies.set({ name, value, ...options });
       },
       remove(name: string, options: CookieOptions) {
         request.cookies.set({ name, value: '', ...options });
-        response = NextResponse.next({ request: { headers: request.headers } });
+        response = NextResponse.next({ request: { headers: requestHeaders } });
         response.cookies.set({ name, value: '', ...options });
       },
     },

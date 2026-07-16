@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { readUsersRaw, writeUsersRaw } from '@/data/repositories';
 import { verifyCaptchaPayload } from '@/lib/captcha';
+import { setDevSessionCookie as setDevCookie } from '@/lib/auth/devSession';
 
 export const dynamic = 'force-dynamic';
 
@@ -131,12 +132,5 @@ function sanitize(u: any) {
  * puissent reconnaitre l'utilisateur via requireUser() en mode mock.
  */
 function setDevSessionCookie(res: NextResponse, user: any) {
-  res.cookies.set({
-    name: 'eaumalik_dev_session',
-    value: JSON.stringify(user),
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 7, // 7 jours
-  });
+  setDevCookie(res, user);
 }

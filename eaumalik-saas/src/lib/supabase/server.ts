@@ -8,7 +8,9 @@
  */
 import 'server-only';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { getDevUserFromCookie } from '@/lib/auth/devSession';
 
 export function createSupabaseServerClient() {
@@ -54,8 +56,6 @@ export function createSupabaseServiceRoleClient() {
     throw new Error('Service Role key manquante.');
   }
 
-  // require() dynamique OK côté serveur ; non exporté vers le client via 'server-only'.
-  const { createClient } = require('@supabase/supabase-js');
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
@@ -100,7 +100,7 @@ export type RealRole = (typeof ALL_ROLES)[number];
 /**Renvoie l'utilisateur authentifie via Supabase Auth (ou session dev en mode mock),
  * ou jete AuthError(401).
  */
-export async function requireUser(): Promise<AuthUser> {
+export const requireUser = cache(async (): Promise<AuthUser> => {
   const dev = await getDevUserFromCookie();
   if (dev) {
     // Le helper dev préserve le rôle métier réel ; on le normalise ici en
@@ -124,7 +124,7 @@ export async function requireUser(): Promise<AuthUser> {
   const user = data.user;
   const { data: profile } = await supabase
     .from('users')
-    .select('role, full_name')
+    .select('role, full_name, permissions')
     .eq('id', user.id)
     .single();
   const dbRole = profile?.role ?? 'client';
@@ -134,8 +134,9 @@ export async function requireUser(): Promise<AuthUser> {
     role: (dbRole === 'admin' || dbRole === 'administrator') ? 'admin' : 'client',
     real_role: dbRole,
     full_name: profile?.full_name ?? null,
+    permissions: profile?.permissions ?? null,
   };
-}
+});
 
 /** Renvoie l'utilisateur authentifie OU null (sans throw). */
 export async function getOptionalUser(): Promise<AuthUser | null> {

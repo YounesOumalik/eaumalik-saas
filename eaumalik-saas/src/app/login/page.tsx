@@ -28,7 +28,8 @@ export default function LoginPage() {
 function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const rawCallback = searchParams.get('callbackUrl') || '/';
+  const callbackUrl = (rawCallback.startsWith('/') && !rawCallback.startsWith('//') && !rawCallback.startsWith('/\\')) ? rawCallback : '/';
   const isDevMode = !maybeSupabaseBrowserClient();
 
   const [loading, setLoading] = useState(false);

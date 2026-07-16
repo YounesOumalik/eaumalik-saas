@@ -4,6 +4,7 @@ import { createSupabaseServiceRoleClient, createSupabaseServerClient, AuthError 
 import { badRequest, forbidden, safeErrorResponse, unauthorized } from '@/lib/api-guard';
 import { readOrdersRaw, writeOrdersRaw, readUsersRaw, writeUsersRaw } from '@/data/repositories';
 import { Order } from '@/types';
+import { setDevSessionCookie } from '@/lib/auth/devSession';
 
 export const dynamic = 'force-dynamic';
 
@@ -257,14 +258,7 @@ async function createOrderMock({
   );
   // Connecte immédiatement l'invité en posant le cookie de session dev (lu par requireUser).
   if (newUser) {
-    res.cookies.set({
-      name: 'eaumalik_dev_session',
-      value: JSON.stringify(sanitizeUser(newUser)),
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-    });
+    setDevSessionCookie(res, sanitizeUser(newUser));
   }
   return res;
 }

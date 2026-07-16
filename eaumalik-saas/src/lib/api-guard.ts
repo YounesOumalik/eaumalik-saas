@@ -46,8 +46,15 @@ export function sanitizePostgREST(input: string): string {
  * Indique si l'application tourne en mode "mocks" (dev local sans Supabase).
  * Utilisé pour court-circuiter l'authentification Supabase dans les route handlers
  * lors des tests / démos en local.
+ *
+ * SÉCURITÉ (audit 2026-07-16, SEC-02) : en production, on retourne TOUJOURS `false`,
+ * même si `NEXT_PUBLIC_SUPABASE_*` est accidentellement vide. Sans cette garde,
+ * une mauvaise config prod court-circuiterait l'auth Supabase et un user fictif
+ * `{ id: 'mock-admin', role: 'admin' }` deviendrait admin (cf. adminActions.gate()).
  */
 export function isMockMode(): boolean {
+  // Garde-fou production : AUCUN mock possible en prod, peu importe les vars d'env.
+  if (process.env.NODE_ENV === 'production') return false;
   if (process.env.NEXT_PUBLIC_USE_MOCKS === 'true') return true;
   return !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 }

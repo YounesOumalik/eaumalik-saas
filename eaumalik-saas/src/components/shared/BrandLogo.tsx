@@ -18,11 +18,12 @@ import Image from 'next/image';
 
 type Size = 'sm' | 'md' | 'lg' | 'xl';
 
+// Tailles ×2.5 par rapport à la version initiale (sm 28px, md 36px, lg 48px, xl 64px).
 const SIZE_CLASS: Record<Size, { h: string; max: string }> = {
-  sm: { h: 'h-7',  max: 'max-w-[28px]' },
-  md: { h: 'h-9',  max: 'max-w-[36px]' },
-  lg: { h: 'h-12', max: 'max-w-[48px]' },
-  xl: { h: 'h-16', max: 'max-w-[64px]' },
+  sm: { h: 'h-[70px]',  max: 'max-w-[70px]' },
+  md: { h: 'h-[90px]',  max: 'max-w-[90px]' },
+  lg: { h: 'h-[120px]', max: 'max-w-[120px]' },
+  xl: { h: 'h-[160px]', max: 'max-w-[160px]' },
 };
 
 export interface BrandLogoProps {
@@ -51,7 +52,7 @@ export default function BrandLogo({
         width={1440}
         height={1440}
         priority={priority}
-        sizes="(max-width: 768px) 36px, 48px"
+        sizes="(max-width: 768px) 90px, 160px"
         className={`${sz.h} w-auto aspect-square object-contain select-none`}
         draggable={false}
       />

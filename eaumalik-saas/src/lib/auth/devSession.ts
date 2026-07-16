@@ -1,10 +1,10 @@
 import 'server-only';
+import crypto from 'node:crypto';
 
 /**
  * Helpers de session pour le mode dev/mock (sans Supabase).
  * La session est portée par un cookie httpOnly `eaumalik_dev_session`
- * posé par /api/auth/dev-login. Contrairement à sessionStorage, le cookie
- * est partagé entre tous les onglets et survit à un refresh de page.
+ * posé par /api/auth/dev-login, protégé par signature HMAC.
  */
 
 export interface DevUser {
@@ -16,11 +16,40 @@ export interface DevUser {
   permissions?: Record<string, boolean> | null;
 }
 
+function getSecret(): string {
+  const fromEnv = process.env.CAPTCHA_SECRET?.trim();
+  if (fromEnv) return fromEnv;
+  // Fallback dev stable basé sur le CWD
+  return crypto.createHash('sha256').update(`eaumalik-dev-session-secret:${process.cwd()}`).digest('hex');
+}
+
+export function signPayload(payload: Record<string, any>): string {
+  const data = JSON.stringify(payload);
+  const signature = crypto.createHmac('sha256', getSecret()).update(data).digest('hex');
+  return `${data}.${signature}`;
+}
+
+export function verifyPayload(value: string): Record<string, any> | null {
+  try {
+    const parts = value.split('.');
+    if (parts.length !== 2) return null;
+    const [data, signature] = parts;
+    if (!data || !signature) return null;
+    const expectedSignature = crypto.createHmac('sha256', getSecret()).update(data).digest('hex');
+    const signatureBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
+    if (signatureBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
+      return null;
+    }
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Lit la session dev (mode mock) depuis le cookie httpOnly posé par
  * /api/auth/dev-login, ou retourne null si pas en mode dev.
- * Préserve le rôle métier réel (pas seulement admin/client) afin que l'UI
- * puisse afficher le menu CRM en fonction des permissions effectives.
  */
 export async function getDevUserFromCookie(): Promise<DevUser | null> {
   if (process.env.NEXT_PUBLIC_USE_MOCKS !== 'true') return null;
@@ -34,7 +63,8 @@ export async function getDevUserFromCookie(): Promise<DevUser | null> {
     const store = cookies();
     const raw = store.get('eaumalik_dev_session')?.value;
     if (!raw) return null;
-    const u = JSON.parse(raw);
+    const u = verifyPayload(raw);
+    if (!u) return null;
     return {
       id: u.id,
       email: u.email,
@@ -54,6 +84,29 @@ export function isDevMockMode(): boolean {
     !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
     !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
   );
+}
+
+/** Ecrit le cookie de session dev signé. */
+export function setDevSessionCookie(res: {
+  cookies: {
+    set: (opts: {
+      name: string;
+      value: string;
+      httpOnly: boolean;
+      sameSite: 'lax' | 'strict' | 'none';
+      path: string;
+      maxAge: number;
+    }) => void;
+  };
+}, user: Record<string, any>) {
+  res.cookies.set({
+    name: 'eaumalik_dev_session',
+    value: signPayload(user),
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7, // 7 jours
+  });
 }
 
 /** Efface le cookie de session dev (déconnexion mode mock). */

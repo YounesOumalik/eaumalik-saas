@@ -1,3 +1,11 @@
+const supabaseHostRaw = (process.env.NEXT_PUBLIC_SUPABASE_URL || '')
+  .replace(/^https?:\/\//, '')
+  .replace(/\/$/, '');
+const supabaseHost =
+  supabaseHostRaw && !supabaseHostRaw.includes('YOUR-PROJECT')
+    ? supabaseHostRaw
+    : 'db-dev.smartefp.com';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -15,6 +23,7 @@ const nextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: 'picsum.photos' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: supabaseHost },
     ],
   },
   experimental: {
@@ -49,15 +58,6 @@ const nextConfig = {
   },
   async headers() {
     const isProd = process.env.NODE_ENV === 'production';
-    const supabaseHostRaw = (process.env.NEXT_PUBLIC_SUPABASE_URL || '')
-      .replace(/^https?:\/\//, '')
-      .replace(/\/$/, '');
-    // Fallback robuste : si l'env est vide ou reste le placeholder Supabase,
-    // on utilise l'hôte réel du déploiement (db-dev.smartefp.com).
-    const supabaseHost =
-      supabaseHostRaw && !supabaseHostRaw.includes('YOUR-PROJECT')
-        ? supabaseHostRaw
-        : 'db-dev.smartefp.com';
     const imgHosts = ['picsum.photos', 'images.unsplash.com'];
     // CDN externes nécessaires au rendu (fonts, icônes)
     const fontHosts = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdnjs.cloudflare.com'];

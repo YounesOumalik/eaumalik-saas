@@ -2,7 +2,7 @@
 
 import 'server-only';
 import { z } from 'zod';
-import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient, createSupabaseServiceRoleClient, requireUser, effectivePermissions } from '@/lib/supabase/server';
 import { getDevUserFromCookie } from '@/lib/auth/devSession';
 import { isMockMode } from '@/lib/api-guard';
 
@@ -145,30 +145,12 @@ export async function getCurrentUserPermissionsAction() {
   }
 
   try {
-    const supabase = createSupabaseServerClient();
-    const { data: userRes } = await supabase.auth.getUser();
-    if (!userRes.user) return { success: false as const, error: 'Non authentifié.' };
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', userRes.user.id)
-      .single();
-
-    const role = (profile?.role as 'admin' | 'client') ?? 'client';
-    const isAdmin = role === 'admin';
-
+    const user = await requireUser();
+    const perms = effectivePermissions(user);
     return {
       success: true as const,
-      role,
-      permissions: {
-        can_view_products: isAdmin,
-        can_edit_products: isAdmin,
-        can_validate_orders: isAdmin,
-        can_follow_prospects: isAdmin,
-        can_view_comptabilite: isAdmin,
-        can_view_stocks: isAdmin,
-      },
+      role: user.real_role ?? user.role,
+      permissions: perms,
     };
   } catch {
     return { success: false as const, error: 'Erreur lors de la lecture des permissions.' };

@@ -10,6 +10,7 @@ import {
   listProducts,
 } from '@/data/repositories';
 import { getOptionalUser } from '@/lib/supabase/server';
+import { getDevUserFromCookie } from '@/lib/auth/devSession';
 
 /**
  * Actions produits cote serveur.
@@ -63,21 +64,9 @@ async function ensureAdminOrMock(): Promise<{ ok: boolean; error?: string; role?
 
 /** Recupere le role effectif de l'appelant (mode mock : via cookie dev-login). */
 async function getCallerRole(): Promise<'admin' | 'client' | null> {
-  const useMocks =
-    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-
-  if (useMocks) {
-    try {
-      const { cookies } = await import('next/headers');
-      const raw = cookies().get('eaumalik_dev_session')?.value;
-      if (!raw) return null;
-      const u = JSON.parse(raw);
-      return u.role === 'admin' ? 'admin' : 'client';
-    } catch {
-      return null;
-    }
+  const dev = await getDevUserFromCookie();
+  if (dev) {
+    return (dev.role === 'admin' || dev.role === 'administrator') ? 'admin' : 'client';
   }
   const user = await getOptionalUser();
   return user?.role ?? null;
