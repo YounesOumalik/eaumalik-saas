@@ -10,6 +10,7 @@ import { PHONE_MA_REGEX } from '@/lib/utils';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 import BrandLogo from '@/components/shared/BrandLogo';
 import CaptchaChallenge from '@/components/shared/CaptchaChallenge';
+import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
 
 const PasswordSchema = z
   .string()
@@ -31,6 +32,7 @@ function LoginInner() {
   const rawCallback = searchParams.get('callbackUrl') || '/';
   const callbackUrl = (rawCallback.startsWith('/') && !rawCallback.startsWith('//') && !rawCallback.startsWith('/\\')) ? rawCallback : '/';
   const isDevMode = !maybeSupabaseBrowserClient();
+  const { refresh } = useSupabaseAuth();
 
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -99,6 +101,7 @@ function LoginInner() {
           return;
         }
         window.dispatchEvent(new Event('eaumalik:dev-session-change'));
+        await refresh();
         const role = json.user?.role;
         if (role === 'admin' || role === 'staff') {
           router.push('/admin');
@@ -185,6 +188,7 @@ function LoginInner() {
         }
         return;
       }
+      await refresh();
       const userRole = json.user?.role;
       if (userRole === 'admin' || userRole === 'staff') {
         router.push('/admin');
