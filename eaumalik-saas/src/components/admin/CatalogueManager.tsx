@@ -944,11 +944,18 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
           {visibleProducts.map(p => (
             <article key={p.id} className="glass-card overflow-hidden flex flex-col" style={{ transform: 'none' }}>
               <div
-                className="aspect-video relative flex items-center justify-center"
-                style={{ background: 'var(--bg-card)' }}
+                className="relative flex items-center justify-center p-3"
+                style={{ background: 'var(--bg-card)', height: '160px' }}
               >
                 {p.image_url ? (
-                  <Image src={p.image_url} alt={p.name} fill className="object-cover" unoptimized />
+                  <Image
+                    src={p.image_url}
+                    alt={p.name}
+                    fill
+                    className="object-contain p-1"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                    unoptimized
+                  />
                 ) : (
                   <i className="fa-solid fa-droplet text-3xl" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
                 )}

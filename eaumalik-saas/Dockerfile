@@ -146,11 +146,11 @@ EXPOSE 3100
 
 # tini = init propre (PID 1, gestion signaux, zombies)
 ENTRYPOINT ["/sbin/tini", "--"]
-# Note : en mode standalone, `HOSTNAME=0.0.0.0` n'est PAS respecté
-# par Next.js (bug connu). Il faut passer --hostname 0.0.0.0
-# explicitement à `node server.js` pour écouter sur toutes les
-# interfaces (et non sur 127.0.0.1 uniquement).
-CMD ["node", "server.js", "--hostname", "0.0.0.0", "--port", "3100"]
+# Next.js 14.2.35 standalone : le flag CLI --hostname est IGNORÉ si
+# process.env.HOSTNAME est déjà défini. On laisse donc ENV HOSTNAME=0.0.0.0
+# (défini plus haut) faire le travail, et deploy.sh force -e HOSTNAME=0.0.0.0
+# au docker run pour garantir l'écoute sur toutes les interfaces.
+CMD ["node", "server.js", "--port", "3100"]
 
 # Healthcheck : wget (déjà installé ci-dessus pour ne pas ajouter curl).
 # Pointe vers /api/auth/captcha (léger, sans optimisation d'image)

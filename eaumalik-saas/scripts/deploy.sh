@@ -69,7 +69,20 @@ if $NO_BUILD; then
   IMAGE_REF="${IMAGE_NAME}:latest"
 else
   log "Build de l'image ${IMAGE_NAME}:${BUILD_TAG}"
-  docker build -t "${IMAGE_NAME}:${BUILD_TAG}" -t "${IMAGE_NAME}:latest" .
+  # Next.js inlines les NEXT_PUBLIC_* au build via webpack DefinePlugin.
+  # On les passe en --build-arg pour garantir qu'elles sont présentes
+  # dans process.env au moment du `npm run build` (le COPY .env.production
+  # seul ne suffit pas toujours en mode standalone).
+  SUPABASE_URL=$(grep '^NEXT_PUBLIC_SUPABASE_URL=' .env.prod | cut -d= -f2-)
+  SUPABASE_KEY=$(grep '^NEXT_PUBLIC_SUPABASE_ANON_KEY=' .env.prod | cut -d= -f2-)
+  APP_URL=$(grep '^NEXT_PUBLIC_APP_URL=' .env.prod | cut -d= -f2-)
+  USE_MOCKS=$(grep '^NEXT_PUBLIC_USE_MOCKS=' .env.prod | cut -d= -f2-)
+  docker build \
+    --build-arg NEXT_PUBLIC_SUPABASE_URL="$SUPABASE_URL" \
+    --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$SUPABASE_KEY" \
+    --build-arg NEXT_PUBLIC_APP_URL="$APP_URL" \
+    --build-arg NEXT_PUBLIC_USE_MOCKS="$USE_MOCKS" \
+    -t "${IMAGE_NAME}:${BUILD_TAG}" -t "${IMAGE_NAME}:latest" .
   log "Build OK"
   IMAGE_REF="${IMAGE_NAME}:${BUILD_TAG}"
 fi
