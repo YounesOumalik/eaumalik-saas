@@ -82,5 +82,28 @@ export async function updateSupabaseSession(request: NextRequest) {
     return redirect;
   }
 
+  // Redirection vers google-complete si l'utilisateur est connecté mais son
+  // profil est incomplet (téléphone/ville manquants après connexion Google).
+  if (
+    isAuthed &&
+    !request.nextUrl.pathname.startsWith('/login/google-complete') &&
+    !request.nextUrl.pathname.startsWith('/login')
+  ) {
+    try {
+      const { data: profile } = await supabase
+        .from('user_profile_complete')
+        .select('is_complete')
+        .eq('id', (await supabase.auth.getUser()).data.user?.id)
+        .single();
+      if (profile && !profile.is_complete) {
+        const completeUrl = new URL('/login/google-complete', request.url);
+        completeUrl.searchParams.set('callbackUrl', request.nextUrl.pathname + request.nextUrl.search);
+        return NextResponse.redirect(completeUrl);
+      }
+    } catch {
+      // En cas d'erreur (vue absente, RLS), on laisse passer.
+    }
+  }
+
   return response;
 }

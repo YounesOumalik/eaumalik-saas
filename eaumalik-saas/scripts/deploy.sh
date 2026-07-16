@@ -106,6 +106,7 @@ ssh "$SERVER_HOST" "
     --restart unless-stopped \
     --network ${NETWORK_NAME} \
     --env-file .env \
+    -e HOSTNAME=0.0.0.0 \
     -p 127.0.0.1:\${PORT}:\${PORT} \
     --log-driver json-file \
     --log-opt max-size=20m \

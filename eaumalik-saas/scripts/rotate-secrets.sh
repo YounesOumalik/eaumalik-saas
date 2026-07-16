@@ -23,6 +23,11 @@ ENV_FILE="/opt/eaumalik/.env"
 SUPABASE_ENV="/opt/smartefp-supabase-prod/_stack/.env"
 BACKUP_DIR="/opt/eaumalik/.env-backups"
 
+# Charger le module Bitwarden (auto-détection mode)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./bitwarden-push.sh
+source "$SCRIPT_DIR/bitwarden-push.sh"
+
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "❌ $ENV_FILE introuvable" >&2; exit 1
 fi
@@ -105,4 +110,19 @@ echo ""
 echo "✅ Rotation terminée."
 echo "   Backup : $BACKUP"
 echo "   ⚠️  IMPORTANT : édite aussi le secret GitHub 'ENV_PROD' sinon le prochain deploy écrasera ces changements."
-echo "   ⚠️  Stocker les nouvelles clés dans Bitwarden (coffre EAUMALIK-PROD)."
+
+# ---------- Push vers Bitwarden ----------
+echo ""
+echo "═══ Synchronisation Bitwarden ═══"
+bw_check
+bw_push_secrets_from_env <<EOF
+ANON_KEY=$NEW_ANON
+SERVICE_ROLE_KEY=$NEW_SR
+CAPTCHA_SECRET=$NEW_CAPTCHA
+EOF
+if [[ -z "${SKIP_JWT:-}" ]]; then
+  NEW_JWT_SECRET=$(sudo grep "^JWT_SECRET=" "$SUPABASE_ENV" | cut -d= -f2- || true)
+  [[ -n "$NEW_JWT_SECRET" ]] && \
+    bw_push_secret "EAUMALIK — Supabase JWT_SECRET ($(date +%Y-%m-%d))" "$NEW_JWT_SECRET"
+fi
+bw_print_commands

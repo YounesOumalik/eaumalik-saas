@@ -12,6 +12,12 @@
 # ============================================================================
 set -euo pipefail
 
+# Charge le module Bitwarden
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./bitwarden-push.sh
+source "$SCRIPT_DIR/bitwarden-push.sh"
+bw_check
+
 ENV_FILE="/opt/smartefp-supabase-prod/_stack/.env"
 # IMPORTANT : on tape DIRECTEMENT sur auth-prod via son IP Docker (10.0.5.7)
 # car Kong ne route pas correctement /auth/v1/admin/users (HTTP 502).
@@ -108,3 +114,9 @@ echo "  ╚═══════════════════════
 echo ""
 echo "  ⚠️  Stocke-le MAINTENANT dans Bitwarden (coffre EAUMALIK-PROD)."
 echo "  ⚠️  Ne le colle PAS dans le chat."
+
+# ---------- Push vers Bitwarden ----------
+bw_push_secrets_from_env <<EOF
+ADMIN_PASSWORD=$ADMIN_PASSWORD
+EOF
+bw_print_commands

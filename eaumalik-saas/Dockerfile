@@ -32,8 +32,7 @@ COPY package.json package-lock.json* ./
 # `npm install` est plus lent que `npm ci` mais résout les dépendances
 # à partir de package.json uniquement. Le cache BuildKit ~/.npm garde
 # les paquets téléchargés entre builds.
-RUN --mount=type=cache,target=/root/.npm \
-    npm install --no-audit --no-fund --prefer-offline
+RUN npm install --no-audit --no-fund --prefer-offline
 
 # ----------------------------------------------------------------------------
 FROM node:20-alpine AS builder
@@ -90,8 +89,7 @@ COPY . .
 # .next/cache évite de tout re-transpiler si seul un
 # fichier source change. Le --frozen-lockfile est
 # implicite via npm ci déjà exécuté dans deps.
-RUN --mount=type=cache,target=/app/.next/cache \
-    npm run build
+RUN npm run build
 
 # ----------------------------------------------------------------------------
 # Stage runner : standalone. On copie uniquement les fichiers

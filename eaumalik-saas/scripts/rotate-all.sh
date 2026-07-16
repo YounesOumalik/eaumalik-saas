@@ -48,6 +48,12 @@ command -v docker >/dev/null || { err "docker absent"; exit 1; }
 [[ -f "$SUPABASE_DIR/generate-secrets.sh" ]] || { err "generate-secrets.sh introuvable"; exit 1; }
 [[ -f "$APP_ENV" ]] || { err "$APP_ENV introuvable"; exit 1; }
 
+# Charge le module Bitwarden
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./bitwarden-push.sh
+source "$SCRIPT_DIR/bitwarden-push.sh"
+bw_check
+
 log ""
 warn "⚠️  Cette opération va :"
 warn "   • Déconnecter TOUS les utilisateurs (JWT_SECRET changé)"
@@ -193,17 +199,24 @@ log "  Backups :"
 log "    $SUPABASE_BACKUP"
 log "    $APP_BACKUP"
 echo ""
-warn "⚠️  COPIE CES VALEURS DANS BITWARDEN (coffre EAUMALIK-PROD) :"
-echo ""
-log "  ANON_KEY:"
-echo "    $NEW_ANON"
-echo ""
-log "  SERVICE_ROLE_KEY:"
-echo "    $NEW_SERVICE"
-echo ""
-log "  CAPTCHA_SECRET (déjà rotaté aujourd'hui):"
-echo "    $NEW_CAPTCHA"
-echo ""
+
+# ---------- Push Bitwarden (auto ou fallback) ----------
+bw_push_secrets_from_env <<EOF
+ANON_KEY=$NEW_ANON
+SERVICE_ROLE_KEY=$NEW_SERVICE
+CAPTCHA_SECRET=$NEW_CAPTCHA
+EOF
+NEW_JWT_SECRET=$(sudo grep "^JWT_SECRET=" "$STACK_ENV" | cut -d= -f2- || true)
+[[ -n "$NEW_JWT_SECRET" ]] && \
+  bw_push_secret "EAUMALIK — Supabase JWT_SECRET ($(date +%Y-%m-%d))" "$NEW_JWT_SECRET"
+NEW_PG_PWD=$(sudo grep "^POSTGRES_PASSWORD=" "$STACK_ENV" | cut -d= -f2- || true)
+[[ -n "$NEW_PG_PWD" ]] && \
+  bw_push_secret "EAUMALIK — Postgres POSTGRES_PASSWORD ($(date +%Y-%m-%d))" "$NEW_PG_PWD"
+NEW_VAULT_KEY=$(sudo grep "^VAULT_ENC_KEY=" "$STACK_ENV" | cut -d= -f2- || true)
+[[ -n "$NEW_VAULT_KEY" ]] && \
+  bw_push_secret "EAUMALIK — Supabase VAULT_ENC_KEY ($(date +%Y-%m-%d))" "$NEW_VAULT_KEY"
+bw_print_commands
+
 warn "⚠️  APRÈS CE SCRIPT :"
 warn "   1. Mettre à jour le secret GitHub 'ENV_PROD' (sinon le prochain deploy"
 warn "      écrasera /opt/eaumalik/.env avec les anciennes clés)."

@@ -1,22 +1,23 @@
 'use client';
 
-import { LogIn, UserPlus, KeyRound, User, Gift, Phone, MapPin, Home, Mail, Loader2, Eye, EyeOff } from 'lucide-react';
-import Link from 'next/link';
+import { LogIn, KeyRound, Mail, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { z } from 'zod';
 import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
-import { PHONE_MA_REGEX } from '@/lib/utils';
-import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 import BrandLogo from '@/components/shared/BrandLogo';
 import CaptchaChallenge from '@/components/shared/CaptchaChallenge';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
 
-const PasswordSchema = z
-  .string()
-  .min(8, 'Le mot de passe doit contenir au moins 8 caractères.')
-  .regex(/[A-Z]/, 'Le mot de passe doit contenir au moins une majuscule.')
-  .regex(/[0-9]/, 'Le mot de passe doit contenir au moins un chiffre.');
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+    </svg>
+  );
+}
 
 export default function LoginPage() {
   return (
@@ -34,57 +35,61 @@ function LoginInner() {
   const isDevMode = !maybeSupabaseBrowserClient();
   const { refresh } = useSupabaseAuth();
 
-  const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  // 'choice' = écran de choix (client Google / staff admin)
+  // 'admin'  = formulaire email + mot de passe + CAPTCHA (staff uniquement)
+  const [mode, setMode] = useState<'choice' | 'admin'>('choice');
 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Champs du formulaire admin
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [city, setCity] = useState('');
-  const [address, setAddress] = useState('');
-  const [referralCode, setReferralCode] = useState('');
   const [captchaAnswer, setCaptchaAnswer] = useState('');
   const [captchaReload, setCaptchaReload] = useState(0);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const supabase = maybeSupabaseBrowserClient();
+      if (!supabase) {
+        setError('Configuration Supabase manquante.');
+        setLoading(false);
+        return;
+      }
+      const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/login/google-complete?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+        },
+      });
+      if (oauthErr) {
+        setError(oauthErr.message);
+        setLoading(false);
+      }
+    } catch {
+      setError('Erreur de connexion Google.');
+      setLoading(false);
+    }
+  };
+
+  const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setSuccess('');
-
-    // Garde-fou côté client (UX uniquement, le serveur revalide tout).
     if (!captchaAnswer || captchaAnswer.trim().length < 4) {
       setError('Merci de compléter le CAPTCHA.');
       return;
     }
-
     setLoading(true);
 
     if (isDevMode) {
-      // Mode mock : on authentifie l'utilisateur contre src/data/mock.ts
-      // via l'API /api/auth/dev-login. Le CAPTCHA est validé côté serveur.
       try {
         const res = await fetch('/api/auth/dev-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            password,
-            isSignUp,
-            captcha_answer: captchaAnswer,
-            profile: {
-              full_name: fullName,
-              phone,
-              city,
-              address,
-              referred_by: referralCode,
-            },
-          }),
+          body: JSON.stringify({ email, password, captcha_answer: captchaAnswer }),
         });
         const json = await res.json();
         if (!res.ok) {
@@ -96,17 +101,6 @@ function LoginInner() {
           }
           return;
         }
-        if (json.created) {
-          setSuccess('Compte créé avec succès. Vous pouvez maintenant vous connecter.');
-          setIsSignUp(false);
-          setPassword('');
-          setConfirmPassword('');
-          setShowPassword(false);
-          setShowConfirmPassword(false);
-          setLoading(false);
-          setCaptchaAnswer('');
-          return;
-        }
         window.dispatchEvent(new Event('eaumalik:dev-session-change'));
         await refresh();
         const role = json.user?.role;
@@ -116,74 +110,13 @@ function LoginInner() {
           router.push(callbackUrl);
         }
         router.refresh();
-      } catch (err) {
+      } catch {
         setError('Erreur de connexion au mode dev.');
         setLoading(false);
       }
       return;
     }
 
-    if (isSignUp) {
-      if (!fullName || fullName.length < 3) { setError('Nom complet obligatoire (min. 3 caractères).'); setLoading(false); return; }
-      if (!PHONE_MA_REGEX.test(phone)) { setError('Numéro de téléphone invalide (ex: 0XXXXXXXXX).'); setLoading(false); return; }
-      if (!city) { setError('La ville est obligatoire.'); setLoading(false); return; }
-      if (password !== confirmPassword) { setError('Les mots de passe ne correspondent pas.'); setLoading(false); return; }
-      const pwd = PasswordSchema.safeParse(password);
-      if (!pwd.success) { setError(pwd.error.issues[0]?.message ?? 'Mot de passe invalide.'); setLoading(false); return; }
-
-      // En mode Supabase on passe par /api/auth/sign-up pour que le CAPTCHA
-      // soit validé côté serveur AVANT l'appel à supabase.auth.signUp().
-      try {
-        const res = await fetch('/api/auth/sign-up', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            password,
-            captcha_answer: captchaAnswer,
-            profile: {
-              full_name: fullName,
-              phone,
-              city,
-              address: address || null,
-              referred_by: referralCode || null,
-            },
-          }),
-        });
-        const json = await res.json();
-        if (!res.ok) {
-          setError(json.error || 'Inscription impossible.');
-          setLoading(false);
-          if (typeof json.error === 'string' && /captcha/i.test(json.error)) {
-            setCaptchaAnswer('');
-            setCaptchaReload(n => n + 1);
-          }
-          return;
-        }
-        setSuccess('Compte créé avec succès. Vérifiez votre email pour confirmer, puis connectez-vous.');
-        setIsSignUp(false);
-        setFullName('');
-        setPhone('');
-        setCity('');
-        setAddress('');
-        setPassword('');
-        setConfirmPassword('');
-        setShowPassword(false);
-        setShowConfirmPassword(false);
-        setReferralCode('');
-        setCaptchaAnswer('');
-        setLoading(false);
-        return;
-      } catch (err) {
-        setError('Erreur lors de la création du compte.');
-        setLoading(false);
-        return;
-      }
-    }
-
-    // Mode Supabase — LOGIN : on délègue aussi à une route serveur pour valider
-    // le CAPTCHA. Cela garantit qu'aucun script ne peut tenter de brute-forcer
-    // un compte sans passer le CAPTCHA.
     try {
       const res = await fetch('/api/auth/sign-in', {
         method: 'POST',
@@ -208,7 +141,7 @@ function LoginInner() {
         router.push(callbackUrl);
       }
       router.refresh();
-    } catch (err) {
+    } catch {
       setError('Erreur de connexion.');
       setLoading(false);
     }
@@ -220,117 +153,104 @@ function LoginInner() {
         <div className="mb-6 flex justify-center">
           <BrandLogo size="lg" priority />
         </div>
-        <h1 className="font-display font-extrabold text-2xl mb-2 text-center">
-          {isSignUp ? <>Créer un <span className="gradient-text">Compte</span></> : <>Connexion <span className="gradient-text">EAUMALIK</span></>}
-        </h1>
-        <p className="text-sm mb-6 text-center" style={{ color: 'var(--text-secondary)' }}>
-          {isSignUp ? 'Rejoignez-nous pour gérer vos commandes, parrainages et alertes.' : 'Accédez à votre espace client, suivi de vos commandes et alertes de maintenance.'}
-        </p>
 
-        {error && (
-          <div className="p-3 mb-4 rounded-lg text-xs bg-red-500/10 border border-red-500/20 text-red-400">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="p-3 mb-4 rounded-lg text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-            {success}
-          </div>
-        )}
+        {mode === 'choice' ? (
+          <>
+            <h1 className="font-display font-extrabold text-2xl mb-2 text-center">
+              Connexion <span className="gradient-text">EAUMALIK</span>
+            </h1>
+            <p className="text-sm mb-6 text-center" style={{ color: 'var(--text-secondary)' }}>
+              Connectez-vous pour accéder à votre espace client, suivre vos commandes et alertes de maintenance.
+            </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {isSignUp && (
-            <>
+            {error && (
+              <div className="p-3 mb-4 rounded-lg text-xs bg-red-500/10 border border-red-500/20 text-red-400">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="btn-primary w-full justify-center py-3 text-base flex items-center gap-2 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="animate-spin" size={16} /> : <><GoogleIcon /> Continuer avec Google</>}
+            </button>
+
+            <div className="flex items-center my-5">
+              <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+              <span className="px-3 text-xs" style={{ color: 'var(--text-secondary)' }}>ou</span>
+              <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => { setMode('admin'); setError(''); }}
+              className="btn-outline w-full justify-center py-3 text-base flex items-center gap-2"
+            >
+              <ShieldCheck size={16} /> Espace Administration
+            </button>
+
+            <p className="text-xs text-center mt-4" style={{ color: 'var(--text-secondary)' }}>
+              En vous connectant, vous acceptez nos Conditions Générales de Vente.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="font-display font-extrabold text-2xl mb-2 text-center">
+              Administration <span className="gradient-text">EAUMALIK</span>
+            </h1>
+            <p className="text-sm mb-6 text-center" style={{ color: 'var(--text-secondary)' }}>
+              Accès réservé au personnel autorisé. Connexion par email et mot de passe.
+            </p>
+
+            {error && (
+              <div className="p-3 mb-4 rounded-lg text-xs bg-red-500/10 border border-red-500/20 text-red-400">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleAdminSubmit} className="space-y-4">
               <div>
-                <label className="form-label text-left flex items-center gap-1.5"><User size={12} /> Nom complet *</label>
-                <input type="text" required className="form-input" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Jean Dupont" />
+                <label className="form-label text-left flex items-center gap-1.5"><Mail size={12} /> Email *</label>
+                <input type="email" required className="form-input" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@eaumalik.com" />
               </div>
               <div>
-                <label className="form-label text-left flex items-center gap-1.5"><Phone size={12} /> Numéro de téléphone *</label>
-                <input type="tel" required className="form-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="06XXXXXXXX" />
+                <label className="form-label text-left flex items-center gap-1.5"><KeyRound size={12} /> Mot de passe *</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    className="form-input pr-10"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Votre mot de passe"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
+                    aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className="form-label text-left flex items-center gap-1.5"><MapPin size={12} /> Ville *</label>
-                <SearchableCitySelect value={city} onChange={setCity} placeholder="Choisir une ville" required />
-              </div>
-              <div>
-                <label className="form-label text-left flex items-center gap-1.5"><Home size={12} /> Adresse (Optionnel)</label>
-                <input type="text" className="form-input" value={address} onChange={e => setAddress(e.target.value)} placeholder="Rue, quartier, n°..." />
-              </div>
-            </>
-          )}
-          <div>
-            <label className="form-label text-left flex items-center gap-1.5"><Mail size={12} /> Email *</label>
-            <input type="email" required className="form-input" value={email} onChange={e => setEmail(e.target.value)} placeholder="votre@email.com" />
-          </div>
-          <div>
-            <label className="form-label text-left flex items-center gap-1.5"><KeyRound size={12} /> Mot de passe *</label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required
-                minLength={8}
-                className="form-input pr-10"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder={isSignUp ? "8+ caractères, 1 majuscule, 1 chiffre" : "Votre mot de passe"}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
-                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              <CaptchaChallenge value={captchaAnswer} onChange={setCaptchaAnswer} disabled={loading} reloadToken={captchaReload} />
+              <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 text-base disabled:opacity-50">
+                {loading ? <Loader2 className="animate-spin" size={16} /> : <><LogIn size={16} /> Se connecter</>}
+              </button>
+            </form>
+
+            <div className="flex items-center justify-center mt-5 text-sm">
+              <button type="button" onClick={() => { setMode('choice'); setError(''); setPassword(''); setCaptchaAnswer(''); }} className="text-primary-400 hover:text-primary-300 font-semibold">
+                ← Retour
               </button>
             </div>
-          </div>
-          {isSignUp && (
-            <div>
-              <label className="form-label text-left flex items-center gap-1.5"><KeyRound size={12} /> Confirmer le mot de passe *</label>
-              <div className="relative">
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  required
-                  minLength={8}
-                  className="form-input pr-10"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  placeholder="Confirmez votre mot de passe"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
-                  aria-label={showConfirmPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                >
-                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-          )}
-          {isSignUp && (
-            <div>
-              <label className="form-label text-left flex items-center gap-1.5"><Gift size={12} /> Code de parrainage (Optionnel)</label>
-              <input type="text" className="form-input" value={referralCode} onChange={e => setReferralCode(e.target.value)} placeholder="EX : A1B2C3" />
-            </div>
-          )}
-          <CaptchaChallenge value={captchaAnswer} onChange={setCaptchaAnswer} disabled={loading} reloadToken={captchaReload} />
-          <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 text-base disabled:opacity-50">
-            {loading ? <Loader2 className="animate-spin" size={16} /> : isSignUp ? <><UserPlus size={16} /> Créer mon compte</> : <><LogIn size={16} /> Se connecter</>}
-          </button>
-        </form>
-
-        <div className="flex items-center justify-between mt-5 text-sm">
-          {!isSignUp ? (
-            <Link href="/login/mot-de-passe-oublie" className="text-primary-400 hover:text-primary-300 font-semibold">
-              Mot de passe oublié ?
-            </Link>
-          ) : <span />}
-          <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(''); setSuccess(''); setCaptchaAnswer(''); setPassword(''); setConfirmPassword(''); setShowPassword(false); setShowConfirmPassword(false); }} className="text-primary-400 hover:text-primary-300 font-semibold">
-            {isSignUp ? 'Déjà un compte ? Connectez-vous' : 'Pas de compte ? Créez-en un ici'}
-          </button>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
