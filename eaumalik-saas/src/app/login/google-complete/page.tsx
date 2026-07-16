@@ -50,20 +50,43 @@ function GoogleCompleteInner() {
       setChecking(false);
       return;
     }
-    supabase.auth.getUser().then(({ data }) => {
+    let cancelled = false;
+    supabase.auth.getUser().then(async ({ data }) => {
       const user = data?.user;
+      if (cancelled) return;
       if (!user) {
         // Pas de session Google valide — on renvoie à /login proprement.
         router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
         return;
       }
-      // Pré-remplir avec les valeurs déjà présentes en base (cas d'un user
-      // qui revient sur la page après avoir rafraîchi sans soumettre).
       setGoogleEmail(user.email ?? null);
-      setPhone((user.user_metadata?.phone as string) ?? '');
-      setCity((user.user_metadata?.city as string) ?? '');
+
+      // On lit la table `users` (source de vérité) plutôt que user_metadata,
+      // qui peut être en retard après un update.
+      const { data: row } = await supabase
+        .from('users')
+        .select('phone, city')
+        .eq('id', user.id)
+        .single();
+      if (cancelled) return;
+      setPhone(row?.phone || (user.user_metadata?.phone as string) || '');
+      setCity(row?.city || (user.user_metadata?.city as string) || '');
+
+      // Auto-skip : si l'user a DÉJÀ un profil complet (phone + ville en base),
+      // on le redirige directement vers callbackUrl. C'était la source du
+      // "retour à la même page" : l'user complétait son profil, revenait sur
+      // google-complete (via refresh ou bouton "Précédent"), et voyait un
+      // formulaire vide comme s'il n'avait rien fait.
+      if (row?.phone && row?.city) {
+        const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
+        router.replace(target);
+        router.refresh();
+        return;
+      }
+
       setChecking(false);
     });
+    return () => { cancelled = true; };
   }, [router, callbackUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,8 +116,24 @@ function GoogleCompleteInner() {
 
       if (updateErr) throw updateErr;
 
+      // Persiste aussi dans user_metadata pour que les prochaines lectures
+      // (et la session JWT) voient les nouvelles valeurs immédiatement,
+      // sans dépendre d'un éventuel cache RLS.
+      await supabase.auth.updateUser({
+        data: { phone, city },
+      });
+
       setSuccess('Profil complété avec succès !');
-      setTimeout(() => router.push(callbackUrl), 1500);
+
+      // IMPORTANT : router.refresh() force le re-fetch RSC et la mise à jour
+      // de la session côté serveur. Sans ça, le middleware Next.js peut garder
+      // l'ancien état (user_profile_complete.is_complete = false) et re-boucler
+      // sur /login/google-complete. router.replace (et non push) : on ne veut
+      // PAS que /login/google-complete reste dans l'historique — sinon le
+      // bouton "Précédent" du navigateur ramène sur ce formulaire vide.
+      const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
+      router.replace(target);
+      router.refresh();
     } catch (err) {
       setError((err as Error).message || 'Erreur lors de la mise à jour.');
       setLoading(false);
