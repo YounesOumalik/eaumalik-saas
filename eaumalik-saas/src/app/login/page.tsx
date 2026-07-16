@@ -59,18 +59,51 @@ function LoginInner() {
         setLoading(false);
         return;
       }
-      const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+
+      // Filet de sécurité : si signInWithOAuth ne navigue pas (popup blocker,
+      // erreur réseau, ou bibliothèque qui ne fait plus de window.location
+      // assign depuis @supabase/ssr >= 0.5), on remet le bouton en état après
+      // 8s plutôt que de laisser le spinner infini.
+      const safetyTimeout = window.setTimeout(() => {
+        setLoading(false);
+        setError(
+          'La fenêtre Google ne s\u2019est pas ouverte. Vérifiez votre bloqueur de popups puis réessayez.'
+        );
+      }, 8000);
+
+      // `prompt: 'select_account'` force Google à TOUJOURS afficher le sélecteur
+      // de compte, même si l\u2019utilisateur a déjà une session Google active
+      // (Chrome smart-lock, cookies persistants). Sans ce param, Google peut
+      // authentifier silencieusement et l\u2019utilisateur atterrit directement sur
+      // /login/google-complete sans avoir vu Google → impression de "rien ne
+      // se passe".
+      const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/login/google-complete?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+          queryParams: {
+            prompt: 'select_account',
+          },
         },
       });
+
+      window.clearTimeout(safetyTimeout);
+
       if (oauthErr) {
         setError(oauthErr.message);
         setLoading(false);
+        return;
       }
-    } catch {
-      setError('Erreur de connexion Google.');
+
+      // @supabase/ssr >= 0.5 navigue automatiquement via window.location.assign
+      // quand data.url est présent et qu'on n'est pas en skipBrowserRedirect.
+      // Si data.url est null/invalide, on remet le spinner à zéro.
+      if (!data?.url) {
+        setLoading(false);
+        setError('Impossible de démarrer la connexion Google (URL manquante).');
+      }
+    } catch (err) {
+      setError((err as Error)?.message || 'Erreur de connexion Google.');
       setLoading(false);
     }
   };
