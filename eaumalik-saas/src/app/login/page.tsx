@@ -1,7 +1,7 @@
 'use client';
 
 import { LogIn, KeyRound, Mail, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
 import { createDirectSupabaseClient } from '@/lib/supabase/client';
@@ -49,8 +49,13 @@ function LoginInner() {
   const [showPassword, setShowPassword] = useState(false);
   const [captchaAnswer, setCaptchaAnswer] = useState('');
   const [captchaReload, setCaptchaReload] = useState(0);
+  const googleLoginRef = useRef(false);
 
   const handleGoogleLogin = async () => {
+    // Guard synchrone : empeche tout double appel (setState est asynchrone,
+    // donc le disabled={loading} peut ne pas etre encore applique).
+    if (googleLoginRef.current) return;
+    googleLoginRef.current = true;
     setLoading(true);
     setError('');
     try {
@@ -62,6 +67,7 @@ function LoginInner() {
       if (!supabase) {
         setError('Configuration Supabase manquante.');
         setLoading(false);
+        googleLoginRef.current = false;
         return;
       }
 
@@ -70,6 +76,7 @@ function LoginInner() {
       // assign depuis @supabase/ssr >= 0.5), on remet le bouton en état après
       // 8s plutôt que de laisser le spinner infini.
       const safetyTimeout = window.setTimeout(() => {
+        googleLoginRef.current = false;
         setLoading(false);
         setError(
           'La fenêtre Google ne s\u2019est pas ouverte. Vérifiez votre bloqueur de popups puis réessayez.'
@@ -111,6 +118,7 @@ function LoginInner() {
       if (oauthErr) {
         setError(oauthErr.message);
         setLoading(false);
+        googleLoginRef.current = false;
         return;
       }
 
@@ -119,11 +127,13 @@ function LoginInner() {
       // Si data.url est null/invalide, on remet le spinner à zéro.
       if (!data?.url) {
         setLoading(false);
+        googleLoginRef.current = false;
         setError('Impossible de démarrer la connexion Google (URL manquante).');
       }
     } catch (err) {
       setError((err as Error)?.message || 'Erreur de connexion Google.');
       setLoading(false);
+      googleLoginRef.current = false;
     }
   };
 
