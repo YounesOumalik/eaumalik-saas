@@ -77,15 +77,16 @@ function LoginInner() {
       // On pointe vers /api/auth/callback (route serveur). Cette route :
       //   1. Reçoit le ?code=... de retour OAuth
       //   2. Lit le code_verifier dans les cookies (posé par signInWithOAuth)
-      //   3. Échange le code côté SERVEUR via createServerClient
-      //   4. Pose les cookies de session dans la réponse HTTP
-      //   5. Redirige vers /login/google-complete PROPRE (sans ?code=)
-      //
-      // Avantage : l'échange est atomique, pas de race condition avec React.
+      //   3. Le navigateur reçoit l'URL avec ?code=..., le client @supabase/ssr
+      //      détecte le code automatiquement (detectSessionInUrl:true),
+      //      lit le code_verifier depuis son cookie, et fait l'échange PKCE.
+      //   4. La session est créée côté navigateur (cookies + mémoire).
+      //   5. La page google-complete écoute onAuthStateChange('SIGNED_IN')
+      //      avant de décider : afficher le formulaire ou rediriger.
       const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/api/auth/callback?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+          redirectTo: `${window.location.origin}/login/google-complete?callbackUrl=${encodeURIComponent(callbackUrl)}`,
           queryParams: {
             prompt: 'select_account',
           },
