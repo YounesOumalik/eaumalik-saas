@@ -88,6 +88,14 @@ function LoginInner() {
       //   4. La session est créée côté navigateur (cookies + mémoire).
       //   5. La page google-complete écoute onAuthStateChange('SIGNED_IN')
       //      avant de décider : afficher le formulaire ou rediriger.
+      // Nettoyer tout ancien code_verifier dans localStorage (un clic
+      // precedent aurait pu en laisser un). Evite l'erreur "code challenge
+      // does not match previously saved code verifier".
+      for (let i = window.localStorage.length - 1; i >= 0; i--) {
+        const k = window.localStorage.key(i);
+        if (k && k.includes('code-verifier')) window.localStorage.removeItem(k);
+      }
+
       const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

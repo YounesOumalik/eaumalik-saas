@@ -93,7 +93,19 @@ function GoogleCompleteInner() {
         const json = await res.json();
         if (redirectedRef.current) return;
         if (!json.ok) {
-          setError(`Echange echoue : ${json.error}`);
+          // Si le code_verifier ne correspond pas (double-clic, rafraichi),
+          // on nettoie localStorage et on propose de recommencer.
+          if (json.error && json.error.includes('code challenge')) {
+            for (let i = window.localStorage.length - 1; i >= 0; i--) {
+              const k = window.localStorage.key(i);
+              if (k && k.includes('code-verifier')) window.localStorage.removeItem(k);
+            }
+            setError(
+              'Session expiree (double authentification detectee). Veuillez reessayer.'
+            );
+          } else {
+            setError(`Echange echoue : ${json.error}`);
+          }
           setProfileChecked(true);
           return;
         }
