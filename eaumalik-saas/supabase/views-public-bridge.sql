@@ -57,6 +57,17 @@ ALTER VIEW public.news              OWNER TO postgres;
 ALTER VIEW public.maintenance_records      OWNER TO postgres;
 ALTER VIEW public.maintenance_interventions OWNER TO postgres;
 
+-- Vue user_profile_complete : exposée au middleware via PostgREST pour
+-- décider si un user authentifié doit être forcé à compléter son profil
+-- (Google OAuth sans phone/ville). Le middleware fait .from('user_profile_complete')
+-- sans préfixe, donc la vue DOIT exister dans public.*. Le code applicatif
+-- reste simple, et le middleware peut faire son job.
+DROP VIEW IF EXISTS public.user_profile_complete CASCADE;
+CREATE VIEW public.user_profile_complete AS
+  SELECT * FROM eaumalik.user_profile_complete;
+ALTER VIEW public.user_profile_complete OWNER TO postgres;
+GRANT SELECT ON public.user_profile_complete TO anon, authenticated, service_role;
+
 -- Table d'archive personnel (créée par migration 0002 dans public.*)
 -- Cette table n'est PAS un bridge : c'est une vraie table dans public pour
 -- conserver l'historique des comptes supprimés.

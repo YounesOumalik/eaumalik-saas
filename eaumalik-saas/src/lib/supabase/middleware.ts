@@ -88,18 +88,50 @@ export async function updateSupabaseSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith('/login')
   ) {
     try {
-      const { data: profile } = await supabase
-        .from('user_profile_complete')
-        .select('is_complete')
-        .eq('id', (await supabase.auth.getUser()).data.user?.id)
-        .single();
-      if (profile && !profile.is_complete) {
+      const { data: userIdData } = await supabase.auth.getUser();
+      const userId = userIdData?.user?.id;
+      if (!userId) {
+        return response;
+      }
+
+      // Tente d'abord la vue user_profile_complete (rapide, calculée en base).
+      // En cas d'échec (vue non exposée via bridge public), fallback sur un
+      // SELECT direct sur public.users pour vérifier phone + city.
+      let isComplete = false;
+      try {
+        const { data: profile } = await supabase
+          .from('user_profile_complete')
+          .select('is_complete')
+          .eq('id', userId)
+          .single();
+        isComplete = !!profile?.is_complete;
+      } catch {
+        // Fallback robuste : SELECT direct sur la table user (vue public.users).
+        try {
+          const { data: row } = await supabase
+            .from('users')
+            .select('phone, city')
+            .eq('id', userId)
+            .single();
+          isComplete = !!(row?.phone && row?.city);
+        } catch {
+          // En cas d'échec total (RLS, vue absente), on laisse passer pour
+          // ne pas bloquer l'utilisateur. Il pourra compléter son profil
+          // depuis son espace client plus tard.
+          isComplete = true;
+        }
+      }
+
+      if (!isComplete) {
         const completeUrl = new URL('/login/google-complete', request.url);
-        completeUrl.searchParams.set('callbackUrl', request.nextUrl.pathname + request.nextUrl.search);
+        completeUrl.searchParams.set(
+          'callbackUrl',
+          request.nextUrl.pathname + request.nextUrl.search
+        );
         return NextResponse.redirect(completeUrl);
       }
     } catch {
-      // En cas d'erreur (vue absente, RLS), on laisse passer.
+      // En cas d'erreur inattendue, on laisse passer.
     }
   }
 
