@@ -31,9 +31,15 @@ export function signPayload(payload: Record<string, any>): string {
 
 export function verifyPayload(value: string): Record<string, any> | null {
   try {
-    const parts = value.split('.');
-    if (parts.length !== 2) return null;
-    const [data, signature] = parts;
+    // FIX : le séparateur '.' peut apparaître DANS le JSON (ex: emails comme
+    // 'user@gmail.com', timestamps ISO '2026-07-11T15:52:54.421Z'). split('.')
+    // éclate alors le tableau en >2 morceaux et la vérification échoue.
+    // On utilise lastIndexOf('.') pour ne découper qu'au DERNIER point,
+    // qui sépare toujours la signature HMAC du payload.
+    const lastDot = value.lastIndexOf('.');
+    if (lastDot < 0) return null;
+    const data = value.slice(0, lastDot);
+    const signature = value.slice(lastDot + 1);
     if (!data || !signature) return null;
     const expectedSignature = crypto.createHmac('sha256', getSecret()).update(data).digest('hex');
     const signatureBuffer = Buffer.from(signature);
