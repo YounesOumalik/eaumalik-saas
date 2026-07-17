@@ -4,6 +4,7 @@ import { LogIn, KeyRound, Mail, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createDirectSupabaseClient } from '@/lib/supabase/client';
 import BrandLogo from '@/components/shared/BrandLogo';
 import CaptchaChallenge from '@/components/shared/CaptchaChallenge';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
@@ -53,7 +54,11 @@ function LoginInner() {
     setLoading(true);
     setError('');
     try {
-      const supabase = maybeSupabaseBrowserClient();
+      // Utiliser le client DIRECT (localStorage) pour l'OAuth.
+      // @supabase/ssr stocke le code_verifier dans un cookie chunké
+      // qui n'est pas retrouvé après le redirect → "PKCE code verifier
+      // not found in storage". Avec localStorage, pas de chunking.
+      const supabase = createDirectSupabaseClient();
       if (!supabase) {
         setError('Configuration Supabase manquante.');
         setLoading(false);

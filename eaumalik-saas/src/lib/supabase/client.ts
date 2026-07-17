@@ -3,6 +3,7 @@
  * Respecte les RLS policies côté serveur via auth.uid().
  */
 import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 
 export function createSupabaseBrowserClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -14,19 +15,30 @@ export function createSupabaseBrowserClient() {
     );
   }
 
-  // flowType: 'implicit' au lieu de 'pkce' (défaut).
-  // PKCE nécessite de persister le code_verifier dans un cookie navigateur
-  // qui doit survivre au redirect OAuth (Google → Supabase → notre app).
-  // Avec @supabase/ssr + chunking, ce cookie n'est pas fiablement retrouvé
-  // sur la page de retour → "PKCE code verifier not found in storage".
-  // Le flow implicite met les tokens directement dans le hash de l'URL,
-  // contournant ce problème de persistance de cookie.
-  return createBrowserClient(url, key, {
+  return createBrowserClient(url, key);
+}
+
+/**
+ * Client Supabase DIRECT (sans @supabase/ssr) pour le flux OAuth.
+ * Stocke le code_verifier PKCE dans localStorage (et non dans un cookie
+ * chunké par @supabase/ssr). Résout le bug "PKCE code verifier not found
+ * in storage" car localStorage survit au redirect OAuth sans altération.
+ *
+ * Ce client n'est PAS destiné aux appels RLS classiques — ses tokens de
+ * session sont stockés dans localStorage, pas dans les cookies HTTPOnly.
+ * Utiliser UNIQUEMENT pour signInWithOAuth + exchangeCodeForSession.
+ */
+export function createDirectSupabaseClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key || url.trim() === '' || key.trim() === '') return null;
+  return createClient(url, key, {
     auth: {
-      flowType: 'implicit',
-      detectSessionInUrl: true,
+      flowType: 'pkce',
+      detectSessionInUrl: false,
       persistSession: true,
       autoRefreshToken: true,
+      storage: window.localStorage,
     },
   });
 }

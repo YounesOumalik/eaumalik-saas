@@ -3,7 +3,7 @@
 import { Phone, MapPin, Loader2, CheckCircle2 } from 'lucide-react';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
+import { maybeSupabaseBrowserClient, createDirectSupabaseClient } from '@/lib/supabase/client';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
 import { PHONE_MA_REGEX } from '@/lib/utils';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
@@ -42,55 +42,94 @@ function GoogleCompleteInner() {
   const [profileChecked, setProfileChecked] = useState(false);
   const redirectedRef = useRef(false);
 
-  // Avec flowType='implicit', les tokens arrivent dans le hash de l'URL.
-  // Le client supabase (detectSessionInUrl:true) les detecte automatiquement
-  // et emet SIGNED_IN. Pas besoin d'echange manuel — on attend juste user.
+  // Avec createDirectSupabaseClient (localStorage), le code_verifier PKCE
+  // survit au redirect OAuth. On fait l'echange manuellement, puis on
+  // synchronise la session vers @supabase/ssr (cookies) pour que toute
+  // l'app (middleware, RSC, SupabaseAuthProvider) voie la session.
   useEffect(() => {
     if (redirectedRef.current) return;
-    if (authLoading) return;
 
-    if (!user) {
-      // La session implicite n'est pas encore prete (les tokens sont encore
-      // dans le hash, le client va bientot emettre SIGNED_IN).
-      // Si l'URL n'a ni code ni hash → vraiment pas connecte → redirect.
-      const hasHash = typeof window !== 'undefined' && window.location.hash.includes('access_token');
-      if (!hasHash) {
-        redirectedRef.current = true;
-        router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-      }
-      // Si hash present, on attend — useEffect sera re-declenche quand
-      // authLoading passe a false avec user non-null (via SIGNED_IN).
-      return;
-    }
-
-    // user dispo → verifier le profil.
-    if (!user) return; // TS guard
-
-    const supabase = maybeSupabaseBrowserClient();
-    if (!supabase) {
+    const directClient = createDirectSupabaseClient();
+    if (!directClient) {
       setError('Configuration Supabase manquante.');
       setProfileChecked(true);
       return;
     }
 
-    supabase
-      .from('users')
-      .select('phone, city')
-      .eq('id', user.id)
-      .single()
-      .then(({ data: row }) => {
+    // Lire le code OAuth dans l'URL.
+    const params = new URLSearchParams(window.location.search);
+    const authCode = params.get('code');
+
+    if (!authCode) {
+      if (authLoading) return;
+      if (!user) {
+        redirectedRef.current = true;
+        router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+      }
+      return;
+    }
+
+    // Échange PKCE avec le client direct (lit code_verifier du localStorage).
+    directClient.auth.exchangeCodeForSession(authCode).then(async ({ error: exchangeErr }) => {
+      if (redirectedRef.current) return;
+      if (exchangeErr) {
+        setError(`Echange echoue : ${exchangeErr.message}`);
+        setProfileChecked(true);
+        return;
+      }
+
+      // Récupérer la session créée par le client direct.
+      const { data: { session } } = await directClient.auth.getSession();
+      if (!session) {
+        setError('Session vide apres echange.');
+        setProfileChecked(true);
+        return;
+      }
+
+      // Synchroniser la session vers @supabase/ssr (cookies).
+      // Sans ça, le middleware + RSC ne voient pas la session.
+      const ssrClient = maybeSupabaseBrowserClient();
+      if (ssrClient) {
+        await ssrClient.auth.setSession({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+        });
+      }
+
+      // Nettoyer le code de l'URL.
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('code');
+      window.history.replaceState(null, '', cleanUrl.toString());
+
+      // Lire le profil.
+      const profileClient = maybeSupabaseBrowserClient();
+      if (profileClient) {
+        const { data: row } = await profileClient
+          .from('users')
+          .select('phone, city')
+          .eq('id', session.user.id)
+          .single();
+
         if (redirectedRef.current) return;
+
         if (row?.phone && row?.city) {
           redirectedRef.current = true;
           const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
           window.location.replace(target);
           return;
         }
-        setPhone(row?.phone || (user.user_metadata?.phone as string) || '');
-        setCity(row?.city || (user.user_metadata?.city as string) || '');
-        setProfileChecked(true);
-      });
-  }, [user, authLoading, callbackUrl, router]);
+
+        setPhone(row?.phone || (session.user.user_metadata?.phone as string) || '');
+        setCity(row?.city || (session.user.user_metadata?.city as string) || '');
+      }
+
+      setProfileChecked(true);
+    }).catch((err: Error) => {
+      if (redirectedRef.current) return;
+      setError(`Erreur : ${err.message}`);
+      setProfileChecked(true);
+    });
+  }, [callbackUrl, router, authLoading, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
