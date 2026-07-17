@@ -42,48 +42,14 @@ function GoogleCompleteInner() {
   const [profileChecked, setProfileChecked] = useState(false);
   const redirectedRef = useRef(false);
 
-  // CLE DU FIX : on ecoute le `user` depuis `useSupabaseAuth()` au lieu
-  // d'appeler `getUser()` manuellement. Le SupabaseAuthProvider partage
-  // le meme client que celui qui a initie signInWithOAuth. Quand la page
-  // se charge avec ?code=XXX dans l'URL, le client detecte le code
-  // (detectSessionInUrl:true), echange PKCE, sauvegarde la session, et
-  // emet SIGNED_IN via onAuthStateChange.
-  //
-  // RACE CONDITION CRITIQUE : si l'URL contient `code=` (le code OAuth
-  // renvoye par Supabase), le navigateur est en train d'echanger le code
-  // PKCE. Tant que cet echange n'est pas termine, user peut etre null.
-  // On NE DOIT PAS rediriger vers /login dans ce cas — on attend.
+  // CLE DU FIX : au lieu de compter sur detectSessionInUrl (qui echoue
+  // silencieusement avec @supabase/ssr + chunking cookies), on fait
+  // l'echange PKCE MANUELLEMENT. On lit le `?code=` dans l'URL, on appelle
+  // supabase.auth.exchangeCodeForSession(code), et on attend la reponse.
+  // Une fois la session creee, on rafraichit useSupabaseAuth et on verifie
+  // le profil.
   useEffect(() => {
     if (redirectedRef.current) return;
-    if (authLoading) return;
-
-    // Verifier si l'URL contient le parametre `code` (OAuth PKCE en cours).
-    const hasOAuthCode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('code');
-
-    if (!user && !hasOAuthCode) {
-      // Pas de session ET pas de code OAuth en attente → redirect /login.
-      redirectedRef.current = true;
-      router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-      return;
-    }
-
-    if (!user && hasOAuthCode) {
-      // Le code OAuth est dans l'URL mais l'echange PKCE n'est pas encore
-      // termine (authLoading est false mais user est null parce que
-      // detectSessionInUrl peut mettre quelques cycles a completer).
-      // On attend : l'event SIGNED_IN va bientot se declencher et
-      // relancera ce useEffect avec user non-null.
-      // Filet de securite : si rien ne se passe apres 10s, on redirige.
-      const safety = window.setTimeout(() => {
-        if (redirectedRef.current) return;
-        redirectedRef.current = true;
-        router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-      }, 10000);
-      return () => { window.clearTimeout(safety); };
-    }
-
-    // user est non-null → session etablie. On verifie le profil.
-    if (!user) return; // guard TypeScript (deja verifie ci-dessus)
 
     const supabase = maybeSupabaseBrowserClient();
     if (!supabase) {
@@ -92,25 +58,76 @@ function GoogleCompleteInner() {
       return;
     }
 
-    supabase
-      .from('users')
-      .select('phone, city')
-      .eq('id', user.id)
-      .single()
-      .then(({ data: row }) => {
-        if (redirectedRef.current) return;
-        if (row?.phone && row?.city) {
-          // Profil deja complet → redirect direct.
-          redirectedRef.current = true;
-          const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
-          window.location.replace(target);
-          return;
-        }
-        setPhone(row?.phone || (user.user_metadata?.phone as string) || '');
-        setCity(row?.city || (user.user_metadata?.city as string) || '');
+    // Lire le code OAuth dans l'URL.
+    const params = new URLSearchParams(window.location.search);
+    const authCode = params.get('code');
+
+    if (!authCode) {
+      // Pas de code → soit deja connecte, soit URL accedee manuellement.
+      if (authLoading) return;
+      if (!user) {
+        redirectedRef.current = true;
+        router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+      }
+      return;
+    }
+
+    // On a un code → echange PKCE manuel.
+    setError('');
+    supabase.auth.exchangeCodeForSession(authCode).then(async ({ error: exchangeErr }) => {
+      if (redirectedRef.current) return;
+
+      if (exchangeErr) {
+        console.error('[google-complete] exchangeCodeForSession failed:', exchangeErr.message);
+        setError(`Echange de session echoue : ${exchangeErr.message}`);
         setProfileChecked(true);
-      });
-  }, [user, authLoading, callbackUrl, router]);
+        return;
+      }
+
+      // Echange reussi → nettoyer le code de l'URL.
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('code');
+      window.history.replaceState(null, '', cleanUrl.toString());
+
+      // Rafraichir le auth provider pour qu'il voie la nouvelle session.
+      // On lit getUser() directement pour eviter une race avec le provider.
+      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      if (redirectedRef.current) return;
+      if (!freshUser) {
+        setError('Session non disponible apres echange.');
+        setProfileChecked(true);
+        return;
+      }
+
+      setGoogleEmail(freshUser.email ?? null);
+
+      // Lire le profil dans la table users.
+      const { data: row } = await supabase
+        .from('users')
+        .select('phone, city')
+        .eq('id', freshUser.id)
+        .single();
+
+      if (redirectedRef.current) return;
+
+      if (row?.phone && row?.city) {
+        // Profil deja complet → redirect direct.
+        redirectedRef.current = true;
+        const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
+        window.location.replace(target);
+        return;
+      }
+
+      setPhone(row?.phone || (freshUser.user_metadata?.phone as string) || '');
+      setCity(row?.city || (freshUser.user_metadata?.city as string) || '');
+      setProfileChecked(true);
+    }).catch((err: Error) => {
+      if (redirectedRef.current) return;
+      console.error('[google-complete] unexpected:', err);
+      setError(`Erreur inattendue : ${err.message}`);
+      setProfileChecked(true);
+    });
+  }, [callbackUrl, router, authLoading, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
