@@ -1,12 +1,13 @@
 'use client';
 
 import { LogIn, KeyRound, Mail, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
-import { Suspense, useState, useRef } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
 import BrandLogo from '@/components/shared/BrandLogo';
 import CaptchaChallenge from '@/components/shared/CaptchaChallenge';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
+import { browserSafeOrigin, safeCallbackPath } from '@/lib/navigation';
 
 function GoogleIcon() {
   return (
@@ -17,6 +18,16 @@ function GoogleIcon() {
       <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
     </svg>
   );
+}
+
+function redirectToSafeBrowserOrigin() {
+  const safeOrigin = browserSafeOrigin(window.location.origin);
+  if (safeOrigin === window.location.origin) return false;
+
+  window.location.replace(
+    `${safeOrigin}${window.location.pathname}${window.location.search}${window.location.hash}`
+  );
+  return true;
 }
 
 export default function LoginPage() {
@@ -30,8 +41,7 @@ export default function LoginPage() {
 function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const rawCallback = searchParams.get('callbackUrl') || '/';
-  const callbackUrl = (rawCallback.startsWith('/') && !rawCallback.startsWith('//') && !rawCallback.startsWith('/\\')) ? rawCallback : '/';
+  const callbackUrl = safeCallbackPath(searchParams.get('callbackUrl'), '/');
   const isDevMode = !maybeSupabaseBrowserClient();
   const { refresh } = useSupabaseAuth();
 
@@ -50,7 +60,18 @@ function LoginInner() {
   const [captchaReload, setCaptchaReload] = useState(0);
   const googleLoginRef = useRef(false);
 
+  // Canonicalise the browser host before Supabase creates the PKCE verifier
+  // cookie. Changing only redirectTo afterwards would move the callback to a
+  // different host and the verifier cookie would no longer be available.
+  useEffect(() => {
+    redirectToSafeBrowserOrigin();
+  }, []);
+
   const handleGoogleLogin = async () => {
+    // Keep the same guard synchronously: a very fast click can happen before
+    // the mount effect above has had time to canonicalise the page.
+    if (redirectToSafeBrowserOrigin()) return;
+
     // Guard synchrone : empeche tout double appel (setState est asynchrone,
     // donc le disabled={loading} peut ne pas etre encore applique).
     if (googleLoginRef.current) return;
@@ -84,7 +105,7 @@ function LoginInner() {
       const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/api/auth/callback?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+          redirectTo: `${browserSafeOrigin(window.location.origin)}/api/auth/callback?callbackUrl=${encodeURIComponent(callbackUrl)}`,
           queryParams: {
             prompt: 'select_account',
           },

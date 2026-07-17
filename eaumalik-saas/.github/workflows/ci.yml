@@ -51,7 +51,11 @@ jobs:
         working-directory: eaumalik-saas
         run: npm run typecheck
 
-      # Le build ne s'exécute que si lint + typecheck passent.
+      - name: Unit tests
+        working-directory: eaumalik-saas
+        run: npm test
+
+      # Le build ne s'exécute que si lint + typecheck + tests passent.
       # On simule les NEXT_PUBLIC_* avec des placeholders neutres
       # pour que webpack DefinePlugin ne plante pas. Les vraies
       # valeurs sont injectées au moment du deploy (build du Dockerfile).

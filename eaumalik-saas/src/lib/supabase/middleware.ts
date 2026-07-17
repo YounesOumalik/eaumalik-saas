@@ -15,6 +15,7 @@
 import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { SUPABASE_COOKIE_OPTIONS } from './cookies';
+import { localRedirect } from '../local-redirect';
 
 const ADMIN_PREFIX = '/admin';
 const CRM_PREFIX = '/crm';
@@ -38,6 +39,14 @@ export async function updateSupabaseSession(request: NextRequest) {
 
   // Pré-crée la réponse pour pouvoir modifier ses headers/cookies.
   let response = NextResponse.next({ request: { headers: requestHeaders } });
+  const pendingCookies: Parameters<SetAllCookies>[0] = [];
+
+  const withSessionCookies = (redirect: NextResponse) => {
+    pendingCookies.forEach(({ name, value, options }) =>
+      redirect.cookies.set({ name, value, ...options })
+    );
+    return redirect;
+  };
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -51,6 +60,7 @@ export async function updateSupabaseSession(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet: Parameters<SetAllCookies>[0]) {
+        pendingCookies.push(...cookiesToSet);
         cookiesToSet.forEach(({ name, value, options }) => {
           request.cookies.set({ name, value, ...options });
           response.cookies.set({ name, value, ...options });
@@ -74,10 +84,11 @@ export async function updateSupabaseSession(request: NextRequest) {
 
   // Protection des routes privées.
   if (isProtected(request.nextUrl.pathname) && !isAuthed) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('callbackUrl', request.nextUrl.pathname + request.nextUrl.search);
-    const redirect = NextResponse.redirect(loginUrl);
-    return redirect;
+    return withSessionCookies(
+      localRedirect('/login', {
+        callbackUrl: request.nextUrl.pathname + request.nextUrl.search,
+      })
+    );
   }
 
   // Redirection vers google-complete si l'utilisateur est connecté mais son
@@ -123,12 +134,11 @@ export async function updateSupabaseSession(request: NextRequest) {
       }
 
       if (!isComplete) {
-        const completeUrl = new URL('/login/google-complete', request.url);
-        completeUrl.searchParams.set(
-          'callbackUrl',
-          request.nextUrl.pathname + request.nextUrl.search
+        return withSessionCookies(
+          localRedirect('/login/google-complete', {
+            callbackUrl: request.nextUrl.pathname + request.nextUrl.search,
+          })
         );
-        return NextResponse.redirect(completeUrl);
       }
     } catch {
       // En cas d'erreur inattendue, on laisse passer.

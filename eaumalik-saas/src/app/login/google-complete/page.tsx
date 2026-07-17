@@ -8,6 +8,7 @@ import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
 import { PHONE_MA_REGEX } from '@/lib/utils';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 import BrandLogo from '@/components/shared/BrandLogo';
+import { safeCallbackPath } from '@/lib/navigation';
 
 function GoogleIcon() {
   return (
@@ -31,7 +32,7 @@ export default function GoogleCompletePage() {
 function GoogleCompleteInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/client';
+  const callbackUrl = safeCallbackPath(searchParams.get('callbackUrl'), '/client');
   const { user, loading: authLoading } = useSupabaseAuth();
 
   const [submitting, setSubmitting] = useState(false);
@@ -73,7 +74,7 @@ function GoogleCompleteInner() {
 
         if (row?.phone && row?.city) {
           redirectedRef.current = true;
-          window.location.replace(callbackUrl.startsWith('/') ? callbackUrl : '/client');
+          window.location.replace(callbackUrl);
           return;
         }
 
@@ -121,8 +122,7 @@ function GoogleCompleteInner() {
       setSuccess('Profil complete avec succes !');
 
       // Full reload : middleware + RSC re-executes avec la session a jour.
-      const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
-      window.location.replace(target);
+      window.location.replace(callbackUrl);
     } catch (err) {
       setError((err as Error).message || 'Erreur lors de la mise a jour.');
       setSubmitting(false);

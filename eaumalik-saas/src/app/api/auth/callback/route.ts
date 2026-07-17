@@ -1,25 +1,22 @@
 import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { SUPABASE_COOKIE_OPTIONS } from '@/lib/supabase/cookies';
-
-function safeCallbackUrl(value: string | null) {
-  return value && value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/\\')
-    ? value
-    : '/client';
-}
+import { localRedirect } from '@/lib/local-redirect';
+import { safeCallbackPath } from '@/lib/navigation';
 
 /** Completes the PKCE exchange after Supabase redirects back from Google. */
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code');
-  const callbackUrl = safeCallbackUrl(request.nextUrl.searchParams.get('callbackUrl'));
-  const completeUrl = new URL('/login/google-complete', request.url);
-  completeUrl.searchParams.set('callbackUrl', callbackUrl);
+  const callbackUrl = safeCallbackPath(
+    request.nextUrl.searchParams.get('callbackUrl'),
+    '/client'
+  );
 
   if (!code) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('callbackUrl', callbackUrl);
-    loginUrl.searchParams.set('error', 'oauth_code_missing');
-    return NextResponse.redirect(loginUrl);
+    return localRedirect('/login', {
+      callbackUrl,
+      error: 'oauth_code_missing',
+    });
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -30,13 +27,15 @@ export async function GET(request: NextRequest) {
 
   // Cookies must be written on this redirect response. Mutating a separate
   // cookie store would lose Set-Cookie headers when the response is returned.
-  const response = NextResponse.redirect(completeUrl);
+  const response = localRedirect('/login/google-complete', { callbackUrl });
+  const pendingCookies: Parameters<SetAllCookies>[0] = [];
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet: Parameters<SetAllCookies>[0]) {
+        pendingCookies.push(...cookiesToSet);
         cookiesToSet.forEach(({ name, value, options }) =>
           response.cookies.set({ name, value, ...options })
         );
@@ -47,10 +46,14 @@ export async function GET(request: NextRequest) {
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('callbackUrl', callbackUrl);
-    loginUrl.searchParams.set('error', 'oauth_exchange_failed');
-    return NextResponse.redirect(loginUrl);
+    const errorResponse = localRedirect('/login', {
+      callbackUrl,
+      error: 'oauth_exchange_failed',
+    });
+    pendingCookies.forEach(({ name, value, options }) =>
+      errorResponse.cookies.set({ name, value, ...options })
+    );
+    return errorResponse;
   }
 
   return response;
