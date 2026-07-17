@@ -84,14 +84,12 @@ function GoogleCompleteInner() {
       setCity(row?.city || (user.user_metadata?.city as string) || '');
 
       // Auto-skip : si l'user a DÉJÀ un profil complet (phone + ville en base),
-      // on le redirige directement vers callbackUrl. C'était la source du
-      // "retour à la même page" : l'user complétait son profil, revenait sur
-      // google-complete (via refresh ou bouton "Précédent"), et voyait un
-      // formulaire vide comme s'il n'avait rien fait.
+      // on le redirige directement vers callbackUrl.
+      // On utilise window.location.replace pour forcer un full reload
+      // (le middleware + RSC doivent s'exécuter avec la session fraîche).
       if (row?.phone && row?.city) {
         const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
-        router.replace(target);
-        router.refresh();
+        window.location.replace(target);
         return;
       }
 
@@ -136,15 +134,18 @@ function GoogleCompleteInner() {
 
       setSuccess('Profil complété avec succès !');
 
-      // IMPORTANT : router.refresh() force le re-fetch RSC et la mise à jour
-      // de la session côté serveur. Sans ça, le middleware Next.js peut garder
-      // l'ancien état (user_profile_complete.is_complete = false) et re-boucler
-      // sur /login/google-complete. router.replace (et non push) : on ne veut
-      // PAS que /login/google-complete reste dans l'historique — sinon le
-      // bouton "Précédent" du navigateur ramène sur ce formulaire vide.
+      // On force un rechargement complet de la page cible via
+      // window.location.replace (et NON router.replace). Pourquoi :
+      //  1. router.replace() + router.refresh() dans la même tick est
+      //     fragile — le refresh peut s'exécuter avant la navigation.
+      //  2. Un full reload garantit que le middleware Next.js re-s'exécute
+      //     avec les cookies de session à jour, que les RSC sont régénérés,
+      //     et que le CartProvider lit le panier depuis le bon storage.
+      //  3. Sans full reload, `useSupabaseAuth().session` peut être null au
+      //     premier rendu de la page `/panier` → celle-ci redirige vers
+      //     /login → boucle infinie.
       const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
-      router.replace(target);
-      router.refresh();
+      window.location.replace(target);
     } catch (err) {
       setError((err as Error).message || 'Erreur lors de la mise à jour.');
       setLoading(false);
