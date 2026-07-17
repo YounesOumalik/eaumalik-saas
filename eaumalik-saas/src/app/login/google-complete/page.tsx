@@ -42,117 +42,51 @@ function GoogleCompleteInner() {
   const [profileChecked, setProfileChecked] = useState(false);
   const redirectedRef = useRef(false);
 
-  // Avec createDirectSupabaseClient (localStorage), le code_verifier PKCE
-  // survit au redirect OAuth. On lit le code depuis l'URL et le verifier
-  // depuis localStorage, puis on appelle /api/auth/exchange-code (proxy
-  // serveur) pour faire l'echange PKCE sans CORS.
+  // The callback route has already exchanged the OAuth code and attached the
+  // session cookies before this page is rendered. This page only decides
+  // whether the profile needs completion.
   useEffect(() => {
     if (redirectedRef.current) return;
-    if (typeof window === 'undefined') return;
-
-    // Lire le code OAuth dans l'URL.
-    const params = new URLSearchParams(window.location.search);
-    const authCode = params.get('code');
-
-    if (!authCode) {
-      if (authLoading) return;
-      if (!user) {
-        redirectedRef.current = true;
-        router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-      }
+    if (authLoading) return;
+    if (!user) {
+      redirectedRef.current = true;
+      router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
       return;
     }
 
-    // Chercher le code_verifier dans localStorage.
-    // Le client direct le stocke sous 'supabase.auth.token-code-verifier'
-    // (defaut supabase-js). On scanne aussi toutes les cles au cas ou.
-    let codeVerifier: string | null = null;
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i);
-      if (key && key.includes('code-verifier')) {
-        codeVerifier = window.localStorage.getItem(key);
-        break;
-      }
-    }
-
-    if (!codeVerifier) {
-      setError(
-        'Verificateur PKCE introuvable. Veuillez rafraichir la page de connexion et reessayer.'
-      );
+    const profileClient = maybeSupabaseBrowserClient();
+    if (!profileClient) {
+      setError('Configuration Supabase manquante.');
       setProfileChecked(true);
       return;
     }
 
-    // Appeler le proxy serveur (pas de CORS).
-    fetch('/api/auth/exchange-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: authCode, codeVerifier }),
-    })
-      .then(async (res) => {
-        const json = await res.json();
+    void (async () => {
+      try {
+        const { data: row, error: profileError } = await profileClient
+          .from('users')
+          .select('phone, city')
+          .eq('id', user.id)
+          .single();
         if (redirectedRef.current) return;
-        if (!json.ok) {
-          // Si le code_verifier ne correspond pas (double-clic, rafraichi),
-          // on nettoie localStorage et on propose de recommencer.
-          if (json.error && json.error.includes('code challenge')) {
-            for (let i = window.localStorage.length - 1; i >= 0; i--) {
-              const k = window.localStorage.key(i);
-              if (k && k.includes('code-verifier')) window.localStorage.removeItem(k);
-            }
-            setError(
-              'Session expiree (double authentification detectee). Veuillez reessayer.'
-            );
-          } else {
-            setError(`Echange echoue : ${json.error}`);
-          }
-          setProfileChecked(true);
+        if (profileError) throw profileError;
+
+        if (row?.phone && row?.city) {
+          redirectedRef.current = true;
+          window.location.replace(callbackUrl.startsWith('/') ? callbackUrl : '/client');
           return;
         }
 
-        // Session posee dans les cookies par le serveur.
-        // Nettoyer le code de l'URL.
-        const cleanUrl = new URL(window.location.href);
-        cleanUrl.searchParams.delete('code');
-        window.history.replaceState(null, '', cleanUrl.toString());
-
-        // Lire le profil avec le client @supabase/ssr (cookies).
-        const profileClient = maybeSupabaseBrowserClient();
-        if (profileClient) {
-          const { data: { user: freshUser } } = await profileClient.auth.getUser();
-          if (redirectedRef.current) return;
-          if (!freshUser) {
-            setError('Session non disponible apres echange.');
-            setProfileChecked(true);
-            return;
-          }
-
-          const { data: row } = await profileClient
-            .from('users')
-            .select('phone, city')
-            .eq('id', freshUser.id)
-            .single();
-
-          if (redirectedRef.current) return;
-
-          if (row?.phone && row?.city) {
-            redirectedRef.current = true;
-            const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
-            window.location.replace(target);
-            return;
-          }
-
-          setPhone(row?.phone || (freshUser.user_metadata?.phone as string) || '');
-          setCity(row?.city || (freshUser.user_metadata?.city as string) || '');
+        setPhone(row?.phone || (user.user_metadata?.phone as string) || '');
+        setCity(row?.city || (user.user_metadata?.city as string) || '');
+      } catch (err) {
+        if (!redirectedRef.current) {
+          setError((err as Error).message || 'Impossible de lire le profil.');
         }
-
-        setProfileChecked(true);
-      })
-      .catch((err: Error) => {
-        if (redirectedRef.current) return;
-        setError(`Erreur reseau : ${err.message}`);
-        setProfileChecked(true);
-      });
+      } finally {
+        if (!redirectedRef.current) setProfileChecked(true);
+      }
+    })();
   }, [callbackUrl, router, authLoading, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {

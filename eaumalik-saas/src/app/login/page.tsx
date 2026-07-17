@@ -4,7 +4,6 @@ import { LogIn, KeyRound, Mail, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide
 import { Suspense, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
-import { createDirectSupabaseClient } from '@/lib/supabase/client';
 import BrandLogo from '@/components/shared/BrandLogo';
 import CaptchaChallenge from '@/components/shared/CaptchaChallenge';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
@@ -59,11 +58,7 @@ function LoginInner() {
     setLoading(true);
     setError('');
     try {
-      // Utiliser le client DIRECT (localStorage) pour l'OAuth.
-      // @supabase/ssr stocke le code_verifier dans un cookie chunké
-      // qui n'est pas retrouvé après le redirect → "PKCE code verifier
-      // not found in storage". Avec localStorage, pas de chunking.
-      const supabase = createDirectSupabaseClient();
+      const supabase = maybeSupabaseBrowserClient();
       if (!supabase) {
         setError('Configuration Supabase manquante.');
         setLoading(false);
@@ -86,27 +81,10 @@ function LoginInner() {
       // `prompt: 'select_account'` force Google à TOUJOURS afficher le sélecteur
       // de compte, même si l\u2019utilisateur a déjà une session Google active.
       //
-      // On pointe vers /api/auth/callback (route serveur). Cette route :
-      //   1. Reçoit le ?code=... de retour OAuth
-      //   2. Lit le code_verifier dans les cookies (posé par signInWithOAuth)
-      //   3. Le navigateur reçoit l'URL avec ?code=..., le client @supabase/ssr
-      //      détecte le code automatiquement (detectSessionInUrl:true),
-      //      lit le code_verifier depuis son cookie, et fait l'échange PKCE.
-      //   4. La session est créée côté navigateur (cookies + mémoire).
-      //   5. La page google-complete écoute onAuthStateChange('SIGNED_IN')
-      //      avant de décider : afficher le formulaire ou rediriger.
-      // Nettoyer tout ancien code_verifier dans localStorage (un clic
-      // precedent aurait pu en laisser un). Evite l'erreur "code challenge
-      // does not match previously saved code verifier".
-      for (let i = window.localStorage.length - 1; i >= 0; i--) {
-        const k = window.localStorage.key(i);
-        if (k && k.includes('code-verifier')) window.localStorage.removeItem(k);
-      }
-
       const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/login/google-complete?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+          redirectTo: `${window.location.origin}/api/auth/callback?callbackUrl=${encodeURIComponent(callbackUrl)}`,
           queryParams: {
             prompt: 'select_account',
           },
@@ -122,9 +100,7 @@ function LoginInner() {
         return;
       }
 
-      // @supabase/ssr >= 0.5 navigue automatiquement via window.location.assign
-      // quand data.url est présent et qu'on n'est pas en skipBrowserRedirect.
-      // Si data.url est null/invalide, on remet le spinner à zéro.
+      // The browser client navigates to data.url unless skipBrowserRedirect is set.
       if (!data?.url) {
         setLoading(false);
         googleLoginRef.current = false;

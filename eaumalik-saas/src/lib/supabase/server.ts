@@ -9,9 +9,10 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { getDevUserFromCookie } from '@/lib/auth/devSession';
+import { SUPABASE_COOKIE_OPTIONS } from './cookies';
 
 export function createSupabaseServerClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,22 +26,20 @@ export function createSupabaseServerClient() {
 
   return createServerClient(url, key, {
     cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
+      getAll() {
+        return cookieStore.getAll();
       },
-      set(name: string, value: string, options: CookieOptions) {
+      setAll(cookiesToSet: Parameters<SetAllCookies>[0]) {
         try {
-          cookieStore.set({ name, value, ...options });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set({ name, value, ...options })
+          );
         } catch {
           // In Server Components, cookie writes are no-op (use middleware or Server Actions).
         }
       },
-      remove(name: string, options: CookieOptions) {
-        try {
-          cookieStore.set({ name, value: '', ...options });
-        } catch {}
-      },
     },
+    cookieOptions: SUPABASE_COOKIE_OPTIONS,
   });
 }
 

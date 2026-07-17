@@ -12,8 +12,9 @@
  * précis en cas de redirect — utile quand l'utilisateur est renvoyé vers
  * /login après expiration de session au milieu d'une navigation.
  */
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { SUPABASE_COOKIE_OPTIONS } from './cookies';
 
 const ADMIN_PREFIX = '/admin';
 const CRM_PREFIX = '/crm';
@@ -46,18 +47,17 @@ export async function updateSupabaseSession(request: NextRequest) {
 
   const supabase = createServerClient(url, key, {
     cookies: {
-      get(name: string) {
-        return request.cookies.get(name)?.value;
+      getAll() {
+        return request.cookies.getAll();
       },
-      set(name: string, value: string, options: CookieOptions) {
-        request.cookies.set({ name, value, ...options });
-        response.cookies.set({ name, value, ...options });
-      },
-      remove(name: string, options: CookieOptions) {
-        request.cookies.set({ name, value: '', ...options });
-        response.cookies.set({ name, value: '', ...options });
+      setAll(cookiesToSet: Parameters<SetAllCookies>[0]) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          request.cookies.set({ name, value, ...options });
+          response.cookies.set({ name, value, ...options });
+        });
       },
     },
+    cookieOptions: SUPABASE_COOKIE_OPTIONS,
   });
 
   // Rafraîchit le token si nécessaire.
