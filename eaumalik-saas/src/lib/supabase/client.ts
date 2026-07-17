@@ -32,6 +32,9 @@ export function createDirectSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key || url.trim() === '' || key.trim() === '') return null;
+  // window.localStorage n'est pas disponible pendant le SSR Next.js.
+  // On retourne null côté serveur — le client sera recréé côté navigateur.
+  if (typeof window === 'undefined') return null;
   return createClient(url, key, {
     auth: {
       flowType: 'pkce',

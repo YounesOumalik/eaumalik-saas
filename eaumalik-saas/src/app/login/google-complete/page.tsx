@@ -48,6 +48,8 @@ function GoogleCompleteInner() {
   // l'app (middleware, RSC, SupabaseAuthProvider) voie la session.
   useEffect(() => {
     if (redirectedRef.current) return;
+    // SSR guard : ne rien faire tant que le navigateur n'est pas pret.
+    if (typeof window === 'undefined') return;
 
     const directClient = createDirectSupabaseClient();
     if (!directClient) {
@@ -56,7 +58,6 @@ function GoogleCompleteInner() {
       return;
     }
 
-    // Lire le code OAuth dans l'URL.
     const params = new URLSearchParams(window.location.search);
     const authCode = params.get('code');
 
