@@ -63,11 +63,22 @@ function GoogleCompleteInner() {
       return;
     }
 
-    // Lire le code_verifier depuis localStorage (stocke par signInWithOAuth
-    // du client direct sur la page /login).
-    const codeVerifier = window.localStorage.getItem('supabase.auth.token-code-verifier');
+    // Chercher le code_verifier dans localStorage.
+    // Le client direct le stocke sous 'supabase.auth.token-code-verifier'
+    // (defaut supabase-js). On scanne aussi toutes les cles au cas ou.
+    let codeVerifier: string | null = null;
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.includes('code-verifier')) {
+        codeVerifier = window.localStorage.getItem(key);
+        break;
+      }
+    }
+
     if (!codeVerifier) {
-      setError('Code verifier introuvable dans le stockage local.');
+      setError(
+        'Verificateur PKCE introuvable. Veuillez rafraichir la page de connexion et reessayer.'
+      );
       setProfileChecked(true);
       return;
     }
