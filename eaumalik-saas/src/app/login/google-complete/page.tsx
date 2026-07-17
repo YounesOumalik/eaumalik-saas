@@ -89,8 +89,7 @@ function GoogleCompleteInner() {
       cleanUrl.searchParams.delete('code');
       window.history.replaceState(null, '', cleanUrl.toString());
 
-      // Rafraichir le auth provider pour qu'il voie la nouvelle session.
-      // On lit getUser() directement pour eviter une race avec le provider.
+      // Lire le user fraichement cree.
       const { data: { user: freshUser } } = await supabase.auth.getUser();
       if (redirectedRef.current) return;
       if (!freshUser) {
@@ -98,8 +97,6 @@ function GoogleCompleteInner() {
         setProfileChecked(true);
         return;
       }
-
-      setGoogleEmail(freshUser.email ?? null);
 
       // Lire le profil dans la table users.
       const { data: row } = await supabase
