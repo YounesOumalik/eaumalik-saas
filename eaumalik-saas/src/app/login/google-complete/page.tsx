@@ -42,14 +42,29 @@ function GoogleCompleteInner() {
   const [profileChecked, setProfileChecked] = useState(false);
   const redirectedRef = useRef(false);
 
-  // CLE DU FIX : au lieu de compter sur detectSessionInUrl (qui echoue
-  // silencieusement avec @supabase/ssr + chunking cookies), on fait
-  // l'echange PKCE MANUELLEMENT. On lit le `?code=` dans l'URL, on appelle
-  // supabase.auth.exchangeCodeForSession(code), et on attend la reponse.
-  // Une fois la session creee, on rafraichit useSupabaseAuth et on verifie
-  // le profil.
+  // Avec flowType='implicit', les tokens arrivent dans le hash de l'URL.
+  // Le client supabase (detectSessionInUrl:true) les detecte automatiquement
+  // et emet SIGNED_IN. Pas besoin d'echange manuel — on attend juste user.
   useEffect(() => {
     if (redirectedRef.current) return;
+    if (authLoading) return;
+
+    if (!user) {
+      // La session implicite n'est pas encore prete (les tokens sont encore
+      // dans le hash, le client va bientot emettre SIGNED_IN).
+      // Si l'URL n'a ni code ni hash → vraiment pas connecte → redirect.
+      const hasHash = typeof window !== 'undefined' && window.location.hash.includes('access_token');
+      if (!hasHash) {
+        redirectedRef.current = true;
+        router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+      }
+      // Si hash present, on attend — useEffect sera re-declenche quand
+      // authLoading passe a false avec user non-null (via SIGNED_IN).
+      return;
+    }
+
+    // user dispo → verifier le profil.
+    if (!user) return; // TS guard
 
     const supabase = maybeSupabaseBrowserClient();
     if (!supabase) {
@@ -58,73 +73,24 @@ function GoogleCompleteInner() {
       return;
     }
 
-    // Lire le code OAuth dans l'URL.
-    const params = new URLSearchParams(window.location.search);
-    const authCode = params.get('code');
-
-    if (!authCode) {
-      // Pas de code → soit deja connecte, soit URL accedee manuellement.
-      if (authLoading) return;
-      if (!user) {
-        redirectedRef.current = true;
-        router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-      }
-      return;
-    }
-
-    // On a un code → echange PKCE manuel.
-    setError('');
-    supabase.auth.exchangeCodeForSession(authCode).then(async ({ error: exchangeErr }) => {
-      if (redirectedRef.current) return;
-
-      if (exchangeErr) {
-        console.error('[google-complete] exchangeCodeForSession failed:', exchangeErr.message);
-        setError(`Echange de session echoue : ${exchangeErr.message}`);
+    supabase
+      .from('users')
+      .select('phone, city')
+      .eq('id', user.id)
+      .single()
+      .then(({ data: row }) => {
+        if (redirectedRef.current) return;
+        if (row?.phone && row?.city) {
+          redirectedRef.current = true;
+          const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
+          window.location.replace(target);
+          return;
+        }
+        setPhone(row?.phone || (user.user_metadata?.phone as string) || '');
+        setCity(row?.city || (user.user_metadata?.city as string) || '');
         setProfileChecked(true);
-        return;
-      }
-
-      // Echange reussi → nettoyer le code de l'URL.
-      const cleanUrl = new URL(window.location.href);
-      cleanUrl.searchParams.delete('code');
-      window.history.replaceState(null, '', cleanUrl.toString());
-
-      // Lire le user fraichement cree.
-      const { data: { user: freshUser } } = await supabase.auth.getUser();
-      if (redirectedRef.current) return;
-      if (!freshUser) {
-        setError('Session non disponible apres echange.');
-        setProfileChecked(true);
-        return;
-      }
-
-      // Lire le profil dans la table users.
-      const { data: row } = await supabase
-        .from('users')
-        .select('phone, city')
-        .eq('id', freshUser.id)
-        .single();
-
-      if (redirectedRef.current) return;
-
-      if (row?.phone && row?.city) {
-        // Profil deja complet → redirect direct.
-        redirectedRef.current = true;
-        const target = callbackUrl.startsWith('/') ? callbackUrl : '/client';
-        window.location.replace(target);
-        return;
-      }
-
-      setPhone(row?.phone || (freshUser.user_metadata?.phone as string) || '');
-      setCity(row?.city || (freshUser.user_metadata?.city as string) || '');
-      setProfileChecked(true);
-    }).catch((err: Error) => {
-      if (redirectedRef.current) return;
-      console.error('[google-complete] unexpected:', err);
-      setError(`Erreur inattendue : ${err.message}`);
-      setProfileChecked(true);
-    });
-  }, [callbackUrl, router, authLoading, user]);
+      });
+  }, [user, authLoading, callbackUrl, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
