@@ -106,8 +106,8 @@ export default function ClientDashboard({ initialData }: Props) {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2 pb-3 mb-6 w-full">
-        <div className="inline-flex flex-wrap rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+      <div className="w-full overflow-x-auto pb-3 mb-6">
+        <div className="flex min-w-max rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
           {[
             { id: 'parrainage', label: 'Parrainage & Cashback', icon: Gift },
             { id: 'maintenance', label: 'Maintenance Filtres', icon: ShieldAlert },
@@ -123,7 +123,7 @@ export default function ClientDashboard({ initialData }: Props) {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id as any)}
-                className="px-4 py-2 text-sm font-semibold transition-all flex items-center gap-1.5"
+                className="whitespace-nowrap px-3 sm:px-4 py-2 text-sm font-semibold transition-all flex items-center gap-1.5"
                 style={{
                   background: active ? 'var(--primary)' : 'transparent',
                   color: active ? '#fff' : 'var(--text-secondary)',

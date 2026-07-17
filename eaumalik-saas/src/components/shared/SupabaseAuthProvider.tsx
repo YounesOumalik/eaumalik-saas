@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useMemo, ReactNode, useCallback } from 'react';
 import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { User, Session } from '@supabase/supabase-js';
 
@@ -43,7 +43,10 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   // sans reload (événement custom + re-fetch).
   const [devUser, setDevUser] = useState<any>(null);
 
-  const supabase = maybeSupabaseBrowserClient();
+  // Keep one browser client for the lifetime of the provider. Creating a new
+  // client on every render recreates the auth listener and refresh callbacks,
+  // which can cause session flapping (and apparent automatic logouts).
+  const supabase = useMemo(() => maybeSupabaseBrowserClient(), []);
 
   const fetchProfile = useCallback(async (uid: string) => {
     if (!supabase) return;
@@ -125,6 +128,8 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
         }
       } catch {
         if (!cancelled) setDevUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     void loadDevSession();
