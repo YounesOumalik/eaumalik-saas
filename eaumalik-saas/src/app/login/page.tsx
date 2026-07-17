@@ -78,18 +78,16 @@ function LoginInner() {
       // /login/google-complete sans avoir vu Google → impression de "rien ne
       // se passe".
       //
-      // IMPORTANT : on pointe vers /api/auth/callback (et NON directement
-      // /login/google-complete). Cette route serveur :
-      //   1. reçoit le `?code=...` de retour OAuth,
-      //   2. sert une page HTML qui appelle supabase.auth.exchangeCodeForSession,
-      //   3. redirige vers /login/google-complete une fois la session créée.
-      // Sans ce détour, l'URL /login/google-complete garde `?code=...` et
-      // toute navigation rapide (clic, refresh, etc.) AVANT que le client
-      // Supabase n'ait fini l'échange PKCE fait perdre le code → boucle.
+      // On pointe DIRECTEMENT vers /login/google-complete. Le client
+      // @supabase/ssr détecte automatiquement le `?code=...` dans l'URL,
+      // récupère le `code_verifier` dans son cookie, et fait l'échange PKCE
+      // via `_initialize()` → `_exchangeCodeForSession()`. Aucun détour
+      // serveur nécessaire — le cookie code_verifier survit au redirect OAuth
+      // car il est en cookie (même origine, path=/).
       const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/api/auth/callback?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+          redirectTo: `${window.location.origin}/login/google-complete?callbackUrl=${encodeURIComponent(callbackUrl)}`,
           queryParams: {
             prompt: 'select_account',
           },

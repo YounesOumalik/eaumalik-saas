@@ -51,7 +51,18 @@ function GoogleCompleteInner() {
       return;
     }
     let cancelled = false;
+
+    // Filet de sécurité : si getUser() n'a pas résolu après 10s, on
+    // considère que l'échange PKCE a échoué et on redirige vers /login
+    // plutôt que de bloquer indéfiniment le spinner.
+    const safety = window.setTimeout(() => {
+      if (cancelled) return;
+      setChecking(false);
+      setError('L\u2019échange de session a expiré. Merci de réessayer.');
+    }, 10000);
+
     supabase.auth.getUser().then(async ({ data }) => {
+      window.clearTimeout(safety);
       const user = data?.user;
       if (cancelled) return;
       if (!user) {
