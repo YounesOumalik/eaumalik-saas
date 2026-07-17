@@ -83,6 +83,7 @@ function GoogleCompleteInner() {
     }
 
     // user est non-null → session etablie. On verifie le profil.
+    if (!user) return; // guard TypeScript (deja verifie ci-dessus)
 
     const supabase = maybeSupabaseBrowserClient();
     if (!supabase) {
