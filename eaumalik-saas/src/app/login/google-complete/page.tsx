@@ -47,22 +47,42 @@ function GoogleCompleteInner() {
   // le meme client que celui qui a initie signInWithOAuth. Quand la page
   // se charge avec ?code=XXX dans l'URL, le client detecte le code
   // (detectSessionInUrl:true), echange PKCE, sauvegarde la session, et
-  // emet SIGNED_IN via onAuthStateChange. useSupabaseAuth capture cet
-  // evenement et met a jour `user` + `loading`.
+  // emet SIGNED_IN via onAuthStateChange.
   //
-  // Avant ce fix, le useEffect appelait getUser() trop tot — avant que
-  // _initialize() du client supabase n'ait termine l'echange PKCE.
+  // RACE CONDITION CRITIQUE : si l'URL contient `code=` (le code OAuth
+  // renvoye par Supabase), le navigateur est en train d'echanger le code
+  // PKCE. Tant que cet echange n'est pas termine, user peut etre null.
+  // On NE DOIT PAS rediriger vers /login dans ce cas — on attend.
   useEffect(() => {
     if (redirectedRef.current) return;
     if (authLoading) return;
 
-    if (!user) {
-      // Pas de session : code PKCE invalide/expire, ou URL accedee
-      // manuellement sans OAuth.
+    // Verifier si l'URL contient le parametre `code` (OAuth PKCE en cours).
+    const hasOAuthCode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('code');
+
+    if (!user && !hasOAuthCode) {
+      // Pas de session ET pas de code OAuth en attente → redirect /login.
       redirectedRef.current = true;
       router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
       return;
     }
+
+    if (!user && hasOAuthCode) {
+      // Le code OAuth est dans l'URL mais l'echange PKCE n'est pas encore
+      // termine (authLoading est false mais user est null parce que
+      // detectSessionInUrl peut mettre quelques cycles a completer).
+      // On attend : l'event SIGNED_IN va bientot se declencher et
+      // relancera ce useEffect avec user non-null.
+      // Filet de securite : si rien ne se passe apres 10s, on redirige.
+      const safety = window.setTimeout(() => {
+        if (redirectedRef.current) return;
+        redirectedRef.current = true;
+        router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+      }, 10000);
+      return () => { window.clearTimeout(safety); };
+    }
+
+    // user est non-null → session etablie. On verifie le profil.
 
     const supabase = maybeSupabaseBrowserClient();
     if (!supabase) {
