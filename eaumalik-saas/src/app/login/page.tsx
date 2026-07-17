@@ -72,22 +72,20 @@ function LoginInner() {
       }, 8000);
 
       // `prompt: 'select_account'` force Google à TOUJOURS afficher le sélecteur
-      // de compte, même si l\u2019utilisateur a déjà une session Google active
-      // (Chrome smart-lock, cookies persistants). Sans ce param, Google peut
-      // authentifier silencieusement et l\u2019utilisateur atterrit directement sur
-      // /login/google-complete sans avoir vu Google → impression de "rien ne
-      // se passe".
+      // de compte, même si l\u2019utilisateur a déjà une session Google active.
       //
-      // On pointe DIRECTEMENT vers /login/google-complete. Le client
-      // @supabase/ssr détecte automatiquement le `?code=...` dans l'URL,
-      // récupère le `code_verifier` dans son cookie, et fait l'échange PKCE
-      // via `_initialize()` → `_exchangeCodeForSession()`. Aucun détour
-      // serveur nécessaire — le cookie code_verifier survit au redirect OAuth
-      // car il est en cookie (même origine, path=/).
+      // On pointe vers /api/auth/callback (route serveur). Cette route :
+      //   1. Reçoit le ?code=... de retour OAuth
+      //   2. Lit le code_verifier dans les cookies (posé par signInWithOAuth)
+      //   3. Échange le code côté SERVEUR via createServerClient
+      //   4. Pose les cookies de session dans la réponse HTTP
+      //   5. Redirige vers /login/google-complete PROPRE (sans ?code=)
+      //
+      // Avantage : l'échange est atomique, pas de race condition avec React.
       const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/login/google-complete?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+          redirectTo: `${window.location.origin}/api/auth/callback?callbackUrl=${encodeURIComponent(callbackUrl)}`,
           queryParams: {
             prompt: 'select_account',
           },
