@@ -17,3 +17,15 @@ export function relativeRedirectLocation(
   const query = params.toString();
   return query ? `${safePathname}?${query}` : safePathname;
 }
+
+/**
+ * Convertit une destination locale validée en URL absolue pour les runtimes
+ * (notamment Edge) qui refusent les en-têtes Location relatifs.
+ */
+export function absoluteRedirectUrl(
+  requestUrl: string,
+  pathname: string,
+  searchParams: Record<string, SearchValue> = {}
+): URL {
+  return new URL(relativeRedirectLocation(pathname, searchParams), requestUrl);
+}

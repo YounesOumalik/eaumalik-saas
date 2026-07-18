@@ -46,8 +46,8 @@ test('mock passwords are stored as scrypt hashes', async () => {
   assert.equal(verifyPassword('wrong-password', stored), false);
 });
 
-test('protected redirects stay relative to the public browser origin', async () => {
-  const { relativeRedirectLocation } = await importTypeScript(
+test('protected redirects are safe and absolute for the Edge runtime', async () => {
+  const { absoluteRedirectUrl, relativeRedirectLocation } = await importTypeScript(
     '../src/lib/relative-redirect.ts',
     [[
       "import { safeCallbackPath } from './navigation';",
@@ -60,6 +60,14 @@ test('protected redirects stay relative to the public browser origin', async () 
   );
   assert.ok(!relativeRedirectLocation('/login', { callbackUrl: '/client' }).includes('0.0.0.0'));
   assert.ok(!relativeRedirectLocation('/login', { callbackUrl: '/client' }).startsWith('http'));
+  assert.equal(
+    absoluteRedirectUrl(
+      'https://eaumalik.com/client',
+      '/login',
+      { callbackUrl: '/client?tab=orders' }
+    ).toString(),
+    'https://eaumalik.com/login?callbackUrl=%2Fclient%3Ftab%3Dorders'
+  );
 });
 
 test('clients do not receive staff navigation entries', async () => {

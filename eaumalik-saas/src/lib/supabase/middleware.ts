@@ -15,7 +15,7 @@
 import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { SUPABASE_COOKIE_OPTIONS } from './cookies';
-import { relativeRedirectLocation } from '../relative-redirect';
+import { absoluteRedirectUrl } from '../relative-redirect';
 
 const ADMIN_PREFIX = '/admin';
 const CRM_PREFIX = '/crm';
@@ -63,15 +63,15 @@ export async function updateSupabaseSession(request: NextRequest) {
   // Si pas d'env configurée, on ne peut rien faire — laisse passer (mode mock).
   if (!url || !key) return response;
 
-  const redirectToLogin = () =>
-    new NextResponse(null, {
-      status: 307,
-      headers: {
-        Location: relativeRedirectLocation('/login', {
-          callbackUrl: request.nextUrl.pathname + request.nextUrl.search,
-        }),
-      },
+  const redirectToLogin = () => {
+    // Le runtime Edge de production exige une URL absolue pour
+    // NextResponse.redirect. request.url conserve ici l'origine publique
+    // transmise par Caddy, tandis que le chemin reste strictement local.
+    const location = absoluteRedirectUrl(request.url, '/login', {
+      callbackUrl: request.nextUrl.pathname + request.nextUrl.search,
     });
+    return NextResponse.redirect(location, 307);
+  };
 
   // Visiteur anonyme : aucun appel réseau Supabase n'est nécessaire. Cela
   // accélère fortement l'accueil, la boutique et la page de connexion, tout
