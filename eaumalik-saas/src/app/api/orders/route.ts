@@ -4,7 +4,7 @@ import { createSupabaseServiceRoleClient, createSupabaseServerClient, AuthError 
 import { badRequest, forbidden, safeErrorResponse, unauthorized } from '@/lib/api-guard';
 import { readOrdersRaw, writeOrdersRaw, readUsersRaw, writeUsersRaw } from '@/data/repositories';
 import { Order } from '@/types';
-import { setDevSessionCookie } from '@/lib/auth/devSession';
+import { getDevUserFromCookie, setDevSessionCookie } from '@/lib/auth/devSession';
 import { hashPassword } from '@/lib/auth/password';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +34,17 @@ function generateOrderNumber(): string {
 
 /** Helper local : renvoie l'utilisateur authentifié et son rôle, ou jette. */
 async function getCaller(): Promise<{ id: string; role: 'admin' | 'client' }> {
+  // En mode mock, la session est portée par le cookie signé local et Supabase
+  // n'est volontairement pas configuré. Il faut tout de même conserver le
+  // user_id pour que la commande soit visible dans l'espace client.
+  const devUser = await getDevUserFromCookie();
+  if (devUser) {
+    return {
+      id: devUser.id,
+      role: devUser.role === 'admin' || devUser.role === 'administrator' ? 'admin' : 'client',
+    };
+  }
+
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) throw new AuthError('unauthenticated', 'Authentification requise.');
@@ -118,7 +129,14 @@ export async function POST(req: NextRequest) {
       return await createOrderMock({ input, subtotal, delivery, total, callerId, account });
     }
 
-    const supabase = createSupabaseServiceRoleClient();
+    // Les vues public.orders/public.order_items utilisent un trigger de sécurité
+    // qui vérifie auth.uid(). La clé service n'embarque pas l'identité du client
+    // dans ce contexte et provoque donc « accès refusé (orders insert) » pour
+    // toute commande liée à un compte. On conserve la session du client pour
+    // que le trigger puisse vérifier user_id = auth.uid().
+    const supabase = callerId
+      ? createSupabaseServerClient()
+      : createSupabaseServiceRoleClient();
     const order_number = generateOrderNumber();
     const { data: order, error } = await supabase
       .from('orders')
@@ -147,7 +165,11 @@ export async function POST(req: NextRequest) {
       line_total: i.unit_price * i.quantity,
     }));
     const { error: itemsErr } = await supabase.from('order_items').insert(itemsPayload);
-    if (itemsErr) throw itemsErr;
+    if (itemsErr) {
+      // Évite de laisser une commande vide si l'insertion des lignes échoue.
+      await supabase.from('orders').delete().eq('id', order.id);
+      throw itemsErr;
+    }
 
     return NextResponse.json({ ...order, items: itemsPayload.map((p, idx) => ({ id: idx, ...p })) }, { status: 201 });
   } catch (e) {
