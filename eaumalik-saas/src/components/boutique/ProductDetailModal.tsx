@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { X } from 'lucide-react';
 import type { Product } from '@/types';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, shouldSkipImageOptimization } from '@/lib/utils';
 import Dialog from '@/components/ui/Dialog';
 import AddToCartButton from './AddToCartButton';
 
@@ -69,7 +69,7 @@ export default function ProductDetailModal({ product, onClose }: Props) {
               height={600}
               className="w-full h-full object-contain"
               sizes="(max-width: 768px) 100vw, 45vw"
-              unoptimized
+              unoptimized={shouldSkipImageOptimization(product.image_url)}
             />
           ) : (
             <div

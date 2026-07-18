@@ -42,15 +42,30 @@ export default function RevealOnScroll() {
       { threshold: 0.08, rootMargin: '0px 0px -40px 0px' }
     );
 
-    const observeAll = () => {
-      document.querySelectorAll('.reveal:not(.revealed)').forEach(el => observer.observe(el));
+    const observeElement = (element: Element) => {
+      if (element.matches('.reveal:not(.revealed)')) {
+        observer.observe(element);
+      }
+      element
+        .querySelectorAll('.reveal:not(.revealed)')
+        .forEach(el => observer.observe(el));
     };
 
     // 2) Observe ce qui existe déjà (rendu initial).
-    observeAll();
+    document
+      .querySelectorAll('.reveal:not(.revealed)')
+      .forEach(el => observer.observe(el));
 
     // 3) Observe aussi les éléments ajoutés après (changement de page via App Router).
-    const mo = new MutationObserver(() => observeAll());
+    // On inspecte uniquement les nouveaux sous-arbres au lieu de rescanner tout
+    // le document à chaque mutation React.
+    const mo = new MutationObserver(records => {
+      for (const record of records) {
+        record.addedNodes.forEach(node => {
+          if (node instanceof Element) observeElement(node);
+        });
+      }
+    });
     mo.observe(document.body, { childList: true, subtree: true });
 
     return () => {

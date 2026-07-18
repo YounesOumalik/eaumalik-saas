@@ -59,6 +59,7 @@ async function gate() {
 }
 
 import { isMockMode } from '@/lib/api-guard';
+import { hashPassword } from '@/lib/auth/password';
 
 function getSupabaseOrThrow() {
   if (isMockMode()) {
@@ -340,7 +341,7 @@ export async function restoreArchivedStaffAction(raw: unknown) {
       const restored = {
         id: snap.id,
         email: snap.email,
-        password: parsed.data.newPassword, // mock only
+        password: hashPassword(parsed.data.newPassword),
         full_name: snap.full_name,
         phone: snap.phone ?? '',
         role: snap.role,

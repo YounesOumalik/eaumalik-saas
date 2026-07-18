@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { X, Droplets, CheckCircle2, ArrowRight } from 'lucide-react';
 import type { Product, ProductCategory } from '@/types';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, shouldSkipImageOptimization } from '@/lib/utils';
 import { submitPublicInquiryAction } from '@/app/actions/contactActions';
 
 const CATEGORY_LABELS: Record<ProductCategory, string> = {
@@ -112,7 +112,8 @@ export default function CatalogSection({ products }: { products: Product[] }) {
                       src={p.image_url}
                       alt={p.name}
                       fill
-                      unoptimized
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      unoptimized={shouldSkipImageOptimization(p.image_url)}
                       className="object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   ) : (
@@ -168,7 +169,14 @@ export default function CatalogSection({ products }: { products: Product[] }) {
               <div className="grid md:grid-cols-2">
                 <div className="aspect-square surface-savor relative">
                   {selected.image_url ? (
-                    <Image src={selected.image_url} alt={selected.name} fill unoptimized className="object-cover" />
+                    <Image
+                      src={selected.image_url}
+                      alt={selected.name}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      unoptimized={shouldSkipImageOptimization(selected.image_url)}
+                      className="object-cover"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--primary-light)' }}>
                       <Droplets className="w-20 h-20" />

@@ -1,16 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Droplets } from 'lucide-react';
 import { useSupabaseAuth } from './SupabaseAuthProvider';
-import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
 import ThemeToggle from './ThemeToggle';
 import CartButton from './CartButton';
 import BrandLogo from './BrandLogo';
-import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
 import { ADMIN_NAV_ITEMS, filterAdminNavItems } from '@/lib/adminNav';
 
 const NAV_LINKS = [
@@ -25,11 +22,10 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { session, signOut, isAdmin } = useSupabaseAuth();
+  const { session, signOut, isAdmin, role, permissions } = useSupabaseAuth();
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -40,94 +36,29 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const [permissions, setPermissions] = useState<any>(null);
-  const [role, setRole] = useState<string>('');
-
-  useEffect(() => {
-    if (!session) return;
-    getCurrentUserPermissionsAction().then(res => {
-      if (res.success) {
-        setPermissions(res.permissions);
-        setRole(res.role || '');
-      }
-    });
-  }, [session]);
-
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
     return pathname.startsWith(href.split('?')[0]);
   };
 
-  /**
-   * Déconnexion instantanée :
-   *  1. Vider le state React (`signOut()` du Provider) — UI bascule tout de suite.
-   *  2. Purger manuellement les cookies Supabase (`sb-*-auth-token`, etc.)
-   *     côté document.cookie avant la nav — sinon le middleware Next.js
-   *     peut renvoyer l'utilisateur sur la route protégée si le navigateur
-   *     met du temps à appliquer la suppression faite par signOut().
-   *  3. router.refresh() pour invalider le cache RSC puis navigation vers '/'.
-   *  4. signOut() réseau (best-effort, fire-and-forget).
-   *
-   * Cette séquence garantit que l'utilisateur est visuellement déconnecté
-   * en <16 ms (1 frame) — pas d'attente sur Supabase.
-   */
   const handleSignOut = () => {
-    const supabase = maybeSupabaseBrowserClient();
-
-    // Étape 2 (cookies) : on purge les cookies SB et `eaumalik_dev_session`
-    // SYNCHRONEMENT avant toute navigation. document.cookie est sync.
-    if (typeof document !== 'undefined') {
-      const cookies = document.cookie.split(';');
-      for (const c of cookies) {
-        const eq = c.indexOf('=');
-        const name = (eq > -1 ? c.slice(0, eq) : c).trim();
-        if (!name) continue;
-        if (
-          name.startsWith('sb-') ||
-          name === 'eaumalik_dev_session' ||
-          name.startsWith('supabase-auth-token')
-        ) {
-          // Supprime pour / ET le domaine actuel (certaines paires
-          // Supabase sont posées sur le Host-only + Domain).
-          document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0`;
-          document.cookie = `${name}=; Path=/; Domain=${window.location.hostname}; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0`;
-        }
-      }
-    }
-
-    // Étape 1 : state React vide IMMÉDIATEMENT (signOut du Provider est sync
-    // pour la partie state, seul le réseau est async).
+    // Le contexte bascule immédiatement l'interface en mode déconnecté.
     void signOut();
-
-    // Étape 3 : refresh du RSC + redirection vers / (home publique).
-    // refresh() invalide le cache des Server Components (sinon les pages
-    // cachées continueraient à voir la session), push('/') navigue.
-    router.refresh();
-    router.push('/');
-
-    // Étape 4 : force le signOut() Supabase en arrière-plan (best-effort).
-    // Si la requête échoue, l'utilisateur reste déconnecté côté client.
-    try {
-      if (supabase) {
-        void supabase.auth.signOut().catch(() => {});
-      }
-    } catch {
-      /* noop */
-    }
+    // Une navigation serveur dédiée efface également les cookies httpOnly,
+    // puis renvoie vers la page légère de connexion. `replace` empêche le
+    // bouton Retour de rouvrir visuellement une page protégée.
+    window.location.replace('/api/auth/logout');
   };
 
-  // Rôle réel (admin, client, technician, sales…) prioritaire sur isAdmin.
-  const userRole = role || (isAdmin ? 'admin' : 'client');
+  // Tant que le profil n'est pas chargé, on adopte le rôle le moins privilégié.
+  // Cela évite d'afficher brièvement les pages du personnel à un client.
+  const userRole = role ?? (isAdmin ? 'admin' : 'client');
   const isAdminStaff = userRole === 'admin' || userRole === 'administrator';
-  // `isStaff` = personnel (rôle non-client). Couvre à la fois l'admin-staff
-  // (superadmin + administrator) et le personnel classique (commercial,
-  // technicien, gestionnaire de stock, assistante d'administration).
-  const isStaff = isAdminStaff || userRole !== 'client';
   // Personnage qui voit au moins UNE entrée admin (utile pour décider
   // d'afficher le dropdown « Administration » au lieu de « Mon Espace »).
   const allowedAdminLinks = filterAdminNavItems(
     ADMIN_NAV_ITEMS,
-    role || (isAdmin ? 'admin' : null),
+    userRole,
     permissions,
   );
   const hasAnyAdminEntry = allowedAdminLinks.length > 0;

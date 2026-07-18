@@ -20,6 +20,8 @@ import {
   writeArchivedUsers,
   readNews,
   writeNews,
+  readMessages,
+  writeMessages,
   readMaintenance,
   writeMaintenance,
   readPasswordResets,
@@ -36,6 +38,32 @@ const shouldUseMocks = (): boolean => {
 async function getSupabase() {
   const { createSupabaseServerClient } = await import('@/lib/supabase/server');
   return createSupabaseServerClient();
+}
+
+let publicClientPromise: Promise<any> | null = null;
+
+/**
+ * Client anonyme pour les données réellement publiques. Contrairement au
+ * client RSC authentifié, il ne lit pas `cookies()` : l'accueil et la boutique
+ * peuvent donc être mis en cache/ISR sans devenir dynamiques par accident.
+ */
+async function getPublicSupabase() {
+  if (!publicClientPromise) {
+    publicClientPromise = (async () => {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!url || !key) throw new Error('Configuration Supabase publique manquante.');
+      const { createClient } = await import('@supabase/supabase-js');
+      return createClient(url, key, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      });
+    })();
+  }
+  return publicClientPromise;
 }
 
 // ============================================================================
@@ -69,7 +97,7 @@ export async function listProducts(filters?: {
     });
   }
 
-  const supabase = await getSupabase();
+  const supabase = await getPublicSupabase();
   // Tri par ordre manuel (sort_order ASC), puis plus récent en premier.
   let query = supabase
     .from('products')
@@ -193,6 +221,23 @@ export async function listOrders(): Promise<Order[]> {
   if (shouldUseMocks()) return readOrders();
   const supabase = await getSupabase();
   const { data, error } = await supabase.from('orders').select('*, items:order_items(*)').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as Order[];
+}
+
+/**
+ * Liste complète réservée aux écrans staff après contrôle de permission côté
+ * serveur. Le client Supabase standard est limité par la RLS aux commandes de
+ * l'utilisateur courant ; un commercial/technicien autorisé verrait donc une
+ * liste vide. Le service role est utilisé uniquement par ces pages protégées.
+ */
+export async function listOrdersForStaff(): Promise<Order[]> {
+  if (shouldUseMocks()) return readOrders();
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*, items:order_items(*)')
+    .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as Order[];
 }
@@ -336,6 +381,21 @@ export async function listClients(): Promise<User[]> {
   // On selectionne explicitement les champs liés au parrainage pour que
   // l'UI CRM puisse distinguer un client direct d'un client filleul
   // (parrainage) et afficher le code/email du parrain.
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, email, full_name, phone, city, address, avatar_url, google_id, role, nps_score, referral_code, referred_by, cashback_balance, created_at, updated_at')
+    .eq('role', 'client')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as User[];
+}
+
+/** Liste complète des clients pour les écrans staff autorisés. */
+export async function listClientsForStaff(): Promise<User[]> {
+  if (shouldUseMocks()) {
+    return readUsers().filter(u => u.role === 'client') as User[];
+  }
+  const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase
     .from('users')
     .select('id, email, full_name, phone, city, address, avatar_url, google_id, role, nps_score, referral_code, referred_by, cashback_balance, created_at, updated_at')
@@ -493,7 +553,7 @@ export async function updateMaintenanceStatus(id: string, status: MaintenancePro
 // ============================================================================
 export async function getCompanyProfile(): Promise<CompanyProfile> {
   if (shouldUseMocks()) return MOCK_COMPANY;
-  const supabase = await getSupabase();
+  const supabase = await getPublicSupabase();
   const { data, error } = await supabase.from('company_profile').select('*').single();
   if (error || !data) return MOCK_COMPANY;
   return data as CompanyProfile;
@@ -584,7 +644,7 @@ export async function listNews(options?: {
     return sorted.map(normalizeNews);
   }
 
-  const supabase = await getSupabase();
+  const supabase = await getPublicSupabase();
   let query = supabase.from('news').select('*').order('created_at', { ascending: false });
   if (options?.promotionOnly) {
     query = query.or('is_promotion.eq.true,price.gt.0,product_ids.neq.{}');
@@ -1064,6 +1124,19 @@ export async function readOrdersRaw(): Promise<any[]> {
 export async function writeOrdersRaw(orders: any[]): Promise<void> {
   if (shouldUseMocks()) { writeOrders(orders); return; }
   throw new Error('writeOrdersRaw: écriture JSON FS interdite en prod.');
+}
+
+export async function readMessagesRaw(): Promise<any[]> {
+  if (shouldUseMocks()) return readMessages();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('messages').select('*');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function writeMessagesRaw(messages: any[]): Promise<void> {
+  if (shouldUseMocks()) { writeMessages(messages); return; }
+  throw new Error('writeMessagesRaw: écriture JSON FS interdite en prod.');
 }
 
 export async function readNewsRaw(): Promise<any[]> {

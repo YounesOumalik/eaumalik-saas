@@ -9,7 +9,7 @@ import { useToast } from '@/components/shared/ToastProvider';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
 import { useRouter } from 'next/navigation';
 import { getUserProfileAction } from '@/app/actions/clientActions';
-import { formatCurrency, PHONE_MA_REGEX } from '@/lib/utils';
+import { formatCurrency, PHONE_MA_REGEX, shouldSkipImageOptimization } from '@/lib/utils';
 import type { CheckoutFormData } from '@/types';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 
@@ -189,7 +189,9 @@ export default function CartPage() {
               <div key={item.product_id} className="glass-card p-4 flex gap-4 items-center" style={{ transform: 'none' }}>
                 {item.image_url && (
                   <Image src={item.image_url} alt={item.name} width={80} height={80}
-                    className="w-20 h-20 rounded-lg object-cover flex-shrink-0" unoptimized />
+                    sizes="80px"
+                    className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
+                    unoptimized={shouldSkipImageOptimization(item.image_url)} />
                 )}
                 <div className="flex-1 min-w-0">
                   <h3 className="font-display font-semibold text-sm truncate">{item.name}</h3>

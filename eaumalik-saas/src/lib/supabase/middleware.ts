@@ -15,16 +15,26 @@
 import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { SUPABASE_COOKIE_OPTIONS } from './cookies';
+import { relativeRedirectLocation } from '../relative-redirect';
 
 const ADMIN_PREFIX = '/admin';
 const CRM_PREFIX = '/crm';
 const CLIENT_PREFIX = '/client';
+const COMMANDES_PREFIX = '/commandes';
+
+function matchesPrefix(pathname: string, prefix: string) {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
 
 function isProtected(pathname: string) {
-  return (
-    pathname.startsWith(ADMIN_PREFIX) ||
-    pathname.startsWith(CRM_PREFIX) ||
-    pathname.startsWith(CLIENT_PREFIX)
+  return [ADMIN_PREFIX, CRM_PREFIX, CLIENT_PREFIX, COMMANDES_PREFIX]
+    .some(prefix => matchesPrefix(pathname, prefix));
+}
+
+function hasSupabaseSessionCookie(request: NextRequest) {
+  const baseName = SUPABASE_COOKIE_OPTIONS.name;
+  return request.cookies.getAll().some(({ name }) =>
+    name === baseName || name.startsWith(`${baseName}.`)
   );
 }
 
@@ -38,6 +48,13 @@ export async function updateSupabaseSession(request: NextRequest) {
 
   // Pré-crée la réponse pour pouvoir modifier ses headers/cookies.
   let response = NextResponse.next({ request: { headers: requestHeaders } });
+  const pathname = request.nextUrl.pathname;
+  const protectedRoute = isProtected(pathname);
+
+  // La route de déconnexion doit rester purement locale et immédiate : elle
+  // efface elle-même les cookies puis redirige vers /login.
+  if (pathname === '/api/auth/logout') return response;
+
   const pendingCookies: Parameters<SetAllCookies>[0] = [];
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -45,6 +62,23 @@ export async function updateSupabaseSession(request: NextRequest) {
 
   // Si pas d'env configurée, on ne peut rien faire — laisse passer (mode mock).
   if (!url || !key) return response;
+
+  const redirectToLogin = () =>
+    new NextResponse(null, {
+      status: 307,
+      headers: {
+        Location: relativeRedirectLocation('/login', {
+          callbackUrl: request.nextUrl.pathname + request.nextUrl.search,
+        }),
+      },
+    });
+
+  // Visiteur anonyme : aucun appel réseau Supabase n'est nécessaire. Cela
+  // accélère fortement l'accueil, la boutique et la page de connexion, tout
+  // en redirigeant immédiatement les routes privées.
+  if (!hasSupabaseSessionCookie(request)) {
+    return protectedRoute ? redirectToLogin() : response;
+  }
 
   const supabase = createServerClient(url, key, {
     cookies: {
@@ -74,85 +108,22 @@ export async function updateSupabaseSession(request: NextRequest) {
     isAuthed = false;
   }
 
-  // Protection des routes privées.
-  // FIX : utiliser directement NextResponse.redirect avec request.url (qui est
-  // absolu derrière le reverse-proxy Caddy). Le helper localRedirect basé sur
-  // 'http://eaumalik.local' introduit un 500 en prod à cause d'un bug dans
-  // Next.js 14.2.35 + Edge runtime (new URL(value, undefined) plante).
-  if (isProtected(request.nextUrl.pathname) && !isAuthed) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set(
-      'callbackUrl',
-      request.nextUrl.pathname + request.nextUrl.search
-    );
-    const redirect = NextResponse.redirect(loginUrl);
+  const withSessionCookies = (redirect: NextResponse) => {
     pendingCookies.forEach(({ name, value, options }) =>
       redirect.cookies.set({ name, value, ...options })
     );
     return redirect;
+  };
+
+  // Protection des routes privées. Keep Location relative: request.url may
+  // contain Docker's bind address (0.0.0.0:3100) behind a reverse proxy.
+  if (protectedRoute && !isAuthed) {
+    return withSessionCookies(redirectToLogin());
   }
 
-  // Redirection vers google-complete si l'utilisateur est connecté mais son
-  // profil est incomplet (téléphone/ville manquants après connexion Google).
-  if (
-    isAuthed &&
-    !request.nextUrl.pathname.startsWith('/login/google-complete') &&
-    !request.nextUrl.pathname.startsWith('/login')
-  ) {
-    try {
-      const { data: userIdData } = await supabase.auth.getUser();
-      const userId = userIdData?.user?.id;
-      if (!userId) {
-        return response;
-      }
-
-      // Tente d'abord la vue user_profile_complete (rapide, calculée en base).
-      // En cas d'échec (vue non exposée via bridge public), fallback sur un
-      // SELECT direct sur public.users pour vérifier phone + city.
-      let isComplete = false;
-      try {
-        const { data: profile } = await supabase
-          .from('user_profile_complete')
-          .select('is_complete')
-          .eq('id', userId)
-          .single();
-        isComplete = !!profile?.is_complete;
-      } catch {
-        // Fallback robuste : SELECT direct sur la table user (vue public.users).
-        try {
-          const { data: row } = await supabase
-            .from('users')
-            .select('phone, city')
-            .eq('id', userId)
-            .single();
-          isComplete = !!(row?.phone && row?.city);
-        } catch {
-          // En cas d'échec total (RLS, vue absente), on laisse passer pour
-          // ne pas bloquer l'utilisateur. Il pourra compléter son profil
-          // depuis son espace client plus tard.
-          isComplete = true;
-        }
-      }
-
-      if (!isComplete) {
-        const completeUrl = new URL(
-          '/login/google-complete',
-          request.url
-        );
-        completeUrl.searchParams.set(
-          'callbackUrl',
-          request.nextUrl.pathname + request.nextUrl.search
-        );
-        const redirect = NextResponse.redirect(completeUrl);
-        pendingCookies.forEach(({ name, value, options }) =>
-          redirect.cookies.set({ name, value, ...options })
-        );
-        return redirect;
-      }
-    } catch {
-      // En cas d'erreur inattendue, on laisse passer.
-    }
-  }
+  // Le contrôle de profil Google vit dans /login/google-complete, destination
+  // obligatoire du callback OAuth. Le refaire ici ajoutait une requête DB à
+  // chaque navigation authentifiée et ralentissait tout l'espace connecté.
 
   return response;
 }

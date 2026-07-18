@@ -108,11 +108,9 @@ RUN apk add --no-cache libc6-compat tini wget && \
     addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# sharp : requis en mode standalone pour l'optimisation d'images Next.js.
-# Sans lui, toute page utilisant next/image renvoie HTTP 500
-# ("'sharp' is required to be installed in standalone mode").
-# Installé en root avant USER nextjs.
-RUN npm install --no-save sharp@0.33.5
+# sharp est une dépendance applicative déclarée dans package.json. Next.js
+# l'inclut donc dans le traçage standalone ci-dessous, sans seconde version ni
+# couche npm redondante dans l'image finale.
 
 # .next/standalone contient le serveur Node.js + uniquement les
 # dépendances runtime (node_modules filtré par file tracing).

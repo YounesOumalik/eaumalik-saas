@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { readUsersRaw, writeUsersRaw } from '@/data/repositories';
 import { verifyCaptchaPayload } from '@/lib/captcha';
 import { setDevSessionCookie as setDevCookie } from '@/lib/auth/devSession';
+import { hashPassword, isHashedPassword, verifyPassword } from '@/lib/auth/password';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
       const newUser = {
         id: `u-${Date.now()}`,
         email,
-        password, // NOTE : mock-only. En prod : hash cote serveur Supabase.
+        password: hashPassword(password),
         full_name: profile.full_name,
         phone: profile.phone || '',
         city: profile.city || '',
@@ -107,8 +108,13 @@ export async function POST(req: NextRequest) {
     if (!existing) {
       return NextResponse.json({ error: 'Aucun compte avec cet email.' }, { status: 401 });
     }
-    if (existing.password !== password) {
+    if (!verifyPassword(password, existing.password)) {
       return NextResponse.json({ error: 'Mot de passe incorrect.' }, { status: 401 });
+    }
+    // Migrate legacy local fixtures/accounts on their first successful login.
+    if (!isHashedPassword(existing.password)) {
+      existing.password = hashPassword(password);
+      await writeUsersRaw(users);
     }
     const safeUser = sanitize(existing);
     const res = NextResponse.json({ user: safeUser });

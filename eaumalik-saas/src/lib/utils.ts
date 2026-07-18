@@ -10,6 +10,15 @@ export function formatCurrency(price: number): string {
   return price.toLocaleString('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' DH';
 }
 
+/**
+ * Les images locales peuvent passer par l'optimiseur Next.js (WebP/AVIF +
+ * tailles responsives). Les data/blob et URL externes arbitraires restent en
+ * accès direct pour préserver les aperçus d'upload et les anciens contenus.
+ */
+export function shouldSkipImageOptimization(src: string): boolean {
+  return !src.startsWith('/');
+}
+
 /** Formatte une date ISO en fr-FR */
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR');

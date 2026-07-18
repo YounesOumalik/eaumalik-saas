@@ -2,11 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { updateSupabaseSession } from '@/lib/supabase/middleware';
 
 export async function middleware(request: NextRequest) {
-  const response = await updateSupabaseSession(request);
-  // Expose le pathname courant aux Server Components (RootLayout) pour
-  // permettre le rendu conditionnel du Footer public.
-  response.headers.set('x-pathname', request.nextUrl.pathname);
-  return response;
+  return updateSupabaseSession(request);
 }
 
 export const config = {

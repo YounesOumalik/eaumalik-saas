@@ -39,6 +39,8 @@ export type AdminNavItem = {
    *  Si défini à 'admin-staff', l'entrée apparaît pour les superadmins ET les
    *  administrateurs (Administrateur « Droits Étendus »). */
   requiredRole?: 'admin' | 'admin-staff';
+  /** Entrée réservée aux rôles métier non-client. */
+  staffOnly?: boolean;
   /** Permission Supabase nécessaire à l'affichage (ignoré si l'utilisateur est admin). */
   permissionKey?: AdminPermissionKey;
 };
@@ -49,6 +51,7 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
     label: 'Commandes',
     href: '/commandes',
     scope: 'global',
+    staffOnly: true,
   },
   {
     id: 'stocks',
@@ -121,8 +124,10 @@ export type AdminPermissionsBag = Partial<Record<AdminPermissionKey, boolean>>;
  *   - `requiredRole === 'admin'` masque l'entrée aux non-superadmins.
  *   - `requiredRole === 'admin-staff'` la rend visible aux superadmins ET
  *     aux administrators.
- *   - Si `permissions` est `null` (chargement en cours), on reste
- *     optimiste : on affiche tout pour ne pas faire clignoter le menu.
+ *   - Un client, ou un rôle encore inconnu pendant le chargement, ne reçoit
+ *     aucune entrée du personnel (principe du moindre privilège).
+ *   - Pour un rôle staff identifié, `permissions=null` conserve les entrées
+ *     pendant le court chargement de ses permissions.
  */
 export function filterAdminNavItems(
   items: readonly AdminNavItem[],
@@ -130,6 +135,11 @@ export function filterAdminNavItems(
   permissions: AdminPermissionsBag | null,
   scope: AdminScopeFilter = 'all',
 ): AdminNavItem[] {
+  // Toute cette liste appartient à l'espace personnel. Un client ne doit
+  // jamais en voir une entrée ; un rôle inconnu est traité comme client
+  // jusqu'à ce que son profil soit effectivement chargé.
+  if (!role || role === 'client') return [];
+
   const isAdmin = role === 'admin';
   // Admin-staff = superadmin OU administrator (Droits Étendus, sans pouvoir
   // supprimer le superadmin).

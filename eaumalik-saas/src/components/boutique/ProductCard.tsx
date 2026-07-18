@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { CATEGORY_LABELS } from '@/types';
 import type { Product } from '@/types';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, shouldSkipImageOptimization } from '@/lib/utils';
 import { useCart } from '@/components/shared/CartProvider';
 import { useToast } from '@/components/shared/ToastProvider';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
@@ -76,8 +76,9 @@ export default function ProductCard({ product }: { product: Product }) {
               alt={product.name}
               width={600}
               height={600}
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
               className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-              unoptimized
+              unoptimized={shouldSkipImageOptimization(product.image_url)}
             />
           ) : (
             <i className="fa-solid fa-droplet text-6xl absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ color: 'var(--primary-light)' }} aria-hidden="true" />

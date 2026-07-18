@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { requirePermission } from '@/lib/supabase/server';
-import { listClients, listOrders, listMaintenance } from '@/data/repositories';
+import { listClientsForStaff, listOrdersForStaff, listMaintenance } from '@/data/repositories';
 import { getAdminMessagesList } from '@/app/actions/clientActions';
 import ClientList from '@/components/crm/ClientList';
 
@@ -26,8 +26,8 @@ export default async function CrmClientsPage() {
   }
 
   const [clients, orders, maintenance, messagesRes] = await Promise.all([
-    listClients(),
-    listOrders(),
+    listClientsForStaff(),
+    listOrdersForStaff(),
     listMaintenance(),
     // Encapsulé : `getAdminMessagesList` exige un rôle admin.
     getAdminMessagesList().catch(() => ({ success: false as const, clients: [] as any[] })),

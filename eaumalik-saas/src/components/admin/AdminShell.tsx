@@ -163,15 +163,9 @@ export default function AdminShell({ title, children }: { title: string; childre
             {session ? (
               <button
                 type="button"
-                onClick={async () => {
-                  await signOut();
-                  // Force la navigation vers /login : un simple signOut() met à
-                  // jour l'état client, mais l'AdminLayout est un Server Component
-                  // qui ne re-vérifie requireAdmin() qu'au prochain render. Sans
-                  // navigation explicite, l'utilisateur reste sur la page admin
-                  // protégée jusqu'à un refresh manuel.
-                  router.replace('/login');
-                  router.refresh();
+                onClick={() => {
+                  void signOut();
+                  window.location.replace('/api/auth/logout');
                 }}
                 className="sidebar-link w-full text-left"
                 title={collapsed ? 'Déconnexion' : undefined}

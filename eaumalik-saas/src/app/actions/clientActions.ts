@@ -12,12 +12,17 @@ import {
 } from '@/lib/supabase/server';
 import {
   readUsersRaw,
+  writeUsersRaw,
+  readOrdersRaw,
+  readMessagesRaw,
+  writeMessagesRaw,
   readNewsRaw,
   writeNewsRaw,
   readProductsRaw,
 } from '@/data/repositories';
 
 import { isMockMode } from '@/lib/api-guard';
+import { hashPassword } from '@/lib/auth/password';
 
 // ============================================================================
 // Schémas Zod (validation stricte des payloads)
@@ -61,9 +66,12 @@ const NewsSchema = z.object({
   validUntil: z.string().optional().nullable(),
 });
 
-const MessageSchema = z.object({
-  text: z.string().min(1).max(1000),
-});
+const MessageSchema = z.preprocess(
+  value => typeof value === 'string' ? { text: value } : value,
+  z.object({
+    text: z.string().trim().min(1).max(1000),
+  })
+);
 
 // ============================================================================
 // Helpers
@@ -98,6 +106,18 @@ async function getCurrentUser() {
   } | null;
 }
 
+function normalizeMessage(row: any) {
+  const sourceSenderId = row.senderId ?? row.sender_id ?? null;
+  const senderId = sourceSenderId === null ? 'admin-id' : sourceSenderId;
+  return {
+    ...row,
+    senderId,
+    senderName: row.senderName ?? row.sender_name ?? (senderId === 'admin-id' ? 'Administrateur EAUMALIK' : 'Client'),
+    recipientId: row.recipientId ?? row.recipient_id ?? null,
+    timestamp: row.timestamp ?? row.created_at ?? new Date().toISOString(),
+  };
+}
+
 // ============================================================================
 // Données du tableau de bord client
 // ============================================================================
@@ -105,21 +125,34 @@ export async function getClientDashboardData() {
   const user = await getCurrentUser();
   if (!user) return { success: false as const, error: 'Non authentifié.' };
 
-  // Mock : lit users.json, orders (vide), news.json (avec filtrage par cible utilisateur).
+  // Mock : mêmes données fonctionnelles que Supabase, depuis data-store/*.json.
   if (isMockMode()) {
-    const allUsers = await readUsersRaw() as any[];
-    const me = allUsers.find((u: any) => u.id === user.id);
-    const referredUsers: any[] = [];
-    if (me?.referred_by) {
-      const ref = allUsers.find((u: any) => u.id === me.referred_by);
-      if (ref) referredUsers.push({ id: ref.id, name: ref.full_name, email: ref.email });
-    }
+    const [allUsers, allOrders, allMessages, allNews] = await Promise.all([
+      readUsersRaw(),
+      readOrdersRaw(),
+      readMessagesRaw(),
+      readNewsRaw(),
+    ]) as [any[], any[], any[], any[]];
+    const referredUsers = allUsers
+      .filter((u: any) => u.referred_by === user.id)
+      .map((u: any) => ({ id: u.id, name: u.full_name ?? u.email, email: u.email }));
+    const userOrders = allOrders
+      .filter((order: any) => order.user_id === user.id)
+      .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+    const userMessages = allMessages
+      .filter((message: any) => {
+        const senderId = message.senderId ?? message.sender_id ?? null;
+        const recipientId = message.recipientId ?? message.recipient_id ?? null;
+        return senderId === user.id || recipientId === user.id;
+      })
+      .map(normalizeMessage)
+      .sort((a: any, b: any) => a.timestamp.localeCompare(b.timestamp));
     const nowIso = new Date().toISOString();
-    const newsRows = (await readNewsRaw() as any[]).filter((n: any) => {
+    const newsRows = allNews.filter((n: any) => {
       const valid = !n.valid_until || n.valid_until > nowIso;
       const target = n.target_all !== false;
       const targets = Array.isArray(n.target_user_ids) ? n.target_user_ids : [];
-      return valid && (target || targets.includes(user.id));
+      return n.is_archived !== true && valid && (target || targets.includes(user.id));
     }).sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
     return {
       success: true as const,
@@ -134,26 +167,48 @@ export async function getClientDashboardData() {
         cashback_balance: user.cashback_balance ?? 0,
       },
       referredUsers,
-      userOrders: [], // Le mock ne gère pas les commandes client ↔ user ici.
-      userMessages: [],
+      userOrders,
+      userMessages,
       news: newsRows,
     };
   }
 
-  const supabase = createSupabaseServerClient();
-  // Commandes : RLS applique auth.uid() = user_id côté DB.
-  const { data: orders } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+  // L'utilisateur est déjà authentifié ci-dessus. Le service role contourne
+  // les divergences de RLS/vues publiques, puis chaque requête reste bornée
+  // strictement à son identifiant.
+  const service = createSupabaseServiceRoleClient();
+  const [ordersRes, newsRes, messagesRes, referralsRes] = await Promise.all([
+    service
+      .from('orders')
+      .select('*, items:order_items(*)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false }),
+    service
+      .from('news')
+      .select('*')
+      .or(`target_all.eq.true,target_user_ids.cs.{${user.id}}`)
+      .order('created_at', { ascending: false }),
+    service
+      .from('messages')
+      .select('*')
+      .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+      .order('timestamp', { ascending: true }),
+    service
+      .from('users')
+      .select('id, full_name, email')
+      .eq('referred_by', user.id)
+      .order('created_at', { ascending: false }),
+  ]);
 
-  // News visibles par ce client (filtrage cible en PostgREST via OR).
-  const { data: news } = await supabase
-    .from('news')
-    .select('*')
-    .or(`target_all.eq.true,target_user_ids.cs.{${user.id}}`)
-    .order('created_at', { ascending: false });
+  const nowIso = new Date().toISOString();
+  const news = (newsRes.data ?? []).filter((item: any) =>
+    item.is_archived !== true && (!item.valid_until || item.valid_until > nowIso)
+  );
+  const referredUsers = (referralsRes.data ?? []).map((ref: any) => ({
+    id: ref.id,
+    name: ref.full_name ?? ref.email,
+    email: ref.email,
+  }));
 
   return {
     success: true as const,
@@ -167,10 +222,10 @@ export async function getClientDashboardData() {
       referral_code: user.referral_code ?? '',
       cashback_balance: user.cashback_balance ?? 0,
     },
-    referredUsers: [], // Calculé en SQL si besoin (table fille).
-    userOrders: orders ?? [],
-    userMessages: [], // Voir table dédiée messages.
-    news: news ?? [],
+    referredUsers,
+    userOrders: ordersRes.data ?? [],
+    userMessages: (messagesRes.data ?? []).map(normalizeMessage),
+    news,
   };
 }
 
@@ -182,6 +237,23 @@ export async function sendClientMessageAction(raw: unknown) {
   if (!parsed.success) return { success: false as const, error: 'Message invalide.' };
   const user = await getCurrentUser();
   if (!user) return { success: false as const, error: 'Non authentifié.' };
+
+  if (isMockMode()) {
+    const rows = await readMessagesRaw();
+    const message = {
+      id: `msg-${Date.now()}`,
+      senderId: user.id,
+      senderName: user.full_name,
+      recipientId: 'admin-id',
+      text: parsed.data.text,
+      timestamp: new Date().toISOString(),
+    };
+    rows.push(message);
+    await writeMessagesRaw(rows);
+    revalidatePath('/client');
+    return { success: true as const, message };
+  }
+
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
     .from('messages')
@@ -195,7 +267,7 @@ export async function sendClientMessageAction(raw: unknown) {
     .single();
   if (error || !data) return { success: false as const, error: 'Envoi échoué.' };
   revalidatePath('/client');
-  return { success: true as const, message: data };
+  return { success: true as const, message: normalizeMessage(data) };
 }
 
 // ============================================================================
@@ -203,35 +275,71 @@ export async function sendClientMessageAction(raw: unknown) {
 // ============================================================================
 export async function getAdminMessagesList() {
   await requireAdmin();
-  const supabase = createSupabaseServiceRoleClient();
-  const { data, error } = await supabase
-    .from('messages')
-    .select('*')
-    .order('timestamp', { ascending: false });
-  if (error) return { success: false as const, error: 'Lecture impossible.' };
+  let rows: any[] = [];
+  let users: any[] = [];
+
+  if (isMockMode()) {
+    [rows, users] = await Promise.all([readMessagesRaw(), readUsersRaw()]);
+  } else {
+    const supabase = createSupabaseServiceRoleClient();
+    const [messagesRes, usersRes] = await Promise.all([
+      supabase.from('messages').select('*').order('timestamp', { ascending: true }),
+      supabase.from('users').select('id, full_name, email').eq('role', 'client'),
+    ]);
+    if (messagesRes.error) return { success: false as const, error: 'Lecture impossible.' };
+    rows = messagesRes.data ?? [];
+    users = usersRes.data ?? [];
+  }
 
   // Groupement par client.
   const clientsMap = new Map<string, any>();
-  for (const m of data ?? []) {
-    const clientId = m.sender_id ?? 'admin';
+  const usersById = new Map(users.map((u: any) => [u.id, u]));
+  for (const raw of rows) {
+    const m = normalizeMessage(raw);
+    const clientId = m.senderId === 'admin-id' ? m.recipientId : m.senderId;
+    if (!clientId || clientId === 'admin-id') continue;
+    const profile = usersById.get(clientId);
     if (!clientsMap.has(clientId)) {
       clientsMap.set(clientId, {
         clientId,
-        clientName: m.sender_name ?? 'Client',
+        clientName: profile?.full_name ?? m.senderName ?? 'Client',
+        clientEmail: profile?.email ?? '',
         lastMessage: m.text,
         timestamp: m.timestamp,
         messages: [],
       });
     }
-    clientsMap.get(clientId)!.messages.push(m);
+    const conversation = clientsMap.get(clientId)!;
+    conversation.lastMessage = m.text;
+    conversation.timestamp = m.timestamp;
+    conversation.messages.push(m);
   }
-  return { success: true as const, clients: Array.from(clientsMap.values()) };
+  const clients = Array.from(clientsMap.values())
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return { success: true as const, clients };
 }
 
 export async function sendAdminReplyAction(clientId: string, raw: unknown) {
   const parsed = MessageSchema.safeParse(raw);
   if (!parsed.success) return { success: false as const, error: 'Message invalide.' };
   await requireAdmin();
+
+  if (isMockMode()) {
+    const rows = await readMessagesRaw();
+    const message = {
+      id: `msg-${Date.now()}`,
+      senderId: 'admin-id',
+      senderName: 'Administrateur EAUMALIK',
+      recipientId: clientId,
+      text: parsed.data.text,
+      timestamp: new Date().toISOString(),
+    };
+    rows.push(message);
+    await writeMessagesRaw(rows);
+    revalidatePath('/client');
+    return { success: true as const, message };
+  }
+
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
     .from('messages')
@@ -245,7 +353,7 @@ export async function sendAdminReplyAction(clientId: string, raw: unknown) {
     .single();
   if (error || !data) return { success: false as const, error: 'Envoi échoué.' };
   revalidatePath('/client');
-  return { success: true as const, message: data };
+  return { success: true as const, message: normalizeMessage(data) };
 }
 
 // ============================================================================
@@ -608,6 +716,24 @@ export async function updateUserProfileAction(raw: unknown) {
   }
   const user = await getCurrentUser();
   if (!user) return { success: false as const, error: 'Non authentifié.' };
+
+  if (isMockMode()) {
+    const users = await readUsersRaw();
+    const index = users.findIndex((item: any) => item.id === user.id);
+    if (index === -1) return { success: false as const, error: 'Profil introuvable.' };
+    users[index] = {
+      ...users[index],
+      full_name: parsed.data.full_name,
+      phone: parsed.data.phone,
+      city: parsed.data.city,
+      address: parsed.data.address ?? null,
+      ...(parsed.data.password ? { password: hashPassword(parsed.data.password) } : {}),
+      updated_at: new Date().toISOString(),
+    };
+    await writeUsersRaw(users);
+    revalidatePath('/client');
+    return { success: true as const };
+  }
 
   const supabase = createSupabaseServerClient();
   const { error } = await supabase

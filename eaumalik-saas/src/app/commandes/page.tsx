@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { requireUser } from '@/lib/supabase/server';
-import { listClients, listOrders } from '@/data/repositories';
+import { listClientsForStaff, listOrdersForStaff } from '@/data/repositories';
 import OrdersView from '@/components/shared/OrdersView';
 import { effectivePermissions } from '@/lib/supabase/server';
 import { MOCK_ORDER_ITEMS } from '@/data/mock';
@@ -39,7 +39,7 @@ export default async function CommandesPage() {
     redirect('/');
   }
 
-  const [clients, orders] = await Promise.all([listClients(), listOrders()]);
+  const [clients, orders] = await Promise.all([listClientsForStaff(), listOrdersForStaff()]);
 
   // Jointure items (selon la forme retournée par mock ou Supabase)
   const itemsByOrder = new Map<string, typeof MOCK_ORDER_ITEMS>();

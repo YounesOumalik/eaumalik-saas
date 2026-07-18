@@ -5,6 +5,7 @@ import { badRequest, forbidden, safeErrorResponse, unauthorized } from '@/lib/ap
 import { readOrdersRaw, writeOrdersRaw, readUsersRaw, writeUsersRaw } from '@/data/repositories';
 import { Order } from '@/types';
 import { setDevSessionCookie } from '@/lib/auth/devSession';
+import { hashPassword } from '@/lib/auth/password';
 
 export const dynamic = 'force-dynamic';
 
@@ -191,7 +192,7 @@ async function createOrderMock({
       newUser = {
         id: `u-${Date.now()}`,
         email: account.email,
-        password: account.password, // NOTE mock-only (cf. /api/auth/dev-login)
+        password: hashPassword(account.password),
         full_name: account.full_name || input.client_name,
         phone: input.client_phone,
         city: input.client_city,

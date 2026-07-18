@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { CATEGORY_LABELS } from '@/types';
 import type { Product } from '@/types';
 import AddToCartButton from '@/components/boutique/AddToCartButton';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, shouldSkipImageOptimization } from '@/lib/utils';
 
 export default function ProductsPreview({ products }: { products: Product[] }) {
   return (
@@ -27,8 +27,9 @@ export default function ProductsPreview({ products }: { products: Product[] }) {
                     alt={p.name}
                     width={400}
                     height={400}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                    unoptimized
+                    unoptimized={shouldSkipImageOptimization(p.image_url)}
                   />
                 )}
               </div>

@@ -20,17 +20,16 @@ import { listProducts, listActivePromotions } from '@/data/repositories';
 //   - ContactSection     : coordonnées + formulaire de contact (backend)
 export default async function HomePage() {
   // Chargement en parallèle :
-  //  - featured : seulement les produits phares (filtrés côté DB) ;
-  //  - all : tous les actifs, utilisé en fallback si aucun produit n'est
-  //    marqué is_featured, et pour le carrousel promotions.
-  //    On évite ainsi une section vide côté landing.
-  const [featured, all, promotions] = await Promise.all([
-    listProducts({ featured: true }),
+  //  - all : tous les produits actifs, dont on dérive les produits phares ;
+  //  - promotions : carrousel public.
+  // Une seule lecture catalogue suffit, au lieu de deux requêtes identiques.
+  const [all, promotions] = await Promise.all([
     listProducts(),
     listActivePromotions(12),
   ]);
+  const featured = all.filter(product => product.is_featured);
   const previewProducts =
-    (featured.length > 0 ? featured : all.filter((p) => !p.is_archived).slice(0, 6)).slice(0, 6);
+    (featured.length > 0 ? featured : all.slice(0, 6)).slice(0, 6);
   return (
     <>
       <HeroSection />

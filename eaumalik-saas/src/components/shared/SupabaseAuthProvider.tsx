@@ -176,13 +176,20 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
             setRole(null);
             setPermissions(null);
             setDisplayName('');
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new Event('eaumalik:dev-session-change'));
-            }
-            // 2) Suppression effective du cookie httpOnly (fire-and-forget :
-            //    on ne bloque PAS la nav si le réseau rame).
+            // 2) Supprime le cookie httpOnly. L'événement doit être publié
+            //    après cette requête, sinon le listener peut relire l'ancien
+            //    cookie et restaurer la session juste après le clic.
             try {
-              fetch('/api/auth/dev-session', { method: 'DELETE' }).catch(() => {});
+              void fetch('/api/auth/dev-session', {
+                method: 'DELETE',
+                cache: 'no-store',
+              })
+                .catch(() => {})
+                .then(() => {
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new Event('eaumalik:dev-session-change'));
+                  }
+                });
             } catch {
               /* noop */
             }
