@@ -25,6 +25,7 @@ import { formatCurrency } from '@/lib/utils';
 import { sendClientMessageAction, updateUserProfileAction } from '@/app/actions/clientActions';
 import { useToast } from '@/components/shared/ToastProvider';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
+import { OrderTimeline } from '@/components/admin/OrderTracker';
 
 interface Props {
   initialData: {
@@ -46,7 +47,7 @@ interface NavItem {
 }
 
 const SIDEBAR_ICONS: Record<string, LucideIcon> = {
-  commandes: ShoppingBag,
+  orders: ShoppingBag,
   parrainage: Gift,
   maintenance: ShieldAlert,
   chat: MessageCircle,
@@ -56,6 +57,14 @@ const SIDEBAR_ICONS: Record<string, LucideIcon> = {
 };
 
 const STORAGE_KEY = 'eaumalik.client.sidebar.collapsed';
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  en_attente: 'En attente',
+  traitee: 'Préparée',
+  en_livraison: 'En livraison',
+  livree: 'Livrée',
+  annulee: 'Annulée',
+};
 
 export default function ClientDashboard({ initialData }: Props) {
   const router = useRouter();
@@ -137,16 +146,13 @@ export default function ClientDashboard({ initialData }: Props) {
     [activeTab]
   );
 
-  // Commande en PREMIER, puis les onglets internes dans le même ordre qu'avant.
-  // La boutique est le parcours de commande client ; /commandes est réservé
-  // au suivi des commandes du personnel.
+  // Commande en PREMIER : ouvre le suivi des commandes du client.
   const navItems: NavItem[] = [
-    { id: 'commandes', label: 'Commande', icon: ShoppingBag, href: '/boutique' },
+    { id: 'orders', label: 'Commande', icon: ShoppingBag },
     { id: 'parrainage', label: 'Parrainage & Cashback', icon: Gift },
     { id: 'maintenance', label: 'Maintenance Filtres', icon: ShieldAlert },
     { id: 'chat', label: 'Discuter avec le vendeur', icon: MessageCircle },
     { id: 'news', label: 'Actualités & Offres', icon: Newspaper },
-    { id: 'orders', label: 'Historique commandes', icon: Receipt },
     { id: 'profile', label: 'Mes Coordonnées', icon: User },
   ];
 
@@ -589,57 +595,74 @@ export default function ClientDashboard({ initialData }: Props) {
         {/* ORDERS */}
         {activeTab === 'orders' && (
           <div className="glass-card p-6" style={{ transform: 'none' }}>
-            <h3 className="font-display font-bold text-lg mb-4">Historique des Commandes</h3>
+            <h3 className="font-display font-bold text-lg mb-2 flex items-center gap-2">
+              <ShoppingBag size={18} className="text-primary-light" /> Mes Commandes
+            </h3>
+            <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
+              Suivez l&apos;avancement de vos commandes et leur livraison.
+            </p>
             {initialData.userOrders.length === 0 ? (
               <div className="text-center py-10" style={{ color: 'var(--text-muted)' }}>
                 <Receipt size={36} className="mx-auto mb-3 opacity-50" />
                 <p className="text-sm">Vous n&apos;avez passé aucune commande pour le moment.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Commande</th>
-                      <th>Date</th>
-                      <th>Total</th>
-                      <th>Statut</th>
-                      <th>Facture</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {initialData.userOrders.map(order => (
-                      <tr key={order.id}>
-                        <td className="font-mono text-sm font-semibold">{order.order_number}</td>
-                        <td className="text-sm">{new Date(order.created_at).toLocaleDateString()}</td>
-                        <td className="font-bold text-sm">{formatCurrency(order.total)}</td>
-                        <td>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            order.status === 'livree' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'
-                          }`}>
-                            {order.status}
-                          </span>
-                        </td>
-                        <td>
-                          {order.status !== 'en_attente' && order.status !== 'annulee' ? (
-                            <a
-                              href={`/api/invoice?order_id=${order.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary-light hover:underline font-bold"
-                            >
-                              Télécharger (PDF)
-                            </a>
-                          ) : (
-                            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                              Dispo. après confirmation
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-5">
+                {initialData.userOrders.map(order => (
+                  <article
+                    key={order.id}
+                    className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] p-4 sm:p-5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+                      <div>
+                        <h4 className="font-display font-bold text-base">Commande {order.order_number}</h4>
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                          Passée le {new Date(order.created_at).toLocaleDateString('fr-FR')}
+                        </p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        order.status === 'livree' ? 'bg-success-soft text-success' :
+                          order.status === 'annulee' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'
+                      }`}>
+                        {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                      </span>
+                    </div>
+
+                    <OrderTimeline order={order} />
+
+                    {Array.isArray(order.items) && order.items.length > 0 && (
+                      <div className="mt-5 pt-4 border-t border-[color:var(--border)]">
+                        <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                          Articles
+                        </div>
+                        <div className="space-y-1 text-sm">
+                          {order.items.map((item: any) => (
+                            <div key={item.id} className="flex items-center justify-between gap-3">
+                              <span>{item.product_name} × {item.quantity}</span>
+                              <span className="font-semibold whitespace-nowrap">{formatCurrency(item.line_total)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <span style={{ color: 'var(--text-muted)' }}>Total : <strong className="text-sm" style={{ color: 'var(--text)' }}>{formatCurrency(order.total)}</strong></span>
+                      {order.status !== 'en_attente' && order.status !== 'annulee' ? (
+                        <a
+                          href={`/api/invoice?order_id=${order.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary-light hover:underline font-bold"
+                        >
+                          Télécharger la facture (PDF)
+                        </a>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>Facture disponible après confirmation</span>
+                      )}
+                    </div>
+                  </article>
+                ))}
               </div>
             )}
           </div>
