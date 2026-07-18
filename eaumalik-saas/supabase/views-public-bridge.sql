@@ -215,7 +215,15 @@ SECURITY DEFINER SET search_path = eaumalik, public
 AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    INSERT INTO eaumalik.order_items SELECT NEW.*;
+    IF NEW.id IS NULL THEN
+      NEW.id := gen_random_uuid();
+    END IF;
+    INSERT INTO eaumalik.order_items (
+      id, order_id, product_id, product_name, unit_price, quantity, line_total
+    ) VALUES (
+      NEW.id, NEW.order_id, NEW.product_id, NEW.product_name, NEW.unit_price,
+      NEW.quantity, NEW.line_total
+    );
     RETURN NEW;
   ELSIF TG_OP = 'DELETE' THEN
     DELETE FROM eaumalik.order_items WHERE id = OLD.id;

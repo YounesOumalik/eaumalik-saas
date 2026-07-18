@@ -227,10 +227,14 @@ AS $$
 DECLARE
   v_caller uuid := (SELECT auth.uid());
   v_is_admin boolean := eaumalik.is_admin();
+  v_is_trusted_server boolean :=
+    COALESCE(auth.role(), '') = 'service_role'
+    OR current_setting('role', true) IN ('service_role', 'postgres')
+    OR session_user IN ('service_role', 'postgres');
   v_owner uuid;
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF NEW.user_id IS NOT NULL AND v_caller IS DISTINCT FROM NEW.user_id AND NOT v_is_admin THEN
+    IF NEW.user_id IS NOT NULL AND v_caller IS DISTINCT FROM NEW.user_id AND NOT v_is_admin AND NOT v_is_trusted_server THEN
       RAISE EXCEPTION 'accès refusé (orders insert)';
     END IF;
     IF NEW.id IS NULL THEN
@@ -250,7 +254,7 @@ BEGIN
     RETURN NEW;
   ELSIF TG_OP = 'UPDATE' THEN
     SELECT user_id INTO v_owner FROM eaumalik.orders WHERE id = OLD.id;
-    IF v_caller IS DISTINCT FROM v_owner AND NOT v_is_admin THEN
+    IF v_caller IS DISTINCT FROM v_owner AND NOT v_is_admin AND NOT v_is_trusted_server THEN
       RAISE EXCEPTION 'accès refusé (orders update)';
     END IF;
     UPDATE eaumalik.orders SET
@@ -263,7 +267,7 @@ BEGIN
     RETURN NEW;
   ELSIF TG_OP = 'DELETE' THEN
     SELECT user_id INTO v_owner FROM eaumalik.orders WHERE id = OLD.id;
-    IF v_caller IS DISTINCT FROM v_owner AND NOT v_is_admin THEN
+    IF v_caller IS DISTINCT FROM v_owner AND NOT v_is_admin AND NOT v_is_trusted_server THEN
       RAISE EXCEPTION 'accès refusé (orders delete)';
     END IF;
     DELETE FROM eaumalik.orders WHERE id = OLD.id;
@@ -280,18 +284,30 @@ AS $$
 DECLARE
   v_caller uuid := (SELECT auth.uid());
   v_is_admin boolean := eaumalik.is_admin();
+  v_is_trusted_server boolean :=
+    COALESCE(auth.role(), '') = 'service_role'
+    OR current_setting('role', true) IN ('service_role', 'postgres')
+    OR session_user IN ('service_role', 'postgres');
   v_order_user uuid;
 BEGIN
   SELECT o.user_id INTO v_order_user FROM eaumalik.orders o
    WHERE o.id = COALESCE(NEW.order_id, OLD.order_id);
   IF TG_OP = 'INSERT' THEN
-    IF v_order_user IS NOT NULL AND v_caller IS DISTINCT FROM v_order_user AND NOT v_is_admin THEN
+    IF v_order_user IS NOT NULL AND v_caller IS DISTINCT FROM v_order_user AND NOT v_is_admin AND NOT v_is_trusted_server THEN
       RAISE EXCEPTION 'accès refusé (order_items insert)';
     END IF;
-    INSERT INTO eaumalik.order_items SELECT NEW.*;
+    IF NEW.id IS NULL THEN
+      NEW.id := gen_random_uuid();
+    END IF;
+    INSERT INTO eaumalik.order_items (
+      id, order_id, product_id, product_name, unit_price, quantity, line_total
+    ) VALUES (
+      NEW.id, NEW.order_id, NEW.product_id, NEW.product_name, NEW.unit_price,
+      NEW.quantity, NEW.line_total
+    );
     RETURN NEW;
   ELSIF TG_OP = 'DELETE' THEN
-    IF v_order_user IS NOT NULL AND v_caller IS DISTINCT FROM v_order_user AND NOT v_is_admin THEN
+    IF v_order_user IS NOT NULL AND v_caller IS DISTINCT FROM v_order_user AND NOT v_is_admin AND NOT v_is_trusted_server THEN
       RAISE EXCEPTION 'accès refusé (order_items delete)';
     END IF;
     DELETE FROM eaumalik.order_items WHERE id = OLD.id;
