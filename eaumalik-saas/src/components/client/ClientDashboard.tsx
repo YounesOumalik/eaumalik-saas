@@ -1,7 +1,26 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Gift, ShieldAlert, MessageCircle, Newspaper, Receipt, Share2, Copy, Send, User, Truck } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { useRouter, usePathname } from 'next/navigation';
+import {
+  Gift,
+  ShieldAlert,
+  MessageCircle,
+  Newspaper,
+  Receipt,
+  Share2,
+  Copy,
+  Send,
+  User,
+  Truck,
+  ShoppingBag,
+  ExternalLink,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  type LucideIcon,
+} from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { sendClientMessageAction, updateUserProfileAction } from '@/app/actions/clientActions';
 import { useToast } from '@/components/shared/ToastProvider';
@@ -17,8 +36,34 @@ interface Props {
   };
 }
 
+type ClientTabId = 'parrainage' | 'maintenance' | 'chat' | 'news' | 'orders' | 'profile';
+
+interface NavItem {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  href?: string;
+}
+
+const SIDEBAR_ICONS: Record<string, LucideIcon> = {
+  commandes: ShoppingBag,
+  parrainage: Gift,
+  maintenance: ShieldAlert,
+  chat: MessageCircle,
+  news: Newspaper,
+  orders: Receipt,
+  profile: User,
+};
+
+const STORAGE_KEY = 'eaumalik.client.sidebar.collapsed';
+
 export default function ClientDashboard({ initialData }: Props) {
-  const [activeTab, setActiveTab] = useState<'parrainage' | 'maintenance' | 'chat' | 'news' | 'orders' | 'profile'>('parrainage');
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const [activeTab, setActiveTab] = useState<ClientTabId>('parrainage');
+  const [collapsed, setCollapsed] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const [messages, setMessages] = useState<any[]>(initialData.userMessages);
   const [newMessageText, setNewMessageText] = useState('');
   const [sending, setSending] = useState(false);
@@ -82,8 +127,143 @@ export default function ClientDashboard({ initialData }: Props) {
     setSending(false);
   };
 
+  // --- Sidebar (style admin, repliable, état persisté en localStorage) ---
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => !prev);
+  }, []);
+
+  const isActiveTab = useCallback(
+    (id: ClientTabId) => activeTab === id,
+    [activeTab]
+  );
+
+  // Commande en PREMIER, puis les onglets internes dans le même ordre qu'avant.
+  // La boutique est le parcours de commande client ; /commandes est réservé
+  // au suivi des commandes du personnel.
+  const navItems: NavItem[] = [
+    { id: 'commandes', label: 'Commande', icon: ShoppingBag, href: '/boutique' },
+    { id: 'parrainage', label: 'Parrainage & Cashback', icon: Gift },
+    { id: 'maintenance', label: 'Maintenance Filtres', icon: ShieldAlert },
+    { id: 'chat', label: 'Discuter avec le vendeur', icon: MessageCircle },
+    { id: 'news', label: 'Actualités & Offres', icon: Newspaper },
+    { id: 'orders', label: 'Historique commandes', icon: Receipt },
+    { id: 'profile', label: 'Mes Coordonnées', icon: User },
+  ];
+
+  const handleNav = useCallback(
+    (item: NavItem) => {
+      if (item.href) {
+        router.push(item.href);
+        return;
+      }
+      setActiveTab(item.id as ClientTabId);
+    },
+    [router]
+  );
+
+  // Hydratation de l'état replié depuis localStorage (évite le mismatch SSR/CSR)
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored === '1') setCollapsed(true);
+    } catch {
+      /* SSR ou mode privé : on garde `false` */
+    }
+    setHydrated(true);
+  }, []);
+
+  // Persistance du choix utilisateur
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0');
+    } catch {
+      /* silencieux */
+    }
+  }, [collapsed, hydrated]);
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="flex min-h-[calc(100vh-4rem)]">
+      {/* Sidebar repliable (style admin) */}
+      <aside
+        className={`admin-sidebar ${collapsed ? 'is-collapsed' : ''}`}
+        aria-label="Navigation espace client"
+      >
+        <div className="admin-sidebar__header">
+          <div className="admin-sidebar__brand admin-sidebar__brand--collapsed">
+            <User size={20} className="text-primary-light shrink-0" aria-hidden="true" />
+            {!collapsed && (
+              <span className="admin-sidebar__brand-label text-sm font-display font-bold ml-2 truncate">Mon Espace</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className="admin-sidebar__toggle"
+            aria-label={collapsed ? 'Déployer la barre latérale' : 'Replier la barre latérale'}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Déployer' : 'Replier'}
+          >
+            {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+        </div>
+        {!collapsed && <div className="admin-sidebar__subtitle">Mon espace client</div>}
+
+        <nav className="admin-sidebar__nav" aria-label="Sections">
+          {navItems.map((item) => {
+            const Icon = SIDEBAR_ICONS[item.id] ?? item.icon;
+            const active = item.href
+              ? pathname === item.href || (pathname?.startsWith(`${item.href}/`) ?? false)
+              : isActiveTab(item.id as ClientTabId);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleNav(item)}
+                className={`sidebar-link ${active ? 'active' : ''}`}
+                data-tab={item.id}
+                aria-current={active ? 'page' : undefined}
+                aria-label={item.label}
+                title={collapsed ? item.label : undefined}
+              >
+                <Icon size={16} aria-hidden="true" className="shrink-0" />
+                {!collapsed && <span className="sidebar-link__label">{item.label}</span>}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="admin-sidebar__footer">
+          <Link
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="sidebar-link"
+            aria-label="Voir le site"
+            title={collapsed ? 'Voir le site' : undefined}
+          >
+            <ExternalLink size={16} aria-hidden="true" className="shrink-0" />
+            {!collapsed && <span className="sidebar-link__label">Voir le site</span>}
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.replace('/api/auth/logout');
+            }}
+            className="sidebar-link w-full text-left"
+            aria-label="Déconnexion"
+            title={collapsed ? 'Déconnexion' : undefined}
+          >
+            <LogOut size={16} aria-hidden="true" className="shrink-0" />
+            {!collapsed && <span className="sidebar-link__label">Déconnexion</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* Zone de contenu principale */}
+      <div className="min-w-0 flex-1 px-4 sm:px-6 py-6 overflow-auto">
+        <div className="max-w-6xl mx-auto">
+
       {/* Welcome Banner */}
       <div className="glass-card p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-6" style={{ transform: 'none' }}>
         <div>
@@ -102,41 +282,6 @@ export default function ClientDashboard({ initialData }: Props) {
             <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Mon Cashback disponible</div>
             <div className="text-xl font-display font-extrabold text-warning">{formatCurrency(initialData.user.cashback_balance)}</div>
           </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="w-full overflow-x-auto pb-3 mb-6">
-        <div className="flex min-w-max rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-          {[
-            { id: 'parrainage', label: 'Parrainage & Cashback', icon: Gift },
-            { id: 'maintenance', label: 'Maintenance Filtres', icon: ShieldAlert },
-            { id: 'chat', label: 'Discuter avec le vendeur', icon: MessageCircle },
-            { id: 'news', label: 'Actualités & Offres', icon: Newspaper },
-            { id: 'orders', label: 'Historique commandes', icon: Receipt },
-            { id: 'profile', label: 'Mes Coordonnées', icon: User },
-          ].map(tab => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id as any)}
-                className="whitespace-nowrap px-3 sm:px-4 py-2 text-sm font-semibold transition-all flex items-center gap-1.5"
-                style={{
-                  background: active ? 'var(--primary)' : 'transparent',
-                  color: active ? '#fff' : 'var(--text-secondary)',
-                }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg-card-hover)'; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
-                aria-pressed={active}
-              >
-                <Icon size={14} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -573,6 +718,8 @@ export default function ClientDashboard({ initialData }: Props) {
             </form>
           </div>
         )}
+      </div>
+        </div>
       </div>
     </div>
   );
