@@ -52,7 +52,6 @@ const SIDEBAR_ICONS: Record<string, LucideIcon> = {
   maintenance: ShieldAlert,
   chat: MessageCircle,
   news: Newspaper,
-  orders: Receipt,
   profile: User,
 };
 
