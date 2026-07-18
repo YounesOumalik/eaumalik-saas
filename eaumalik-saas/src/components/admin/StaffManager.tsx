@@ -1,12 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus, Edit2, Trash2, Shield, Archive, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Shield, Archive, RotateCcw, AlertTriangle, Mail } from 'lucide-react';
 import { useToast } from '@/components/shared/ToastProvider';
 import Dialog from '@/components/ui/Dialog';
 import {
   createStaffUserAction,
   updateStaffUserAction,
+  sendStaffPasswordResetAction,
   deleteStaffUserAction,
   restoreArchivedStaffAction,
   purgeArchivedStaffAction,
@@ -67,6 +68,7 @@ export default function StaffManager({
   const [password, setPassword] = useState('');
   const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS);
   const [submitting, setSubmitting] = useState(false);
+  const [resetSubmitting, setResetSubmitting] = useState<string | null>(null);
 
   const toast = useToast();
 
@@ -171,7 +173,6 @@ export default function StaffManager({
         full_name: fullName,
         phone,
         role,
-        password: password || undefined,
         permissions,
       });
 
@@ -212,6 +213,28 @@ export default function StaffManager({
       }
     }
     setSubmitting(false);
+  };
+
+  const handlePasswordReset = async (member: any) => {
+    if (resetSubmitting || member.id === currentUserId) return;
+    if (!confirm(
+      `Envoyer un lien de réinitialisation à ${member.full_name} (${member.email}) ?\n\n`
+      + 'Le lien expirera après 30 minutes. Vous ne verrez jamais son mot de passe.'
+    )) return;
+
+    setResetSubmitting(member.id);
+    const res = await sendStaffPasswordResetAction({ id: member.id });
+    if (res.success) {
+      toast(
+        res.delivery === 'mock'
+          ? (res.message ?? 'Demande enregistrée en mode démo.')
+          : `Lien de réinitialisation envoyé à ${member.email}.`,
+        'success',
+      );
+    } else {
+      toast('Erreur : ' + res.error, 'error');
+    }
+    setResetSubmitting(null);
   };
 
   const handleDelete = async (member: any) => {
@@ -307,6 +330,7 @@ export default function StaffManager({
 
   const isViewerSuperAdmin = currentUserRole === 'admin';
   const isViewerAdministrator = currentUserRole === 'administrator';
+  const canResetOtherPasswords = isViewerSuperAdmin || isViewerAdministrator;
 
   // Un Administrateur (non-super) ne doit pas voir la ligne du Superadmin
   // dans la liste du personnel.
@@ -459,6 +483,17 @@ export default function StaffManager({
                         <button onClick={() => handleOpenEdit(member)} className="btn-outline btn-sm" aria-label="Modifier">
                           <Edit2 size={12} />
                         </button>
+                        {canResetOtherPasswords && member.id !== currentUserId && (
+                          <button
+                            onClick={() => handlePasswordReset(member)}
+                            disabled={resetSubmitting === member.id}
+                            className="btn-outline btn-sm"
+                            aria-label="Envoyer un lien de réinitialisation"
+                            title="Envoyer un lien de réinitialisation par email"
+                          >
+                            {resetSubmitting === member.id ? '…' : <Mail size={12} />}
+                          </button>
+                        )}
                         {/* Bouton Archiver masqué si :
                               - la cible est un superadmin (ne jamais archiver un superadmin),
                               - OU la cible est l'utilisateur connecté lui-même (auto-suppression interdite). */}
@@ -611,19 +646,24 @@ export default function StaffManager({
                       )}
                     </select>
                   </div>
-                  <div>
-                    <label className="form-label">
-                      {editingStaff ? 'Nouveau mot de passe (optionnel)' : 'Mot de passe *'}
-                    </label>
-                    <input
-                      type="password"
-                      required={!editingStaff}
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      placeholder={editingStaff ? 'Conserver le mot de passe actuel' : '••••••••'}
-                      className="form-input text-sm"
-                    />
-                  </div>
+                  {!editingStaff ? (
+                    <div>
+                      <label className="form-label">Mot de passe *</label>
+                      <input
+                        type="password"
+                        required
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="form-input text-sm"
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-[color:var(--border)] p-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Le mot de passe n’est jamais affiché ni modifié depuis ce formulaire. Utilisez le bouton email de réinitialisation.
+                    </div>
+                  )}
                 </div>
 
                 {role !== 'admin' && role !== 'administrator' && (

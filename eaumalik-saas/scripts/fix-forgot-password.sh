@@ -76,6 +76,8 @@ patches = {
     "GOTRUE_SMTP_ADMIN_EMAIL":   "no-reply@eaumalik.com",
     "GOTRUE_SMTP_SENDER_NAME":   "EAUMALIK",
     "GOTRUE_SITE_URL":           "https://eaumalik.com",
+    # Les liens de récupération sont utilisables 30 minutes et une seule fois.
+    "GOTRUE_MAILER_OTP_EXP":     "1800",
     # Allow-list : on garde db-dev.smartefp.com ET on ajoute eaumalik.com
     "GOTRUE_URI_ALLOW_LIST":     "https://db-dev.smartefp.com,https://eaumalik.com,http://localhost:3000",
 }

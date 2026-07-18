@@ -17,12 +17,14 @@ import {
   ShoppingBag,
   ExternalLink,
   LogOut,
+  Eye,
+  EyeOff,
   PanelLeftClose,
   PanelLeftOpen,
   type LucideIcon,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-import { sendClientMessageAction, updateUserProfileAction } from '@/app/actions/clientActions';
+import { changeOwnPasswordAction, sendClientMessageAction, updateUserProfileAction } from '@/app/actions/clientActions';
 import { useToast } from '@/components/shared/ToastProvider';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 import { OrderTimeline } from '@/components/admin/OrderTracker';
@@ -84,8 +86,14 @@ export default function ClientDashboard({ initialData }: Props) {
   const [phone, setPhone] = useState(initialData.user.phone || '');
   const [city, setCity] = useState(initialData.user.city || '');
   const [address, setAddress] = useState(initialData.user.address || '');
-  const [password, setPassword] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,15 +104,33 @@ export default function ClientDashboard({ initialData }: Props) {
       phone,
       city,
       address: address || undefined,
-      password: password || undefined,
     });
     if (res.success) {
       toast('Coordonnées mises à jour avec succès !', 'success');
-      setPassword('');
     } else {
       toast('Erreur : ' + res.error, 'error');
     }
     setUpdating(false);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (changingPassword) return;
+    setChangingPassword(true);
+    const res = await changeOwnPasswordAction({
+      current_password: currentPassword,
+      new_password: newPassword,
+      confirmation: passwordConfirmation,
+    });
+    if (res.success) {
+      toast('Mot de passe modifié avec succès.', 'success');
+      setCurrentPassword('');
+      setNewPassword('');
+      setPasswordConfirmation('');
+    } else {
+      toast('Erreur : ' + res.error, 'error');
+    }
+    setChangingPassword(false);
   };
 
   // Auto scroll chat
@@ -720,16 +746,6 @@ export default function ClientDashboard({ initialData }: Props) {
                   placeholder="Rue, quartier, n°..."
                 />
               </div>
-              <div>
-                <label className="form-label">Nouveau mot de passe (Laissez vide pour conserver l&apos;actuel)</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                />
-              </div>
               <button
                 type="submit"
                 disabled={updating}
@@ -738,10 +754,89 @@ export default function ClientDashboard({ initialData }: Props) {
                 {updating ? 'Enregistrement...' : 'Enregistrer les modifications'}
               </button>
             </form>
+
+            <div className="border-t border-[color:var(--border)] mt-8 pt-6">
+              <h4 className="font-display font-bold text-base mb-1">Modifier mon mot de passe</h4>
+              <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                Votre mot de passe reste confidentiel et n’est jamais visible par l’administration.
+              </p>
+              <form onSubmit={handleChangePassword} className="space-y-4">
+                <PasswordInput
+                  label="Mot de passe actuel"
+                  value={currentPassword}
+                  onChange={setCurrentPassword}
+                  visible={showCurrentPassword}
+                  onToggle={() => setShowCurrentPassword(value => !value)}
+                  autoComplete="current-password"
+                  disabled={changingPassword}
+                />
+                <PasswordInput
+                  label="Nouveau mot de passe"
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  visible={showNewPassword}
+                  onToggle={() => setShowNewPassword(value => !value)}
+                  autoComplete="new-password"
+                  disabled={changingPassword}
+                />
+                <PasswordInput
+                  label="Confirmer le nouveau mot de passe"
+                  value={passwordConfirmation}
+                  onChange={setPasswordConfirmation}
+                  visible={showPasswordConfirmation}
+                  onToggle={() => setShowPasswordConfirmation(value => !value)}
+                  autoComplete="new-password"
+                  disabled={changingPassword}
+                />
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  Minimum 12 caractères, avec majuscule, minuscule et chiffre.
+                </p>
+                <button type="submit" disabled={changingPassword} className="btn-outline w-full justify-center py-2.5 text-sm disabled:opacity-50">
+                  {changingPassword ? 'Modification...' : 'Modifier le mot de passe'}
+                </button>
+              </form>
+            </div>
           </div>
         )}
       </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PasswordInput({
+  label, value, onChange, visible, onToggle, autoComplete, disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  visible: boolean;
+  onToggle: () => void;
+  autoComplete: string;
+  disabled: boolean;
+}) {
+  return (
+    <div>
+      <label className="form-label">{label} *</label>
+      <div className="relative">
+        <input
+          type={visible ? 'text' : 'password'}
+          required
+          className="form-input pr-10"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          disabled={disabled}
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+          aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+        >
+          {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
       </div>
     </div>
   );

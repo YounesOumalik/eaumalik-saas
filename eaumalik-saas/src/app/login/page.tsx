@@ -42,6 +42,7 @@ function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = safeCallbackPath(searchParams.get('callbackUrl'), '/');
+  const passwordResetSuccess = searchParams.get('password_reset') === 'success';
   const isDevMode = !maybeSupabaseBrowserClient();
   const { refresh } = useSupabaseAuth();
 
@@ -225,6 +226,12 @@ function LoginInner() {
             {error && (
               <div className="p-3 mb-4 rounded-lg text-xs bg-red-500/10 border border-red-500/20 text-red-400">
                 {error}
+              </div>
+            )}
+
+            {passwordResetSuccess && (
+              <div className="p-3 mb-4 rounded-lg text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                Votre mot de passe a été réinitialisé. Vous pouvez vous connecter avec le nouveau.
               </div>
             )}
 

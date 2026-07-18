@@ -22,7 +22,8 @@ import {
 } from '@/data/repositories';
 
 import { isMockMode } from '@/lib/api-guard';
-import { hashPassword } from '@/lib/auth/password';
+import { hashPassword, verifyPassword } from '@/lib/auth/password';
+import { strongPasswordSchema } from '@/lib/auth/passwordPolicy';
 
 // ============================================================================
 // Schémas Zod (validation stricte des payloads)
@@ -32,13 +33,20 @@ const ProfileUpdateSchema = z.object({
   phone: z.string().regex(/^0[6-7][0-9]{8}$/, 'Numéro marocain invalide.'),
   city: z.string().min(1),
   address: z.string().max(200).optional(),
-  password: z
-    .string()
-    .min(8, 'Mot de passe trop court (min. 8 caractères).')
-    .regex(/[A-Z]/, 'Doit contenir une majuscule.')
-    .regex(/[0-9]/, 'Doit contenir un chiffre.')
-    .optional()
-    .or(z.literal('').transform(() => undefined)),
+});
+
+const ChangePasswordSchema = z.object({
+  current_password: z.string().min(1, 'Mot de passe actuel requis.'),
+  new_password: strongPasswordSchema,
+  confirmation: z.string().min(1, 'Confirmation du mot de passe requise.'),
+}).superRefine((value, ctx) => {
+  if (value.new_password !== value.confirmation) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['confirmation'],
+      message: 'Les deux mots de passe ne correspondent pas.',
+    });
+  }
 });
 
 const NewsSchema = z.object({
@@ -727,7 +735,6 @@ export async function updateUserProfileAction(raw: unknown) {
       phone: parsed.data.phone,
       city: parsed.data.city,
       address: parsed.data.address ?? null,
-      ...(parsed.data.password ? { password: hashPassword(parsed.data.password) } : {}),
       updated_at: new Date().toISOString(),
     };
     await writeUsersRaw(users);
@@ -748,11 +755,49 @@ export async function updateUserProfileAction(raw: unknown) {
     .eq('id', user.id);
   if (error) return { success: false as const, error: 'Mise à jour échouée.' };
 
-  // Mise à jour du mot de passe dans Supabase Auth (séparé du profil).
-  if (parsed.data.password) {
-    const { error: pwdErr } = await supabase.auth.updateUser({ password: parsed.data.password });
-    if (pwdErr) return { success: false as const, error: 'Mot de passe non mis à jour.' };
-  }
   revalidatePath('/client');
   return { success: true as const };
+}
+
+/** Modification du mot de passe du compte courant, séparée du profil. */
+export async function changeOwnPasswordAction(raw: unknown) {
+  const parsed = ChangePasswordSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Validation échouée.' };
+  }
+  const auth = await getOptionalUser();
+  if (!auth) return { success: false as const, error: 'Non authentifié.' };
+
+  try {
+    if (isMockMode()) {
+      const users = await readUsersRaw();
+      const index = users.findIndex((item: any) => item.id === auth.id);
+      if (index === -1) return { success: false as const, error: 'Profil introuvable.' };
+      if (!verifyPassword(parsed.data.current_password, users[index].password)) {
+        return { success: false as const, error: 'Mot de passe actuel incorrect.' };
+      }
+      users[index] = {
+        ...users[index],
+        password: hashPassword(parsed.data.new_password),
+        updated_at: new Date().toISOString(),
+      };
+      await writeUsersRaw(users);
+      console.info('[security] password_changed', { user_id: auth.id, created_at: new Date().toISOString() });
+      return { success: true as const };
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email: auth.email,
+      password: parsed.data.current_password,
+    });
+    if (reauthError) return { success: false as const, error: 'Mot de passe actuel incorrect.' };
+
+    const { error } = await supabase.auth.updateUser({ password: parsed.data.new_password });
+    if (error) return { success: false as const, error: 'Mot de passe non mis à jour.' };
+    console.info('[security] password_changed', { user_id: auth.id, created_at: new Date().toISOString() });
+    return { success: true as const };
+  } catch {
+    return { success: false as const, error: 'Modification du mot de passe impossible.' };
+  }
 }

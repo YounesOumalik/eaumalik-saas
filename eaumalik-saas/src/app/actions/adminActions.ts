@@ -39,13 +39,11 @@ const StaffUpdateSchema = z.object({
   full_name: z.string().min(3).max(100),
   phone: z.string().regex(/^0[6-7][0-9]{8}$/).optional().or(z.literal('')),
   role: z.string().min(1).max(40),
-  password: z.string()
-    .min(8, 'Mot de passe trop court (min. 8 caractères).')
-    .regex(/[A-Z]/, 'Doit contenir une majuscule.')
-    .regex(/[0-9]/, 'Doit contenir un chiffre.')
-    .optional()
-    .or(z.literal('').transform(() => undefined)),
   permissions: PermissionsSchema,
+});
+
+const PasswordResetTargetSchema = z.object({
+  id: z.string().min(1, 'Compte invalide.'),
 });
 
 async function gate() {
@@ -192,14 +190,79 @@ export async function updateStaffUserAction(id: string, raw: unknown) {
     };
     const { error } = await supabase.from('users').update(update).eq('id', id);
     if (error) throw error;
-    if (parsed.data.password && parsed.data.password.length >= 8) {
-      const { error: pwdErr } = await supabase.auth.admin.updateUserById(id, { password: parsed.data.password });
-      if (pwdErr) throw pwdErr;
-    }
     revalidatePath('/admin/personnels');
     return { success: true as const };
   } catch (err: any) {
     return { success: false as const, error: err.message ?? 'Erreur.' };
+  }
+}
+
+/**
+ * Demande une réinitialisation pour un autre compte.
+ * Supabase génère et envoie le lien via le SMTP configuré. Aucun mot de passe
+ * ni token n'est exposé à l'administrateur.
+ */
+export async function sendStaffPasswordResetAction(raw: unknown) {
+  const parsed = PasswordResetTargetSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Compte invalide.' };
+  }
+
+  try {
+    const admin = await gate();
+    if (parsed.data.id === admin.id) {
+      return {
+        success: false as const,
+        error: 'Pour votre propre compte, utilisez la modification personnelle du mot de passe.',
+      };
+    }
+
+    if (isMockMode()) {
+      const users = await readUsersRaw();
+      const target = users.find((user: any) => user.id === parsed.data.id);
+      if (!target) return { success: false as const, error: 'Compte introuvable.' };
+      console.info('[security] password_reset_requested', {
+        actor_id: admin.id,
+        target_id: target.id,
+        created_at: new Date().toISOString(),
+        delivery: 'mock-email-not-configured',
+      });
+      return {
+        success: true as const,
+        delivery: 'mock' as const,
+        message: 'Demande enregistrée en mode démo. Configurez le SMTP pour envoyer réellement l’email.',
+      };
+    }
+
+    const supabase = createSupabaseServiceRoleClient();
+    const { data: target, error: targetError } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('id', parsed.data.id)
+      .maybeSingle();
+    if (targetError) throw targetError;
+    if (!target?.email) return { success: false as const, error: 'Compte introuvable.' };
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://eaumalik.com';
+    const { error } = await supabase.auth.resetPasswordForEmail(target.email, {
+      redirectTo: `${appUrl}/login/reinitialiser`,
+    });
+    if (error) throw error;
+
+    console.info('[security] password_reset_requested', {
+      actor_id: admin.id,
+      target_id: target.id,
+      created_at: new Date().toISOString(),
+      delivery: 'supabase-auth-email',
+    });
+    return { success: true as const, delivery: 'email' as const };
+  } catch (err: any) {
+    console.error('[security] password_reset_request_failed', {
+      message: err?.message ?? 'unknown',
+      target_id: parsed.data.id,
+      created_at: new Date().toISOString(),
+    });
+    return { success: false as const, error: 'Envoi de l’email de réinitialisation impossible.' };
   }
 }
 
