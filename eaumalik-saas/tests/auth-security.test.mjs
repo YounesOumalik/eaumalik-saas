@@ -85,3 +85,25 @@ test('clients do not receive staff navigation entries', async () => {
   assert.deepEqual(loadingLinks, []);
   assert.equal(staffLinks.some(item => item.href === '/commandes'), true);
 });
+
+test('public pages externalize inline images instead of serializing Base64', async () => {
+  const { withPublicMediaUrl } = await importTypeScript(
+    '../src/lib/public-media.ts'
+  );
+  const inline = withPublicMediaUrl('product', {
+    id: 'product-1',
+    image_url: 'data:image/jpeg;base64,YWJj',
+    updated_at: '2026-07-18T12:00:00.000Z',
+  });
+  const external = withPublicMediaUrl('product', {
+    id: 'product-2',
+    image_url: 'https://cdn.example.com/product.jpg',
+  });
+
+  assert.equal(
+    inline.image_url,
+    '/api/media/product/product-1?v=2026-07-18T12%3A00%3A00.000Z'
+  );
+  assert.equal(inline.image_url.includes('base64'), false);
+  assert.equal(external.image_url, 'https://cdn.example.com/product.jpg');
+});

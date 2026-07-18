@@ -28,6 +28,7 @@ import {
   writePasswordResets,
 } from '@/data/localDb';
 import { sanitizePostgREST } from '@/lib/api-guard';
+import type { PublicMediaKind } from '@/lib/public-media';
 
 const shouldUseMocks = (): boolean => {
   if (process.env.NEXT_PUBLIC_USE_MOCKS === 'true') return true;
@@ -119,6 +120,54 @@ export async function listProducts(filters?: {
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Product[];
+}
+
+/**
+ * Lit uniquement une image Base64 destinée à une route média publique.
+ * Les actualités ciblées ou archivées ne sont jamais exposées anonymement.
+ */
+export async function getPublicInlineImageSource(
+  kind: PublicMediaKind,
+  id: string
+): Promise<string | null> {
+  if (shouldUseMocks()) {
+    const row = kind === 'product'
+      ? readProducts().find(product => product.id === id && !product.is_archived)
+      : readNews().find(news =>
+          news.id === id &&
+          news.target_all !== false &&
+          news.is_archived !== true &&
+          (!news.valid_until || news.valid_until > new Date().toISOString())
+        );
+    return typeof row?.image_url === 'string' ? row.image_url : null;
+  }
+
+  const supabase = await getPublicSupabase();
+  if (kind === 'product') {
+    const { data, error } = await supabase
+      .from('products')
+      .select('image_url, is_archived')
+      .eq('id', id)
+      .maybeSingle();
+    if (error || !data || data.is_archived === true) return null;
+    return typeof data.image_url === 'string' ? data.image_url : null;
+  }
+
+  const { data, error } = await supabase
+    .from('news')
+    .select('image_url, target_all, is_archived, valid_until')
+    .eq('id', id)
+    .maybeSingle();
+  if (
+    error ||
+    !data ||
+    data.target_all === false ||
+    data.is_archived === true ||
+    (data.valid_until && data.valid_until <= new Date().toISOString())
+  ) {
+    return null;
+  }
+  return typeof data.image_url === 'string' ? data.image_url : null;
 }
 
 export async function createProduct(product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> {
@@ -664,7 +713,7 @@ export async function listNews(options?: {
 /** Promotions actuellement visibles par un visiteur anonyme (carrousel landing). */
 export async function listActivePromotions(limit = 12): Promise<News[]> {
   const all = await listNews({ promotionOnly: true });
-  return all.slice(0, limit);
+  return all.filter(item => item.target_all).slice(0, limit);
 }
 
 /**

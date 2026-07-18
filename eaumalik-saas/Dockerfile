@@ -48,31 +48,10 @@ ENV NODE_ENV=production
 # silencieusement ignorées.
 ARG CACHE_BUST=1
 
-# Next.js incline `process.env.NEXT_PUBLIC_*` dans le
-# bundle CLIENT au moment du build (webpack DefinePlugin).
-# Si ces variables ne sont pas présentes ici, le bundle
-# client contient `undefined` à la place, et même un
-# `--env-file` côté runtime ne peut plus les fournir
-# (elles sont codées en dur dans le JS).
-#
-# Solution : on charge le fichier .env.prod dans le
-# contexte du build via COPY. ATTENTION : Next.js (@next/
-# env) reconnait UNIQUEMENT .env, .env.local,
-# .env.development, .env.production — PAS .env.prod !
-# On copie donc .env.prod sous le nom .env.production
-# pour qu'il soit chargé automatiquement par @next/env
-# lors du 'npm run build'.
-#
-# C'est la voie la plus fiable : pas de risque de
-# désynchro entre le local et le serveur CI, et le bundle
-# client contient bien les NEXT_PUBLIC_* inlinées par
-# webpack DefinePlugin.
-COPY .env.prod* .env.production* ./
-
-# Fallback ARG/ENV pour les déploiements CI qui passent
-# les secrets via `docker build --build-arg` plutôt que
-# par fichier. Si COPY .env.prod a déjà posé les vars,
-# ces ENV sont sans effet (équivalence).
+# Next.js inline `process.env.NEXT_PUBLIC_*` dans le bundle client au build.
+# On injecte uniquement ces valeurs publiques par ARG/ENV. Les fichiers
+# .env complets et les secrets serveur restent hors du contexte et des
+# couches Docker ; ils sont fournis au conteneur uniquement au runtime.
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG NEXT_PUBLIC_APP_URL
@@ -85,11 +64,12 @@ ENV NEXT_PUBLIC_USE_MOCKS=${NEXT_PUBLIC_USE_MOCKS}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build Next.js avec cache de compilation BuildKit.
-# .next/cache évite de tout re-transpiler si seul un
-# fichier source change. Le --frozen-lockfile est
-# implicite via npm ci déjà exécuté dans deps.
-RUN npm run build
+# Build Next.js avec cache de compilation BuildKit. La référence explicite à
+# CACHE_BUST garantit qu'un nouveau déploiement régénère les pages ISR même
+# lorsque le code source n'a pas changé.
+RUN --mount=type=cache,target=/app/.next/cache \
+    echo "$CACHE_BUST" > /tmp/eaumalik-cache-bust && \
+    npm run build
 
 # ----------------------------------------------------------------------------
 # Stage runner : standalone. On copie uniquement les fichiers

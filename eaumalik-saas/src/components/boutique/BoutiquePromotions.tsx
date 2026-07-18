@@ -5,7 +5,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { News, Product } from '@/types';
-import { formatCurrency, formatDate, daysUntil } from '@/lib/utils';
+import {
+  formatCurrency,
+  formatDate,
+  daysUntil,
+  shouldSkipImageOptimization,
+} from '@/lib/utils';
 import { Sparkles, Tag, Clock, Newspaper, ArrowRight, Lock, UserPlus } from 'lucide-react';
 import { useCart } from '@/components/shared/CartProvider';
 import { useToast } from '@/components/shared/ToastProvider';
@@ -158,7 +163,7 @@ function PromotionCard({ promo }: { promo: News }) {
             fill
             sizes="(max-width: 768px) 100vw, 33vw"
             className="object-cover"
-            unoptimized
+            unoptimized={shouldSkipImageOptimization(promo.image_url)}
           />
         ) : (
           <div className="flex flex-col items-center gap-2 text-brand-600 dark:text-brand-300">

@@ -1,6 +1,7 @@
 import { listProducts, listActivePromotions } from '@/data/repositories';
 import BoutiqueClient from './BoutiqueClient';
 import { Metadata } from 'next';
+import { withPublicMediaUrl } from '@/lib/public-media';
 
 export const metadata: Metadata = {
   title: 'Boutique — Purificateurs d\'eau et Filtres',
@@ -17,8 +18,12 @@ export default async function BoutiquePage() {
 
   return (
     <BoutiqueClient
-      initialProducts={products}
-      promotions={promotions}
+      initialProducts={products.map(product =>
+        withPublicMediaUrl('product', product)
+      )}
+      promotions={promotions.map(promotion =>
+        withPublicMediaUrl('news', promotion)
+      )}
     />
   );
 }

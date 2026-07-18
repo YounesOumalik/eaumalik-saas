@@ -5,17 +5,9 @@ out
 .git
 .github
 .gitignore
-.env
-.env.local
-.env*.local
-
-# NOTE: .env.production DOIT être dans le contexte de
-# build car le Dockerfile le COPY explicitement avant
-# 'npm run build' pour que @next/env l'incline dans
-# le bundle client. Sans ça, le bundle webpack a
-# process.env.NEXT_PUBLIC_SUPABASE_URL = '' et la
-# page /login bascule en mode dev en prod.
-!.env.production
+# Aucun fichier d'environnement ne doit entrer dans une couche Docker.
+# Les NEXT_PUBLIC_* sont passées par build args ; les secrets restent runtime.
+.env*
 data-store/*.json
 !data-store/.gitkeep
 .DS_Store

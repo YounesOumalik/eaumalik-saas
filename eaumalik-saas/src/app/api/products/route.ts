@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { badRequest, safeErrorResponse, sanitizePostgREST, isMockMode } from '@/lib/api-guard';
 import { listProducts } from '@/data/repositories';
+import { withPublicMediaUrl } from '@/lib/public-media';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -55,7 +56,9 @@ export async function GET(req: NextRequest) {
           (p) => p.name.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q),
         );
       }
-      return NextResponse.json(products);
+      return NextResponse.json(
+        products.map(product => withPublicMediaUrl('product', product))
+      );
     }
 
     // ----- MODE SUPABASE -----
@@ -72,7 +75,9 @@ export async function GET(req: NextRequest) {
     }
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json(data ?? []);
+    return NextResponse.json(
+      (data ?? []).map(product => withPublicMediaUrl('product', product))
+    );
   } catch (e) {
     return safeErrorResponse(e);
   }
