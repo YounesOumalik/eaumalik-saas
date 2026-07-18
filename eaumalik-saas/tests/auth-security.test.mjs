@@ -87,8 +87,9 @@ test('clients do not receive staff navigation entries', async () => {
 });
 
 test('public pages externalize inline images instead of serializing Base64', async () => {
-  const { withPublicMediaUrl } = await importTypeScript(
-    '../src/lib/public-media.ts'
+  const { toPublicProduct, withPublicMediaUrl } = await importTypeScript(
+    '../src/lib/public-media.ts',
+    [["import type { Product } from '@/types';", '']]
   );
   const inline = withPublicMediaUrl('product', {
     id: 'product-1',
@@ -106,4 +107,25 @@ test('public pages externalize inline images instead of serializing Base64', asy
   );
   assert.equal(inline.image_url.includes('base64'), false);
   assert.equal(external.image_url, 'https://cdn.example.com/product.jpg');
+
+  const product = toPublicProduct({
+    id: 'product-3',
+    name: 'Produit',
+    slug: 'produit',
+    description: null,
+    price: 100,
+    category: 'purificateurs',
+    image_url: '/products/product-3.jpg',
+    image_url_local: 'data:image/png;base64,YWJj',
+    specs: null,
+    is_featured: false,
+    stock: 1,
+    stock_alert_threshold: 1,
+    filter_lifespan_months: null,
+    wholesale_price: 50,
+    created_at: '2026-07-18T12:00:00.000Z',
+    updated_at: '2026-07-18T12:00:00.000Z',
+  });
+  assert.equal('image_url_local' in product, false);
+  assert.equal('wholesale_price' in product, false);
 });

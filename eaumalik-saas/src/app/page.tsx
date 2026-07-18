@@ -7,7 +7,7 @@ import ProductsPreview from '@/components/landing/ProductsPreview';
 import IndustrialSection from '@/components/landing/IndustrialSection';
 import ContactSection from '@/components/landing/ContactSection';
 import { listProducts, listActivePromotions } from '@/data/repositories';
-import { withPublicMediaUrl } from '@/lib/public-media';
+import { toPublicProduct, withPublicMediaUrl } from '@/lib/public-media';
 
 // Page d'accueil — design "EauMalik — Catalogue Produits" (maquette adoptée le 2026-07-14) :
 //   - HeroSection        : hero sombre + particules d'eau, CTA vers /boutique
@@ -31,7 +31,7 @@ export default async function HomePage() {
   const featured = all.filter(product => product.is_featured);
   const previewProducts = (featured.length > 0 ? featured : all.slice(0, 6))
     .slice(0, 6)
-    .map(product => withPublicMediaUrl('product', product));
+    .map(toPublicProduct);
   const publicPromotions = promotions.map(promotion =>
     withPublicMediaUrl('news', promotion)
   );
