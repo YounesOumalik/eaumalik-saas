@@ -892,6 +892,8 @@ export async function listMaintenanceRecords(filters: MaintenanceRecordFilters =
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
     let records = [...bundle.records];
+    const deliveredOrderIds = new Set(readOrders().filter(order => order.status === 'livree').map(order => order.id));
+    records = records.filter(record => !!record.order_id && deliveredOrderIds.has(record.order_id));
     if (filters.status) records = records.filter(r => r.status === filters.status);
     if (filters.orderId) records = records.filter(r => r.order_id === filters.orderId);
     if (filters.dueBefore) records = records.filter(r => r.next_service_date && r.next_service_date <= filters.dueBefore!);
@@ -909,10 +911,18 @@ export async function listMaintenanceRecords(filters: MaintenanceRecordFilters =
   }
 
   const supabase = await getSupabase();
+  const { data: deliveredOrders, error: deliveredOrdersError } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('status', 'livree');
+  if (deliveredOrdersError) throw deliveredOrdersError;
+  const deliveredOrderIds = (deliveredOrders ?? []).map((order: { id: string }) => order.id);
+  if (deliveredOrderIds.length === 0) return [];
   let query = supabase
     .from('maintenance_records')
     .select('*, interventions:maintenance_interventions(*)')
     .order('next_service_date', { ascending: true });
+  query = query.in('order_id', deliveredOrderIds);
   if (filters.status) query = query.eq('status', filters.status);
   if (filters.orderId) query = query.eq('order_id', filters.orderId);
   const { data, error } = await query;
@@ -944,6 +954,7 @@ export async function getMaintenanceRecord(id: string): Promise<MaintenanceRecor
  */
 export async function ensureMaintenanceForOrder(order: Order): Promise<MaintenanceRecord[]> {
   const createdOrExisting: MaintenanceRecord[] = [];
+  if (order.status !== 'livree') return createdOrExisting;
   const items = order.items ?? [];
   if (items.length === 0) return createdOrExisting;
 

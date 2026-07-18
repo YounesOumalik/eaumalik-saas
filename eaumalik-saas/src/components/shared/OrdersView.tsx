@@ -19,11 +19,12 @@
  * (`can_follow_prospects` minimum) ; le gating fin se fait ici côté UI.
  */
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Gift,
   ArrowRight,
+  CheckCircle2,
   Eye,
   XCircle,
   FileText,
@@ -92,6 +93,9 @@ export default function OrdersView({
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const [advanceTarget, setAdvanceTarget] = useState<Order | null>(null);
+  const [advanceRemark, setAdvanceRemark] = useState('');
+  const [advancing, setAdvancing] = useState(false);
 
   const [permissions, setPermissions] = useState<any>(null);
   const [role, setRole] = useState<string>('');
@@ -130,7 +134,7 @@ export default function OrdersView({
   );
 
   /** Détermine si une commande a été passée par un client filleul (parrainage). */
-  const isReferred = (o: Order): boolean => {
+  const isReferred = useCallback((o: Order): boolean => {
     if (o.user_id) {
       const u = clientsById.get(o.user_id);
       return !!(u && u.referred_by);
@@ -141,16 +145,16 @@ export default function OrdersView({
       return !!(u && u.referred_by);
     }
     return false;
-  };
+  }, [clientsById, clientsByPhone]);
 
   /** Renvoie les infos du parrain (parrain de la cliente qui a passé la commande). */
-  const getReferrer = (o: Order): User | null => {
+  const getReferrer = useCallback((o: Order): User | null => {
     let user: User | undefined;
     if (o.user_id) user = clientsById.get(o.user_id);
     if (!user && o.client_phone) user = clientsByPhone.get(o.client_phone);
     if (!user?.referred_by) return null;
     return clientsById.get(user.referred_by) ?? null;
-  };
+  }, [clientsById, clientsByPhone]);
 
   const counts = useMemo(() => {
     const out: Record<string, number> = { total: orders.length };
@@ -160,7 +164,7 @@ export default function OrdersView({
       else out.direct = (out.direct ?? 0) + 1;
     });
     return out;
-  }, [orders, clientsById, clientsByPhone]);
+  }, [orders, isReferred]);
 
   const filtered = useMemo(() => {
     let list = orders;
@@ -183,29 +187,55 @@ export default function OrdersView({
       });
     }
     return list;
-  }, [orders, filterStatus, filterSource, search, clientsById, clientsByPhone]);
+  }, [orders, filterStatus, filterSource, search, isReferred, getReferrer]);
 
-  const advance = async (id: string) => {
-    const order = orders.find(o => o.id === id);
-    if (!order) return;
+  const openAdvanceDialog = (order: Order) => {
+    setAdvanceTarget(order);
+    setAdvanceRemark('');
+  };
+
+  const closeAdvanceDialog = () => {
+    if (advancing) return;
+    setAdvanceTarget(null);
+    setAdvanceRemark('');
+  };
+
+  const confirmAdvance = async () => {
+    if (!advanceTarget) return;
+    const order = advanceTarget;
     const idx = STATUS_CYCLE.indexOf(order.status);
     if (idx < 0 || idx >= STATUS_CYCLE.length - 1) return;
     const nextStatus = STATUS_CYCLE[idx + 1];
+    const id = order.id;
+    const previousOrder = order;
+    const remark = advanceRemark.trim();
+    setAdvancing(true);
     setOrders(prev => prev.map(o => (o.id === id ? { ...o, status: nextStatus } : o)));
     try {
       const res = await fetch(`/api/orders/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ status: nextStatus, remark, handled_by: agent ?? undefined }),
       });
       const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setOrders(prev => prev.map(o => (
+        o.id === id
+          ? { ...o, status: nextStatus, notes: data.notes ?? o.notes }
+          : o
+      )));
       if (data.maintenance_created > 0) {
         toast(`${id} -> ${STATUS_LABELS[nextStatus]} (+${data.maintenance_created} maintenance)`, 'info');
       } else {
         toast(`${id} -> ${STATUS_LABELS[nextStatus]}`, 'info');
       }
+      setAdvanceTarget(null);
+      setAdvanceRemark('');
     } catch {
-      toast('Erreur réseau (modifié localement)', 'error');
+      setOrders(prev => prev.map(o => (o.id === id ? previousOrder : o)));
+      toast('Mise à jour échouée : vérifiez la connexion.', 'error');
+    } finally {
+      setAdvancing(false);
     }
   };
 
@@ -240,6 +270,10 @@ export default function OrdersView({
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+      setOrders(prev => prev.map(o => (
+        o.id === id ? { ...o, status: 'annulee', notes: data.notes ?? o.notes } : o
+      )));
       toast(
         reason
           ? `Commande ${cancelTarget.order_number} annulée (motif enregistré).`
@@ -338,9 +372,9 @@ export default function OrdersView({
           Source&nbsp;:
         </span>
         {([
-          { id: 'all' as SourceFilter,        label: 'Toutes',     icon: Users,       color: '#0ea5e9' },
           { id: 'direct' as SourceFilter,     label: 'Directes',   icon: ShoppingBag, color: '#22d3ee' },
           { id: 'parrainage' as SourceFilter, label: 'Parrainage', icon: Gift,        color: '#a78bfa' },
+          { id: 'all' as SourceFilter,        label: 'Toutes',     icon: Users,       color: '#0ea5e9' },
         ] as const).map(btn => {
           const Icon = btn.icon;
           const active = filterSource === btn.id;
@@ -352,8 +386,12 @@ export default function OrdersView({
               style={chipStyle(active, btn.color)}
               role="tab"
               aria-selected={active}
+              aria-label={`${btn.label} (${btn.id === 'all' ? counts.total : counts[btn.id] ?? 0})`}
             >
-              <Icon size={12} aria-hidden="true" /> {btn.label}
+              <Icon size={12} aria-hidden="true" /> <span>{btn.label}</span>
+              <span className="rounded-full px-1.5 py-0.5 text-[10px] leading-none font-bold" style={{ background: active ? 'rgba(255,255,255,0.2)' : `${btn.color}22` }}>
+                {btn.id === 'all' ? counts.total : counts[btn.id] ?? 0}
+              </span>
             </button>
           );
         })}
@@ -370,12 +408,12 @@ export default function OrdersView({
           Statut&nbsp;:
         </span>
         {([
-          { id: 'all' as StatusFilterKey,          label: 'Tous',         color: '#0ea5e9' },
           { id: 'en_attente' as StatusFilterKey,   label: 'En attente',   color: '#f59e0b' },
           { id: 'traitee' as StatusFilterKey,      label: 'Traitée',      color: '#06b6d4' },
           { id: 'en_livraison' as StatusFilterKey, label: 'En livraison', color: '#fb923c' },
           { id: 'livree' as StatusFilterKey,       label: 'Livrée',       color: '#22c55e' },
           { id: 'annulee' as StatusFilterKey,      label: 'Annulée',      color: '#ef4444' },
+          { id: 'all' as StatusFilterKey,          label: 'Tous',         color: '#0ea5e9' },
         ] as const).map(s => {
           const active = filterStatus === s.id;
           return (
@@ -386,8 +424,12 @@ export default function OrdersView({
               style={chipStyle(active, s.color)}
               role="tab"
               aria-selected={active}
+              aria-label={`${s.label} (${s.id === 'all' ? counts.total : counts[s.id] ?? 0})`}
             >
-              {s.label}
+              <span>{s.label}</span>
+              <span className="rounded-full px-1.5 py-0.5 text-[10px] leading-none font-bold" style={{ background: active ? 'rgba(255,255,255,0.2)' : `${s.color}22` }}>
+                {s.id === 'all' ? counts.total : counts[s.id] ?? 0}
+              </span>
             </button>
           );
         })}
@@ -492,7 +534,7 @@ export default function OrdersView({
                     <div className="flex gap-1.5">
                       {STATUS_CYCLE.includes(o.status) && canValidate && (
                         <button
-                          onClick={() => advance(o.id)}
+                          onClick={() => openAdvanceDialog(o)}
                           className="btn-primary btn-sm"
                           title="Avancer le statut"
                         >
@@ -594,10 +636,14 @@ export default function OrdersView({
               <textarea
                 value={cancelReason}
                 onChange={e => setCancelReason(e.target.value)}
-                rows={3}
+                rows={6}
+                maxLength={500}
                 placeholder="Ex : client injoignable, double commande, erreur de référence…"
-                className="input w-full resize-none"
+                className="input w-full min-h-[9rem] resize-y"
               />
+              <span className="mt-1 block text-right text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                {cancelReason.length}/500
+              </span>
             </label>
             {cancelTarget.status !== 'en_attente' && (
               <div
@@ -609,6 +655,65 @@ export default function OrdersView({
                 certain de vouloir l&apos;annuler.
               </div>
             )}
+          </div>
+        </Dialog>
+      )}
+
+      {advanceTarget && (
+        <Dialog
+          open={true}
+          onClose={closeAdvanceDialog}
+          title={`Valider : ${STATUS_LABELS[STATUS_CYCLE[STATUS_CYCLE.indexOf(advanceTarget.status) + 1]]}`}
+          subtitle={advanceTarget.order_number}
+          icon={<CheckCircle2 size={18} />}
+          size="sm"
+          dismissible={!advancing}
+          footer={
+            <div className="flex flex-col-reverse sm:flex-row gap-2 w-full">
+              <button
+                onClick={closeAdvanceDialog}
+                disabled={advancing}
+                className="btn-outline flex-1 justify-center py-2.5"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmAdvance}
+                disabled={advancing}
+                className="btn-primary flex-1 justify-center py-2.5 inline-flex items-center gap-1.5"
+              >
+                <CheckCircle2 size={14} />
+                {advancing ? 'Validation…' : 'Confirmer la validation'}
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-3 text-sm">
+            <p style={{ color: 'var(--text-muted)' }}>
+              La commande <strong style={{ color: 'var(--text)' }}>{advanceTarget.order_number}</strong> va passer au statut{' '}
+              <strong style={{ color: 'var(--text)' }}>
+                {STATUS_LABELS[STATUS_CYCLE[STATUS_CYCLE.indexOf(advanceTarget.status) + 1]]}
+              </strong>.
+            </p>
+            <label className="block">
+              <span
+                className="text-xs font-semibold uppercase tracking-wider mb-1.5 block"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Remarque du traitement (optionnelle)
+              </span>
+              <textarea
+                value={advanceRemark}
+                onChange={e => setAdvanceRemark(e.target.value)}
+                rows={6}
+                maxLength={500}
+                placeholder="Ex : commande contrôlée, colis remis au transporteur, livraison confirmée…"
+                className="input w-full min-h-[9rem] resize-y"
+              />
+              <span className="mt-1 block text-right text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                {advanceRemark.length}/500
+              </span>
+            </label>
           </div>
         </Dialog>
       )}
@@ -773,7 +878,10 @@ function OrderDetailModal({
       </div>
       {order.notes && (
         <div className="mt-4 text-sm" style={{ color: 'var(--text-muted)' }}>
-          Notes : {order.notes}
+          <div className="font-semibold mb-2" style={{ color: 'var(--text)' }}>Historique de la commande</div>
+          <pre className="whitespace-pre-wrap break-words rounded-xl p-3 text-xs leading-5" style={{ background: 'var(--bg-card)', fontFamily: 'inherit' }}>
+            {order.notes}
+          </pre>
         </div>
       )}
     </Dialog>

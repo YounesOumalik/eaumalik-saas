@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
       if (!parsed.success) return badRequest('order_id requis.');
       const order = (await readOrdersRaw()).find(o => o.id === parsed.data.order_id);
       if (!order) return badRequest('Commande introuvable.');
+      if (order.status !== 'livree') return badRequest('La maintenance est disponible uniquement après livraison.');
       const records = await ensureMaintenanceForOrder(order as any);
       return NextResponse.json({ success: true, records });
     }
@@ -115,7 +116,7 @@ export async function POST(req: NextRequest) {
       .select('role')
       .eq('id', userRes.user.id)
       .single();
-    if (profile?.role !== 'admin') return forbidden('Droits administrateur requis.');
+    if (profile?.role !== 'admin' && profile?.role !== 'administrator') return forbidden('Droits administrateur requis.');
 
     let body: unknown;
     try { body = await req.json(); } catch { return badRequest('JSON invalide.'); }
@@ -128,6 +129,7 @@ export async function POST(req: NextRequest) {
       .eq('id', parsed.data.order_id)
       .single();
     if (orderErr || !order) return badRequest('Commande introuvable.');
+    if (order.status !== 'livree') return badRequest('La maintenance est disponible uniquement après livraison.');
 
     const records = await ensureMaintenanceForOrder(order as any);
     return NextResponse.json({ success: true, records });

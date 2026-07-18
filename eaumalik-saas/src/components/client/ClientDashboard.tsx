@@ -13,7 +13,6 @@ import {
   Copy,
   Send,
   User,
-  Truck,
   ShoppingBag,
   ExternalLink,
   LogOut,
@@ -175,7 +174,9 @@ export default function ClientDashboard({ initialData }: Props) {
   const navItems: NavItem[] = [
     { id: 'orders', label: 'Commande', icon: ShoppingBag },
     { id: 'parrainage', label: 'Parrainage & Cashback', icon: Gift },
-    { id: 'maintenance', label: 'Maintenance Filtres', icon: ShieldAlert },
+    ...(initialData.userOrders.some((order: any) => order.status === 'livree')
+      ? [{ id: 'maintenance', label: 'Maintenance Filtres', icon: ShieldAlert }]
+      : []),
     { id: 'chat', label: 'Discuter avec le vendeur', icon: MessageCircle },
     { id: 'news', label: 'Actualités & Offres', icon: Newspaper },
     { id: 'profile', label: 'Mes Coordonnées', icon: User },
@@ -387,7 +388,6 @@ export default function ClientDashboard({ initialData }: Props) {
         {/* MAINTENANCE */}
         {activeTab === 'maintenance' && (() => {
           const deliveredOrder = initialData.userOrders.find(o => o.status === 'livree');
-          const shippingOrder = initialData.userOrders.find(o => ['en_attente', 'traitee', 'en_livraison'].includes(o.status));
 
           return (
             <div className="glass-card p-6" style={{ transform: 'none' }}>
@@ -440,23 +440,10 @@ export default function ClientDashboard({ initialData }: Props) {
                     </div>
                   </div>
                 );
-              })() : shippingOrder ? (
-                <div className="border border-[color:var(--border)] rounded-2xl p-5 bg-[color:var(--bg-surface)] text-center py-10">
-                  <div className="w-12 h-12 rounded-full bg-warning-soft flex items-center justify-center mx-auto mb-4 text-warning">
-                    <Truck size={24} />
-                  </div>
-                  <h4 className="font-bold text-base mb-1">Purificateur d&apos;Eau en cours de livraison</h4>
-                  <p className="text-xs max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
-                    Votre commande <span className="font-mono font-bold text-warning">{shippingOrder.order_number}</span> est actuellement avec le statut <span className="font-semibold">&quot;{shippingOrder.status === 'en_attente' ? 'En attente' : shippingOrder.status === 'traitee' ? 'Traitée' : 'En cours de livraison'}&quot;</span>.
-                  </p>
-                  <p className="text-xs mt-3 text-sky-400 font-medium">
-                    Le suivi de la maintenance et le calendrier des révisions débuteront dès la finalisation de l&apos;installation de votre appareil.
-                  </p>
-                </div>
-              ) : (
+              })() : (
                 <div className="text-center py-12 text-xs" style={{ color: 'var(--text-muted)' }}>
                   <ShieldAlert size={36} className="mx-auto mb-3 opacity-50" />
-                  Aucun purificateur d&apos;eau actif enregistré sur votre compte.
+                  La maintenance sera disponible après la livraison confirmée de votre appareil.
                 </div>
               )}
             </div>
@@ -668,6 +655,20 @@ export default function ClientDashboard({ initialData }: Props) {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {order.notes && (
+                      <div className="mt-5 pt-4 border-t border-[color:var(--border)]">
+                        <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                          Historique du traitement
+                        </div>
+                        <pre
+                          className="whitespace-pre-wrap break-words text-xs leading-5 rounded-xl p-3"
+                          style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)', fontFamily: 'inherit' }}
+                        >
+                          {order.notes}
+                        </pre>
                       </div>
                     )}
 

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseServiceRoleClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { badRequest, forbidden, isMockMode, safeErrorResponse, unauthorized } from '@/lib/api-guard';
-import { ensureMaintenanceForOrder, listMaintenanceRecords, updateOrderStatus } from '@/data/repositories';
+import { ensureMaintenanceForOrder, listMaintenanceRecords } from '@/data/repositories';
 import { readOrdersRaw, writeOrdersRaw } from '@/data/repositories';
+import { getDevUserFromCookie } from '@/lib/auth/devSession';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,22 +21,46 @@ const CancelledBySchema = z.object({
   role: z.string().min(1).max(60),
 }).optional();
 
+const HandledBySchema = z.object({
+  id: z.string().min(1).max(120),
+  email: z.string().email().max(200),
+  full_name: z.string().min(1).max(200),
+  role: z.string().min(1).max(60),
+}).optional();
+
 const PatchBodySchema = z.object({
   status: OrderStatusSchema,
   reason: z.string().max(500).optional(),
+  remark: z.string().max(500).optional(),
   cancelled_by: CancelledBySchema,
+  handled_by: HandledBySchema,
 });
 
-/** Construit la ligne de commentaire d'annulation (profil agent + date + motif). */
-function buildCancellationComment(agent: { full_name: string; email: string; role: string } | undefined, reason: string | undefined, when: string): string {
+const STATUS_LABELS: Record<z.infer<typeof OrderStatusSchema>, string> = {
+  en_attente: 'En attente',
+  traitee: 'Traitée',
+  en_livraison: 'En livraison',
+  livree: 'Livrée',
+  annulee: 'Annulée',
+};
+
+type HandlingAgent = { id: string; full_name: string; email: string; role: string };
+
+/** Construit une entrée d'historique avec l'agent et sa remarque. */
+function buildStatusHistoryComment(
+  agent: HandlingAgent | undefined,
+  status: z.infer<typeof OrderStatusSchema>,
+  remark: string | undefined,
+  when: string,
+): string {
   const dateStr = new Date(when).toISOString().slice(0, 19).replace('T', ' ');
   const agentLine = agent
     ? `Agent : ${agent.full_name} <${agent.email}> (${agent.role})`
     : 'Agent : (inconnu — non authentifié)';
-  const motifLine = reason && reason.trim().length > 0
-    ? `Motif : ${reason.trim()}`
-    : 'Motif : (non renseigné)';
-  return `[Annulation — ${dateStr}]\n${agentLine}\n${motifLine}`;
+  const remarkLine = remark && remark.trim().length > 0
+    ? `Remarque : ${remark.trim()}`
+    : 'Remarque : (non renseignée)';
+  return `[Traitement — ${STATUS_LABELS[status]} — ${dateStr}]\n${agentLine}\n${remarkLine}`;
 }
 
 /** PATCH — admin uniquement (changement de statut d'une commande).
@@ -54,7 +79,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     try { body = await req.json(); } catch { return badRequest('JSON invalide.'); }
     const parsed = PatchBodySchema.safeParse(body);
     if (!parsed.success) return badRequest('Corps invalide.');
-    const { status: newStatus, reason, cancelled_by } = parsed.data;
+    const { status: newStatus, reason, remark, cancelled_by, handled_by } = parsed.data;
     const now = new Date().toISOString();
     const list = await readOrdersRaw();
     const order = list.find(o => o.id === idParam);
@@ -74,13 +99,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
     if (newStatus === 'livree') order.delivered_at = now;
-    // Annulation : on consigne le profil de l'agent + date + motif dans `notes`.
-    if (newStatus === 'annulee') {
-      const comment = buildCancellationComment(cancelled_by, reason, now);
-      order.notes = order.notes && order.notes.trim().length > 0
-        ? `${order.notes}\n\n---\n${comment}`
-        : comment;
-    }
+    const devUser = await getDevUserFromCookie();
+    const agent: HandlingAgent | undefined = devUser
+      ? { id: devUser.id, email: devUser.email, full_name: devUser.full_name ?? devUser.email, role: devUser.role }
+      : handled_by ?? cancelled_by;
+    const comment = buildStatusHistoryComment(agent, newStatus, reason ?? remark, now);
+    order.notes = order.notes && order.notes.trim().length > 0
+      ? `${order.notes}\n\n---\n${comment}`
+      : comment;
     await writeOrdersRaw(list);
 
     let maintenanceRecords: any[] = [];
@@ -96,25 +122,38 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       success: true,
       order_id: idParam,
       status: newStatus,
+      notes: order.notes,
       maintenance_created: maintenanceRecords.length,
-      comment_recorded: newStatus === 'annulee',
+      comment_recorded: true,
     });
   }
 
-  let caller: { id: string; role: 'admin' | 'client' };
+  let caller: { id: string; role: 'admin' | 'administrator' | 'client'; agent?: HandlingAgent };
   try {
     const supabase = createSupabaseServerClient();
     const { data: userRes, error: userErr } = await supabase.auth.getUser();
     if (userErr || !userRes.user) return unauthorized();
     caller = { id: userRes.user.id, role: 'client' };
     const admin = createSupabaseServiceRoleClient();
-    const { data: profile } = await admin.from('users').select('role').eq('id', userRes.user.id).single();
-    if (profile?.role === 'admin') caller.role = 'admin';
+    const { data: profile } = await admin
+      .from('users')
+      .select('id, email, full_name, role')
+      .eq('id', userRes.user.id)
+      .single();
+    if (profile?.role === 'admin' || profile?.role === 'administrator') {
+      caller.role = profile.role;
+      caller.agent = {
+        id: profile.id,
+        email: profile.email,
+        full_name: profile.full_name ?? profile.email,
+        role: profile.role,
+      };
+    }
   } catch (e) {
     return safeErrorResponse(e);
   }
 
-  if (caller.role !== 'admin') return forbidden('Droits administrateur requis.');
+  if (caller.role !== 'admin' && caller.role !== 'administrator') return forbidden('Droits administrateur requis.');
 
   const idParam = String(params.id).slice(0, 80);
   let body: unknown;
@@ -122,7 +161,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const parsed = PatchBodySchema.safeParse(body);
   if (!parsed.success) return badRequest('Corps invalide.');
-  const { status: newStatus, reason, cancelled_by } = parsed.data;
+  const { status: newStatus, reason, remark } = parsed.data;
   const now = new Date().toISOString();
 
   try {
@@ -158,14 +197,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       trackingPatch.delivered_at = now;
     }
 
-    // Annulation : on consigne le profil de l'agent + date + motif dans `notes`
-    // (champ libre déjà utilisé pour les notes admin — on appende au contenu
-    // existant pour préserver l'historique).
-    if (newStatus === 'annulee') {
-      const comment = buildCancellationComment(cancelled_by, reason, now);
-      const existing = typeof order.notes === 'string' ? order.notes.trim() : '';
-      trackingPatch.notes = existing.length > 0 ? `${existing}\n\n---\n${comment}` : comment;
-    }
+    // Chaque changement de statut est conservé dans l'historique de la commande.
+    // L'agent est déterminé côté serveur afin de ne jamais dépendre du profil
+    // envoyé par le navigateur.
+    const comment = buildStatusHistoryComment(caller.agent, newStatus, reason ?? remark, now);
+    const existing = typeof order.notes === 'string' ? order.notes.trim() : '';
+    trackingPatch.notes = existing.length > 0 ? `${existing}\n\n---\n${comment}` : comment;
 
     const { error: updErr } = await admin
       .from('orders')
@@ -188,8 +225,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       success: true,
       order_id: idParam,
       status: newStatus,
+      notes: trackingPatch.notes,
       maintenance_created: maintenanceRecords.length,
-      comment_recorded: newStatus === 'annulee',
+      comment_recorded: true,
     });
   } catch (e) {
     return safeErrorResponse(e);
