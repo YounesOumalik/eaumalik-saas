@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
       .select('role')
       .eq('id', userRes.user.id)
       .single();
-    if (profile?.role !== 'admin') return forbidden('Droits administrateur requis.');
+    if (profile?.role !== 'admin' && profile?.role !== 'administrator') return forbidden('Droits administrateur requis.');
 
     const url = new URL(req.url);
     const status = url.searchParams.get('status') ?? undefined;

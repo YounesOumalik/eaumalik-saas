@@ -910,7 +910,10 @@ export async function listMaintenanceRecords(filters: MaintenanceRecordFilters =
     return records;
   }
 
-  const supabase = await getSupabase();
+  // Les écrans de maintenance sont réservés au personnel côté serveur.
+  // Le service role évite que la RLS de la vue `orders` ne masque les
+  // commandes livrées et ne fasse apparaître 0 fiche à l'admin.
+  const supabase = await getSupabaseAdmin();
   const { data: deliveredOrders, error: deliveredOrdersError } = await supabase
     .from('orders')
     .select('id')
@@ -938,7 +941,7 @@ export async function getMaintenanceRecord(id: string): Promise<MaintenanceRecor
     if (found) hydrateRecordInterventions([found], bundle.interventions);
     return found;
   }
-  const supabase = await getSupabase();
+  const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase
     .from('maintenance_records')
     .select('*, interventions:maintenance_interventions(*)')
@@ -1024,8 +1027,9 @@ export async function ensureMaintenanceForOrder(order: Order): Promise<Maintenan
     return createdOrExisting;
   }
 
-  const supabase = await getSupabase();
-  // En prod, c'est le trigger SQL `ensure_maintenance_on_delivery` qui fait ce travail.
+  const supabase = await getSupabaseAdmin();
+  // Le trigger SQL crée normalement la fiche. La lecture en service role
+  // garantit que le fallback applicatif retrouve aussi les fiches existantes.
   const { data } = await supabase
     .from('maintenance_records')
     .select('*, interventions:maintenance_interventions(*)')
