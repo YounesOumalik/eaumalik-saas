@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin, createSupabaseServiceRoleClient } from '@/lib/supabase/server';
 import {
   archiveStaff,
+  archiveClient,
   getArchivedStaff,
   removeArchivedStaff,
   listArchivedStaff,
@@ -344,6 +345,71 @@ export async function deleteStaffUserAction(id: string) {
     }
 
     revalidatePath('/admin/personnels');
+    return { success: true as const };
+  } catch (err: any) {
+    return { success: false as const, error: err.message ?? 'Erreur.' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// SUPPRESSION DE CLIENT (superadmin + administrator)
+// ----------------------------------------------------------------------------
+
+export async function deleteClientAction(id: string) {
+  try {
+    const admin = await gate();
+    if (id === admin.id) {
+      return { success: false as const, error: 'Vous ne pouvez pas supprimer votre propre compte.' };
+    }
+
+    // 1) Récupère le profil complet AVANT suppression (snapshot pour archive)
+    let profile: {
+      id: string; email: string; full_name: string; phone: string | null;
+      role: string; permissions: Record<string, boolean> | null;
+      created_at: string | null; updated_at: string | null;
+    } | null = null;
+
+    if (isMockMode()) {
+      const u = (await readUsersRaw()).find((x: any) => x.id === id);
+      if (!u) return { success: false as const, error: 'Client introuvable.' };
+      if (u.role !== 'client') {
+        return { success: false as const, error: 'Ce compte n\'est pas un compte client.' };
+      }
+      profile = {
+        id: u.id, email: u.email, full_name: u.full_name, phone: u.phone ?? null,
+        role: u.role, permissions: u.permissions ?? null,
+        created_at: u.created_at ?? null, updated_at: u.updated_at ?? null,
+      };
+    } else {
+      const supabase = createSupabaseServiceRoleClient();
+      const { data, error: readErr } = await supabase
+        .from('users')
+        .select('id, email, full_name, phone, role, permissions, created_at, updated_at')
+        .eq('id', id)
+        .maybeSingle();
+      if (readErr) throw readErr;
+      if (!data) return { success: false as const, error: 'Client introuvable.' };
+      if (data.role !== 'client') {
+        return { success: false as const, error: 'Ce compte n\'est pas un compte client.' };
+      }
+      profile = data;
+    }
+
+    // 2) Snapshot vers l'archive
+    await archiveClient(profile, 'Suppression manuelle depuis la fiche client (CRM).');
+
+    // 3) Suppression effective (auth + profil)
+    if (isMockMode()) {
+      const remaining = (await readUsersRaw()).filter((u: any) => u.id !== id);
+      await writeUsersRaw(remaining);
+    } else {
+      const supabase = createSupabaseServiceRoleClient();
+      const { error: authErr } = await supabase.auth.admin.deleteUser(id);
+      if (authErr) throw authErr;
+      await supabase.from('users').delete().eq('id', id);
+    }
+
+    revalidatePath('/crm/clients');
     return { success: true as const };
   } catch (err: any) {
     return { success: false as const, error: err.message ?? 'Erreur.' };

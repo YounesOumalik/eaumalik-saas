@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Eye, X, MessageSquare } from 'lucide-react';
+import { useState, useMemo, useTransition } from 'react';
+import { Eye, X, MessageSquare, Trash2 } from 'lucide-react';
 import type { User, Order, OrderStatus, MaintenanceAlert } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import MessagesPanel, { type ClientMessageItem } from './MessagesPanel';
+import { deleteClientAction } from '@/app/actions/adminActions';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   en_attente: 'En attente',
@@ -29,6 +30,8 @@ export default function ClientList({
   const [selected, setSelected] = useState<User | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'buyers' | 'prospects'>('all');
   const [showMessages, setShowMessages] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const stats = useMemo(() => {
     return initialClients.map(c => {
@@ -58,6 +61,27 @@ export default function ClientList({
       (c.phone ?? '').includes(q),
     );
   }, [stats, search, filterType]);
+
+  const handleDelete = async (client: any) => {
+    if (deleting) return;
+    if (!confirm(
+      `Supprimer définitivement le compte de ${client.full_name} ?\n\n`
+      + `Email : ${client.email}\n`
+      + `Cette action est IRRÉVERSIBLE. Le compte sera archivé.`
+    )) return;
+
+    setDeleting(client.id);
+    const res = await deleteClientAction(client.id);
+    setDeleting(null);
+
+    if (res.success) {
+      startTransition(() => {
+        window.location.reload();
+      });
+    } else {
+      alert(res.error || 'Erreur lors de la suppression.');
+    }
+  };
 
   return (
     <>
@@ -159,7 +183,18 @@ export default function ClientList({
                   )}
                 </td>
                 <td>
-                  <button onClick={() => setSelected(c)} className="btn-outline btn-sm"><Eye size={12} /></button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setSelected(c)} className="btn-outline btn-sm" title="Voir le détail"><Eye size={12} /></button>
+                    <button
+                      onClick={() => handleDelete(c)}
+                      className="btn-outline btn-sm"
+                      style={{ color: deleting === c.id ? 'var(--text-muted)' : 'var(--danger)' }}
+                      disabled={deleting === c.id}
+                      title="Supprimer le client"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

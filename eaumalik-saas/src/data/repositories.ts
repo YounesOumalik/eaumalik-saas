@@ -489,6 +489,55 @@ export async function listArchivedStaff(): Promise<ArchivedStaff[]> {
 }
 
 /**
+ * Archive un compte client :
+ *   1) snapshot vers users_archive
+ *   2) suppression de users.json (mock) OU laissé au caller (Supabase)
+ * Même principe que archiveStaff() mais pour les comptes clients.
+ */
+export async function archiveClient(
+  client: {
+    id: string;
+    email: string;
+    full_name: string;
+    phone: string | null;
+    role: string;
+    permissions: Record<string, boolean> | null;
+    created_at: string | null;
+    updated_at: string | null;
+  },
+  reason: string | null = null
+): Promise<ArchivedStaff> {
+  const entry: ArchivedStaff = {
+    id: client.id,
+    email: client.email,
+    full_name: client.full_name,
+    phone: client.phone ?? null,
+    role: client.role,
+    permissions: client.permissions ?? null,
+    original_created_at: client.created_at ?? null,
+    original_updated_at: client.updated_at ?? null,
+    archived_at: new Date().toISOString(),
+    archived_reason: reason,
+  };
+
+  if (shouldUseMocks()) {
+    const list = readArchivedUsers();
+    list.push(entry);
+    writeArchivedUsers(list);
+    // supprime également de users.json (en mock)
+    const users = readUsers().filter(u => u.id !== client.id);
+    writeUsers(users);
+    return entry;
+  }
+
+  // Snapshot archive → service role.
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase.from('users_archive').insert(entry).select().single();
+  if (error) throw error;
+  return data as ArchivedStaff;
+}
+
+/**
  * Archive un compte personnel :
  *   1) snapshot vers users_archive
  *   2) suppression de users + auth.users (effectuée côté server actions)
