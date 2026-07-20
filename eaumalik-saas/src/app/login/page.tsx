@@ -175,7 +175,9 @@ function LoginInner() {
         window.dispatchEvent(new Event('eaumalik:dev-session-change'));
         await refresh();
         const role = json.user?.role;
-        if (role === 'admin' || role === 'staff') {
+        // Tous les rôles non-client (admin, administrator, technician, sales,
+        // stock_manager, admin_assistant) sont du personnel → redirection /admin.
+        if (role && role !== 'client') {
           router.push('/admin');
         } else {
           router.push(callbackUrl);
@@ -206,7 +208,8 @@ function LoginInner() {
       }
       await refresh();
       const userRole = json.user?.role;
-      if (userRole === 'admin' || userRole === 'staff') {
+      // Tous les rôles non-client sont du personnel → redirection /admin.
+      if (userRole && userRole !== 'client') {
         router.push('/admin');
       } else {
         router.push(callbackUrl);

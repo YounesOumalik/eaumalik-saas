@@ -74,7 +74,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email ou mot de passe incorrect.' }, { status: 401 });
     }
 
-    const role = (data.user?.user_metadata?.role as string) ?? 'client';
+    // On lit le rôle depuis la table `users` (et non user_metadata) car c'est
+    // la source de vérité côté métier (y compris administrator, technician…).
+    let role = 'client';
+    if (data.user?.id) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', data.user.id)
+        .single();
+      role = profile?.role ?? 'client';
+    }
+
     return NextResponse.json({
       user: {
         id: data.user?.id,
