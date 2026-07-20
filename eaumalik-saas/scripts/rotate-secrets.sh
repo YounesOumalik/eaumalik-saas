@@ -8,7 +8,7 @@
 # Ce script :
 #   1. Backup de l'ancien /opt/eaumalik/.env
 #   2. Patch les clés Supabase (anon, service_role) + CAPTCHA_SECRET
-#   3. Patch le JWT secret dans /opt/smartefp-supabase-prod/_stack/.env
+#   3. Patch le JWT secret dans /opt/eaumalik-supabase/_stack/.env
 #   4. Redémarre auth-prod puis eaumalik-app
 #   5. Vérifie que /, /login, /api/auth/captcha répondent 200
 #
@@ -20,7 +20,7 @@
 set -euo pipefail
 
 ENV_FILE="/opt/eaumalik/.env"
-SUPABASE_ENV="/opt/smartefp-supabase-prod/_stack/.env"
+SUPABASE_ENV="/opt/eaumalik-supabase/_stack/.env"
 BACKUP_DIR="/opt/eaumalik/.env-backups"
 
 # Charger le module Bitwarden (auto-détection mode)

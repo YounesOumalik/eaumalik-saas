@@ -5,7 +5,7 @@
 -- On a créé des VUES public.* qui pointent vers eaumalik.* (cf. views-public-bridge.sql).
 --
 -- 1. Créez l'utilisateur via l'API admin de auth-prod :
---      curl -X POST 'https://db-dev.smartefp.com/auth/v1/admin/users' \
+--      curl -X POST 'https://db.eaumalik.com/auth/v1/admin/users' \
 --        -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
 --        -H "Content-Type: application/json" \
 --        -d '{"email":"eaumaliksarl@gmail.com","password":"...","email_confirm":true,

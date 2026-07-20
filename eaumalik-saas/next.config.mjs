@@ -4,7 +4,7 @@ const supabaseHostRaw = (process.env.NEXT_PUBLIC_SUPABASE_URL || '')
 const supabaseHost =
   supabaseHostRaw && !supabaseHostRaw.includes('YOUR-PROJECT')
     ? supabaseHostRaw
-    : 'db-dev.smartefp.com';
+    : 'db.eaumalik.com';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -73,7 +73,7 @@ const nextConfig = {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
       "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
       // img-src : hôtes explicites uniquement (pas de 'https:' générique qui autorise tout).
-      "img-src 'self' data: blob: " + [...imgHosts, 'https://db-dev.smartefp.com'].join(' '),
+      "img-src 'self' data: blob: " + [...imgHosts, `https://${supabaseHost}`].join(' '),
       // connect-src : uniquement l'hôte Supabase réel (db-dev.smartefp.com) + ws. Pas de *.supabase.co ni raw.githubusercontent.com.
       `connect-src 'self' ${supabaseHost ? `https://${supabaseHost} wss://${supabaseHost}` : ''}`,
       // Fonts : autoriser Google Fonts (woff2) + data URIs

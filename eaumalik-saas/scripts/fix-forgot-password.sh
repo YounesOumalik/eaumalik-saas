@@ -13,7 +13,7 @@
 #   - Avoir ajouté les DNS SPF/DKIM/DMARC chez Contabo.
 #
 # Effet :
-#   1. Backup de /opt/smartefp-supabase-prod/_stack/.env
+#   1. Backup de /opt/eaumalik-supabase/_stack/.env
 #   2. Met à jour les vars GOTRUE_SMTP_* avec Resend
 #   3. Met à jour GOTRUE_SITE_URL + GOTRUE_URI_ALLOW_LIST
 #   4. Restart auth-prod
@@ -29,7 +29,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/bitwarden-push.sh"
 bw_check
 
-STACK_ENV="/opt/smartefp-supabase-prod/_stack/.env"
+STACK_ENV="/opt/eaumalik-supabase/_stack/.env"
 
 # ---------- Garde-fous ----------
 if [[ $EUID -ne 0 ]]; then
@@ -78,8 +78,8 @@ patches = {
     "GOTRUE_SITE_URL":           "https://eaumalik.com",
     # Les liens de récupération sont utilisables 30 minutes et une seule fois.
     "GOTRUE_MAILER_OTP_EXP":     "1800",
-    # Allow-list : on garde db-dev.smartefp.com ET on ajoute eaumalik.com
-    "GOTRUE_URI_ALLOW_LIST":     "https://db-dev.smartefp.com,https://eaumalik.com,http://localhost:3000",
+    # Allow-list : on garde db.eaumalik.com ET on ajoute eaumalik.com
+    "GOTRUE_URI_ALLOW_LIST":     "https://db.eaumalik.com,https://eaumalik.com,http://localhost:3000",
 }
 
 for key, val in patches.items():
@@ -102,7 +102,7 @@ PY
 # ---------- Restart auth-prod ----------
 echo
 echo "=== Restart auth-prod ==="
-cd /opt/smartefp-supabase-prod
+cd /opt/eaumalik-supabase
 docker compose restart auth-prod
 echo "[OK] auth-prod redémarré."
 
@@ -110,7 +110,7 @@ echo "[OK] auth-prod redémarré."
 echo
 echo "=== Attente health (max 30s) ==="
 for i in $(seq 1 30); do
-  if curl -fsS -o /dev/null -w "%{http_code}" https://db-dev.smartefp.com/auth/v1/health 2>/dev/null | grep -q 200; then
+  if curl -fsS -o /dev/null -w "%{http_code}" https://db.eaumalik.com/auth/v1/health 2>/dev/null | grep -q 200; then
     echo "[OK] auth-prod healthy."
     break
   fi

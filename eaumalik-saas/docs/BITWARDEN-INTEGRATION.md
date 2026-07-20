@@ -115,7 +115,7 @@ Si tu pars d'un coffre BW vide, je recommande un setup manuel rapide :
 3. Crée un Folder `EAUMALIK-PROD` (dans l'org)
 4. Récupère les valeurs sur le VPS :
    ```bash
-   ssh smartserveur 'sudo grep -E "^(JWT_SECRET|ANON_KEY|SERVICE_ROLE_KEY|POSTGRES_PASSWORD|VAULT_ENC_KEY)=" /opt/smartefp-supabase-prod/_stack/.env'
+   ssh smartserveur 'sudo grep -E "^(JWT_SECRET|ANON_KEY|SERVICE_ROLE_KEY|POSTGRES_PASSWORD|VAULT_ENC_KEY)=" /opt/eaumalik-supabase/_stack/.env'
    ssh smartserveur 'sudo grep -E "^(NEXT_PUBLIC_SUPABASE_ANON_KEY|SUPABASE_SERVICE_ROLE_KEY|CAPTCHA_SECRET)=" /opt/eaumalik/.env'
    ```
 5. Crée 8 Secure Notes dans BW avec ces valeurs (noms ci-dessus).

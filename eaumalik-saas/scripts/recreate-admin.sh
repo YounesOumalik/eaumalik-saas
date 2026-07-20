@@ -18,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/bitwarden-push.sh"
 bw_check
 
-ENV_FILE="/opt/smartefp-supabase-prod/_stack/.env"
+ENV_FILE="/opt/eaumalik-supabase/_stack/.env"
 # IMPORTANT : on tape DIRECTEMENT sur auth-prod via son IP Docker (10.0.5.7)
 # car Kong ne route pas correctement /auth/v1/admin/users (HTTP 502).
 # On passe par un container (eaumalik-app) qui a accès au réseau Docker et aux outils curl/wget.

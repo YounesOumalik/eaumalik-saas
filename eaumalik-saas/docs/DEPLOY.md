@@ -17,7 +17,7 @@ Internet (eaumalik.com)
    ├── auth-prod   gotrue:v2.189     9999
    ├── rest-prod   postgrest:v14     3000
    └── studio-prod studio             3000
-   → Kong gateway expose le tout via db-dev.smartefp.com:8000
+   → Kong gateway expose le tout via db.eaumalik.com:8000
    → Schéma SQL dédié : eaumalik.* (isolé des autres projets)
 ```
 
@@ -41,7 +41,7 @@ docker exec auth-prod printenv GOTRUE_JWT_SECRET
 
 # Clé anon (regénère-la si besoin depuis Studio : Settings > API > anon)
 docker exec auth-prod printenv GOTRUE_JWT_SECRET
-# Ou via le Studio déjà exposé sur studio.smartefp.com
+# Ou via le Studio déjà exposé sur studio.eaumalik.com
 ```
 
 ### 3. Renseigner `.env.prod` (local, jamais commité)
@@ -56,7 +56,7 @@ nano .env.prod
 Valeurs à mettre :
 ```env
 NEXT_PUBLIC_APP_URL=https://eaumalik.com
-NEXT_PUBLIC_SUPABASE_URL=https://db-dev.smartefp.com
+NEXT_PUBLIC_SUPABASE_URL=https://db.eaumalik.com
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<ANON_KEY>
 SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY>
 NEXT_PUBLIC_USE_MOCKS=false
@@ -412,7 +412,7 @@ ssh smartserveur 'docker stats eaumalik-app --no-stream'
 
 | Var | Description | Source |
 |-----|-------------|--------|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL publique du gateway Kong | `https://db-dev.smartefp.com` |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL publique du gateway Kong | `https://db.eaumalik.com` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | JWT anon | `auth-prod` env `GOTRUE_JWT_SECRET` (re-vérifier) |
 | `SUPABASE_SERVICE_ROLE_KEY` | JWT service role | Idem |
 | `NEXT_PUBLIC_APP_URL` | URL canonique | `https://eaumalik.com` |
@@ -463,5 +463,5 @@ ssh smartserveur 'docker inspect --format "{{.NetworkSettings.Networks.supabase-
    10.0.5.x:5432   10.0.5.x:9999    10.0.5.x:3000
         │                │                │
         └─────── kong-prod (gateway) ─────┘
-                  db-dev.smartefp.com:8000
+                  db.eaumalik.com:8000
 ```

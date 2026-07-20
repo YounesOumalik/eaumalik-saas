@@ -14,7 +14,7 @@
 # Usage :
 #   ./setup-new-project.sh \
 #     --app portfolio \
-#     --domain younesoumalik.smartefp.com \
+#     --domain portfolio.eaumalik.com \
 #     --repo https://github.com/YounesOumalik/portfolio.git \
 #     --port 3000 \
 #     [--network supabase-prod-net] \
@@ -22,10 +22,10 @@
 #     [--dry-run]
 #
 # Exemples :
-#   ./setup-new-project.sh --app portfolio --domain younesoumalik.smartefp.com \
+#   ./setup-new-project.sh --app portfolio --domain portfolio.eaumalik.com \
 #     --repo https://github.com/YounesOumalik/portfolio.git --port 3000
 #
-#   ./setup-new-project.sh --app api --domain api.smartefp.com \
+#   ./setup-new-project.sh --app api --domain api.eaumalik.com \
 #     --repo https://github.com/YounesOumalik/api.git --port 8080 --staging
 # ============================================================================
 set -euo pipefail
@@ -68,7 +68,7 @@ done
 
 # ---------- Vérifs ----------
 [[ -z "$APP" ]] && { echo "❌ --app requis (ex: portfolio, api, blog)"; exit 1; }
-[[ -z "$DOMAIN" ]] && { echo "❌ --domain requis (ex: portfolio.smartefp.com)"; exit 1; }
+[[ -z "$DOMAIN" ]] && { echo "❌ --domain requis (ex: portfolio.eaumalik.com)"; exit 1; }
 [[ -z "$REPO" ]] && { echo "❌ --repo requis (URL GitHub)"; exit 1; }
 
 # Valide format

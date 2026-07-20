@@ -3,7 +3,7 @@
 # rotate-all.sh — Rotation COMPLÈTE des secrets EAUMALIK (clé en main)
 # ============================================================================
 # Enchaîne :
-#   1. Backup /opt/smartefp-supabase-prod/_stack/.env + /opt/eaumalik/.env
+#   1. Backup /opt/eaumalik-supabase/_stack/.env + /opt/eaumalik/.env
 #   2. Régénère TOUS les secrets Supabase via generate-secrets.sh
 #   3. Extrait automatiquement ANON_KEY + SERVICE_ROLE_KEY du nouveau .env
 #   4. Patch /opt/eaumalik/.env (anon, service_role, CAPTCHA_SECRET)
@@ -30,7 +30,7 @@ warn() { printf '%b\n' "${YEL}⚠${RST}  $*"; }
 step() { printf '%b\n' "${DIM}→${RST}  $*"; }
 err()  { printf '%b\n' "${RED}✗${RST}  $*" >&2; }
 
-SUPABASE_DIR="/opt/smartefp-supabase-prod"
+SUPABASE_DIR="/opt/eaumalik-supabase"
 STACK_ENV="$SUPABASE_DIR/_stack/.env"
 APP_ENV="/opt/eaumalik/.env"
 BACKUP_DIR="/opt/eaumalik/.env-backups"
@@ -168,7 +168,7 @@ curl -fsS -m 5 -o /dev/null -w "    /                            → HTTP %{http
 curl -fsS -m 5 -o /dev/null -w "    /login                       → HTTP %{http_code}\n" https://eaumalik.com/login 2>/dev/null || echo "    /login → FAILED"
 curl -fsS -m 5 -o /dev/null -w "    /login/mot-de-passe-oublie   → HTTP %{http_code}\n" https://eaumalik.com/login/mot-de-passe-oublie 2>/dev/null || echo "    /login/mot-de-passe-oublie → FAILED"
 curl -fsS -m 5 -o /dev/null -w "    /api/auth/captcha            → HTTP %{http_code}\n" https://eaumalik.com/api/auth/captcha 2>/dev/null || echo "    /api/auth/captcha → FAILED"
-curl -fsS -m 5 -o /dev/null -w "    db-dev.smartefp.com/auth/v1/health → HTTP %{http_code}\n" https://db-dev.smartefp.com/auth/v1/health 2>/dev/null || echo "    auth → FAILED"
+curl -fsS -m 5 -o /dev/null -w "    db.eaumalik.com/auth/v1/health → HTTP %{http_code}\n" https://db.eaumalik.com/auth/v1/health 2>/dev/null || echo "    auth → FAILED"
 
 # Vérif cohérence : anon key de l'app doit matcher celle de la stack
 echo ""

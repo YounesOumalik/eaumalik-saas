@@ -99,7 +99,7 @@ v_role := 'client';
 - **Type** : Mauvaise configuration de sécurité — CWE-693
 - **Correctifs appliqués** :
   - `script-src` : suppression de `'unsafe-eval'` (dev-only, dangereux en prod).
-  - `img-src` : suppression du joker `'https:'` (tout hôte) → hôtes explicites + `db-dev.smartefp.com`.
+  - `img-src` : suppression du joker `'https:'` (tout hôte) → hôtes explicites + `db.eaumalik.com`.
   - `connect-src` : retrait de `https://raw.githubusercontent.com` et `https://*.supabase.co` (hôte réel déjà inclus via `supabaseHost`).
   - Ajout de `object-src 'none'` et `upgrade-insecure-requests`.
   - Note résiduelle : `'unsafe-inline'` reste nécessaire pour le SSR Next.js (amélioration future : nonce par requête via middleware).

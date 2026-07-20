@@ -113,7 +113,7 @@ bw_check
 ```
 
 Ce script doit :
-1. `ssh smartserveur` pour lire `/opt/smartefp-supabase-prod/_stack/.env` + `/opt/eaumalik/.env`
+1. `ssh smartserveur` pour lire `/opt/eaumalik-supabase/_stack/.env` + `/opt/eaumalik/.env`
 2. Extraire : `JWT_SECRET`, `VAULT_ENC_KEY`, `POSTGRES_PASSWORD`, `CAPTCHA_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY`
 3. Utiliser `bw create item` pour créer/mettre à jour les Secure Notes avec les noms suivants :
 
@@ -234,7 +234,7 @@ sudo bash /tmp/fix-forgot-password.sh
 ```
 
 → Le script te demande la clé Resend : colle-la (input masqué)
-→ Il patche `/opt/smartefp-supabase-prod/_stack/.env` (backup auto)
+→ Il patche `/opt/eaumalik-supabase/_stack/.env` (backup auto)
 → Redémarre `auth-prod`
 → Vérifie la santé
 → **Push automatique de la clé Resend dans BW** (via bitwarden-push.sh)
@@ -290,7 +290,7 @@ Erreurs possibles :
 ### Si "redirect URL not allowed"
 
 ```bash
-ssh smartserveur 'sudo grep "GOTRUE_URI_ALLOW_LIST" /opt/smartefp-supabase-prod/_stack/.env'
+ssh smartserveur 'sudo grep "GOTRUE_URI_ALLOW_LIST" /opt/eaumalik-supabase/_stack/.env'
 # Doit contenir : https://eaumalik.com
 # Sinon relancer fix-forgot-password.sh (le script l'a déjà ajouté)
 ```

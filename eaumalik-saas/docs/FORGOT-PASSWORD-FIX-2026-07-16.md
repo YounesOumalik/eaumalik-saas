@@ -6,21 +6,21 @@ L'utilisateur `younesoumalik@gmail.com` ne reçoit pas l'email de réinitialisat
 après un `POST /api/auth/forgot-password`.
 
 ### Tests API
-- `https://db-dev.smartefp.com/auth/v1/health` → **200 OK** (auth-prod vivant).
-- `POST https://db-dev.smartefp.com/auth/v1/recover` → **200 OK** puis 429 rate limit (normal).
+- `https://db.eaumalik.com/auth/v1/health` → **200 OK** (auth-prod vivant).
+- `POST https://db.eaumalik.com/auth/v1/recover` → **200 OK** puis 429 rate limit (normal).
 - Logs auth-prod : l'audit `user_recovery_requested` est bien créé, **mais aucun log SMTP**.
 
 ### Causes racines identifiées
 
 #### 1. SMTP GoTrue **non configuré pour la prod**
-Fichier `/opt/smartefp-supabase-prod/_stack/.env` (extrait) :
+Fichier `/opt/eaumalik-supabase/_stack/.env` (extrait) :
 
 ```bash
 GOTRUE_SMTP_HOST=                 # ← vide
 GOTRUE_SMTP_USER=                 # ← vide
 GOTRUE_SMTP_PORT=2500             # ← port MailPit dev, jamais remplacé
 GOTRUE_SMTP_PASS=...              # ← set mais inutile
-GOTRUE_SMTP_ADMIN_EMAIL=admin@smartefp.com   # ← mauvais domaine
+GOTRUE_SMTP_ADMIN_EMAIL=admin@eaumalik.com   # ← mauvais domaine
 GOTRUE_SMTP_SENDER_NAME=SmartApp Dev         # ← mauvais nom
 ```
 
@@ -39,8 +39,8 @@ DNS géré chez **Contabo** (NS : `ns1.contabo.net`, `ns2.contabo.net`, `ns3.con
 
 #### 3. `GOTRUE_SITE_URL` + `GOTRUE_URI_ALLOW_LIST` pointent vers dev
 ```bash
-GOTRUE_SITE_URL=https://dev.smartefp.com
-GOTRUE_URI_ALLOW_LIST=https://db-dev.smartefp.com
+GOTRUE_SITE_URL=https://eaumalik.com
+GOTRUE_URI_ALLOW_LIST=https://db.eaumalik.com
 ```
 
 **Conséquence** : si le template email utilise `{{ .SiteURL }}` (au lieu de
@@ -89,7 +89,7 @@ ssh smartserveur 'sudo bash /tmp/fix-forgot-password.sh'
 
 Le script :
 
-1. Backup `/opt/smartefp-supabase-prod/_stack/.env`.
+1. Backup `/opt/eaumalik-supabase/_stack/.env`.
 2. Patche les variables :
    ```bash
    GOTRUE_SMTP_HOST=smtp.resend.com
@@ -99,7 +99,7 @@ Le script :
    GOTRUE_SMTP_ADMIN_EMAIL=no-reply@eaumalik.com
    GOTRUE_SMTP_SENDER_NAME=EAUMALIK
    GOTRUE_SITE_URL=https://eaumalik.com
-   GOTRUE_URI_ALLOW_LIST=https://db-dev.smartefp.com,https://eaumalik.com,http://localhost:3000
+   GOTRUE_URI_ALLOW_LIST=https://db.eaumalik.com,https://eaumalik.com,http://localhost:3000
    ```
 3. `chmod 600` sur le `.env`.
 4. `docker compose restart auth-prod`.
@@ -140,7 +140,7 @@ curl -sS -X POST https://eaumalik.com/api/auth/forgot-password \
 
 Le mail doit contenir un bouton/lien du type :
 ```
-https://db-dev.smartefp.com/auth/v1/verify?token=...&type=recovery&redirect_to=https://eaumalik.com/login/reinitialiser
+https://db.eaumalik.com/auth/v1/verify?token=...&type=recovery&redirect_to=https://eaumalik.com/login/reinitialiser
 ```
 
 Cliquer → ouvre `https://eaumalik.com/login/reinitialiser` → page de saisie du

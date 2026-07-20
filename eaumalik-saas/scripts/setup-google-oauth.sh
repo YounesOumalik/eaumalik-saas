@@ -12,7 +12,7 @@
 #   - Google Client Secret
 #
 # Effet :
-#   1. Backup de /opt/smartefp-supabase-prod/_stack/.env
+#   1. Backup de /opt/eaumalik-supabase/_stack/.env
 #   2. Ajoute les vars GOTRUE_EXTERNAL_GOOGLE_*
 #   3. Exécute supabase/migrations/0009_google_oauth.sql sur db-prod
 #   4. Restart auth-prod
@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-STACK_ENV="/opt/smartefp-supabase-prod/_stack/.env"
+STACK_ENV="/opt/eaumalik-supabase/_stack/.env"
 MIGRATION_LOCAL="supabase/migrations/0009_google_oauth.sql"
 MIGRATION_REMOTE="/tmp/0009_google_oauth.sql"
 
@@ -70,7 +70,7 @@ keys_to_set = {
     "GOTRUE_EXTERNAL_GOOGLE_ENABLED": "true",
     "GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID": client_id,
     "GOTRUE_EXTERNAL_GOOGLE_SECRET": client_secret,
-    "GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI": "https://db-dev.smartefp.com/auth/v1/callback",
+    "GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI": "https://db.eaumalik.com/auth/v1/callback",
 }
 
 present = set()
@@ -108,13 +108,13 @@ docker exec -i db-prod psql -U postgres -d postgres -f "$MIGRATION_REMOTE" \
 
 # ---------- Restart auth-prod ----------
 echo "[..] Restart auth-prod"
-cd /opt/smartefp-supabase-prod/_stack
+cd /opt/eaumalik-supabase/_stack
 docker compose restart auth-prod
 
 # ---------- Vérification health ----------
 echo "[..] Vérification /auth/v1/health"
 for i in $(seq 1 10); do
-  if curl -sf https://db-dev.smartefp.com/auth/v1/health >/dev/null 2>&1; then
+  if curl -sf https://db.eaumalik.com/auth/v1/health >/dev/null 2>&1; then
     echo "[OK] auth-prod répond 200 sur /auth/v1/health"
     break
   fi
@@ -124,5 +124,5 @@ done
 echo
 echo "=== Terminé ==="
 echo "Client ID : $GOOGLE_CLIENT_ID"
-echo "Redirection : https://db-dev.smartefp.com/auth/v1/callback"
+echo "Redirection : https://db.eaumalik.com/auth/v1/callback"
 echo "Test : /login → Continuer avec Google"

@@ -33,7 +33,7 @@ if [[ -z "$SR_KEY" ]]; then
   exit 1
 fi
 
-SUPABASE_URL="https://db-dev.smartefp.com"
+SUPABASE_URL="https://db.eaumalik.com"
 
 echo "[1/3] Création de l'utilisateur auth..."
 curl -fsS -X POST "${SUPABASE_URL}/auth/v1/admin/users" \
