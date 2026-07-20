@@ -48,7 +48,13 @@ function LoginInner() {
 
   // 'choice' = écran de choix (client Google / staff admin)
   // 'admin'  = formulaire email + mot de passe + CAPTCHA (staff uniquement)
-  const [mode, setMode] = useState<'choice' | 'admin'>('choice');
+  // Détection intelligente : si callbackUrl pointe vers /admin ou /crm, ou
+  // si ?mode=admin est dans l'URL, on passe directement en mode admin
+  // (email/mdp sans Google) car ces espaces sont réservés au personnel.
+  const urlMode = searchParams.get('mode');
+  const isAdminTarget = callbackUrl.startsWith('/admin') || callbackUrl.startsWith('/crm');
+  const initialMode = (urlMode === 'admin' || isAdminTarget) ? 'admin' : 'choice';
+  const [mode, setMode] = useState<'choice' | 'admin'>(initialMode);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
