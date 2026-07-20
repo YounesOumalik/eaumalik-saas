@@ -2,14 +2,15 @@ import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { SUPABASE_COOKIE_OPTIONS } from '@/lib/supabase/cookies';
 import { absoluteLocalRedirect } from '@/lib/local-redirect';
-import { safeCallbackPath } from '@/lib/navigation';
+import { safeCallbackPath, safePostLoginLanding } from '@/lib/navigation';
 
 /** Completes the PKCE exchange after Supabase redirects back from Google. */
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code');
-  const callbackUrl = safeCallbackPath(
-    request.nextUrl.searchParams.get('callbackUrl'),
-    '/client'
+  // Force l'atterrissage vers un espace USER (jamais /api/*, /login, etc.)
+  // pour eviter qu'un callbackUrl stale ou malforme detourne l'utilisateur.
+  const callbackUrl = safePostLoginLanding(
+    request.nextUrl.searchParams.get('callbackUrl')
   );
 
   if (!code) {

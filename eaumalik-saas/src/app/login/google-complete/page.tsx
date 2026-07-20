@@ -8,7 +8,7 @@ import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
 import { PHONE_MA_REGEX } from '@/lib/utils';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 import BrandLogo from '@/components/shared/BrandLogo';
-import { safeCallbackPath } from '@/lib/navigation';
+import { safeCallbackPath, safePostLoginLanding } from '@/lib/navigation';
 
 function GoogleIcon() {
   return (
@@ -32,7 +32,7 @@ export default function GoogleCompletePage() {
 function GoogleCompleteInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = safeCallbackPath(searchParams.get('callbackUrl'), '/client');
+  const callbackUrl = safePostLoginLanding(searchParams.get('callbackUrl'));
   const { user, loading: authLoading } = useSupabaseAuth();
   // Un seul client pour tout le cycle de vie du composant : eviter qu'un
   // deuxieme createBrowserClient (avec son propre cookie-parser) relise les
