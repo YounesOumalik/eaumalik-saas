@@ -1,6 +1,6 @@
 'use client';
 
-import { LogIn, KeyRound, Mail, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { LogIn, KeyRound, Mail, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Suspense, useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -258,19 +258,7 @@ function LoginInner() {
               {loading ? <Loader2 className="animate-spin" size={16} /> : <><GoogleIcon /> Continuer avec Google</>}
             </button>
 
-            <div className="flex items-center my-5">
-              <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
-              <span className="px-3 text-xs" style={{ color: 'var(--text-secondary)' }}>ou</span>
-              <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => { window.location.href = 'https://admin.eaumalik.com'; }}
-              className="btn-outline w-full justify-center py-3 text-base flex items-center gap-2"
-            >
-              <ShieldCheck size={16} /> Espace Administration
-            </button>
+            {/* Pas de bouton Administration ici — les admins se connectent sur admin.eaumalik.com */}
 
             <p className="text-xs text-center mt-4" style={{ color: 'var(--text-secondary)' }}>
               En vous connectant, vous acceptez nos Conditions Générales de Vente.
