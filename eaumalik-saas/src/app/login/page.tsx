@@ -46,14 +46,19 @@ function LoginInner() {
   const isDevMode = !maybeSupabaseBrowserClient();
   const { refresh } = useSupabaseAuth();
 
-  // 'choice' = écran de choix (client Google / staff admin)
+  // Detection du domaine : sur admin.eaumalik.com, on force le mode admin
+  // (email/mdp uniquement, pas de Google). Sur eaumalik.com, on garde le
+  // choix client (Google) avec possibilite de basculer vers admin.
+  const isAdminDomain = typeof window !== 'undefined' && window.location.hostname.startsWith('admin.');
+
+  // 'choice' = ecran de choix (client Google / staff admin)
   // 'admin'  = formulaire email + mot de passe + CAPTCHA (staff uniquement)
-  // Détection intelligente : si callbackUrl pointe vers /admin ou /crm, ou
+  // Detection intelligente : si callbackUrl pointe vers /admin ou /crm, ou
   // si ?mode=admin est dans l'URL, on passe directement en mode admin
-  // (email/mdp sans Google) car ces espaces sont réservés au personnel.
+  // (email/mdp sans Google) car ces espaces sont reserves au personnel.
   const urlMode = searchParams.get('mode');
   const isAdminTarget = callbackUrl.startsWith('/admin') || callbackUrl.startsWith('/crm');
-  const initialMode = (urlMode === 'admin' || isAdminTarget) ? 'admin' : 'choice';
+  const initialMode = isAdminDomain || urlMode === 'admin' || isAdminTarget ? 'admin' : 'choice';
   const [mode, setMode] = useState<'choice' | 'admin'>(initialMode);
 
   const [loading, setLoading] = useState(false);
@@ -258,7 +263,7 @@ function LoginInner() {
 
             <button
               type="button"
-              onClick={() => { setMode('admin'); setError(''); }}
+              onClick={() => { window.location.href = 'https://admin.eaumalik.com'; }}
               className="btn-outline w-full justify-center py-3 text-base flex items-center gap-2"
             >
               <ShieldCheck size={16} /> Espace Administration
@@ -316,11 +321,13 @@ function LoginInner() {
               </button>
             </form>
 
+            {!isAdminDomain && (
             <div className="flex items-center justify-center mt-5 text-sm">
               <button type="button" onClick={() => { setMode('choice'); setError(''); setPassword(''); setCaptchaAnswer(''); }} className="text-primary-400 hover:text-primary-300 font-semibold">
                 ← Retour
               </button>
             </div>
+            )}
           </>
         )}
       </div>

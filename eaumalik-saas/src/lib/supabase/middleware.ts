@@ -29,13 +29,32 @@ function isProtected(pathname: string) {
   );
 }
 
+/**
+ * Detecte si la requete vient du sous-domaine admin (admin.eaumalik.com).
+ * Utilise le header Host forwarde par Caddy, avec fallback sur nextUrl.hostname.
+ */
+function isAdminDomain(request: NextRequest): boolean {
+  const host = request.headers.get('host') || request.nextUrl.hostname;
+  return host.startsWith('admin.');
+}
+
+/**
+ * Routes blocables sur le domaine admin (ne doivent JAMAIS etre servies
+ * aux staff qui se connectent exclusivement par email/mot de passe).
+ */
+const ADMIN_BLOCKED_PREFIXES = ['/api/auth/callback', '/login/google-complete'];
+
 export async function updateSupabaseSession(request: NextRequest) {
   // Expose le pathname courant aux Server Components (utile pour /crm/layout
-  // qui doit reconstruire un callbackUrl précis quand il redirige vers /login).
-  // On passe par `request.headers` (forwardé au RSC) pour ne pas dépendre
-  // d'une extension propriétaire.
+  // qui doit reconstruire un callbackUrl precis quand il redirige vers /login).
+  // On passe par `request.headers` (forwarde au RSC) pour ne pas dependre
+  // d'une extension proprietaire.
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-crm-pathname', request.nextUrl.pathname + request.nextUrl.search);
+
+  // Detection du domaine admin (admin.eaumalik.com).
+  // Sur ce sous-domaine : pas de Google OAuth, pas de google-complete.
+  const adminDomain = isAdminDomain(request);
 
   // Pré-crée la réponse pour pouvoir modifier ses headers/cookies.
   let response = NextResponse.next({ request: { headers: requestHeaders } });
@@ -82,6 +101,14 @@ export async function updateSupabaseSession(request: NextRequest) {
     return redirect;
   };
 
+  // Bloque les routes Google OAuth sur le domaine admin.
+  // Les staffs se connectent par email/mot de passe uniquement.
+  if (adminDomain && ADMIN_BLOCKED_PREFIXES.some(p => request.nextUrl.pathname.startsWith(p))) {
+    return withSessionCookies(
+      absoluteRedirectResponse(request, '/login', { error: 'oauth_not_available_on_admin' })
+    );
+  }
+
   // Protection des routes privées. On utilise une Location ABSOLUE car le
   // runtime Next.js (web/sandbox) valide le header Location avec `new URL(loc)`
   // SANS base → une Location relative fait crasher le middleware
@@ -91,16 +118,20 @@ export async function updateSupabaseSession(request: NextRequest) {
     return withSessionCookies(
       absoluteRedirectResponse(request, '/login', {
         callbackUrl: request.nextUrl.pathname + request.nextUrl.search,
+        ...(adminDomain ? { mode: 'admin' } : {}),
       })
     );
   }
 
   // Redirection vers google-complete si l'utilisateur est connecté mais son
   // profil est incomplet (téléphone/ville manquants après connexion Google).
+  // S'applique UNIQUEMENT sur le domaine principal (eaumalik.com).
+  // Sur admin.eaumalik.com, les staffs ne passent jamais par Google.
   if (
     isAuthed &&
     !request.nextUrl.pathname.startsWith('/login/google-complete') &&
-    !request.nextUrl.pathname.startsWith('/login')
+    !request.nextUrl.pathname.startsWith('/login') &&
+    !adminDomain // Sur admin.eaumalik.com, pas de check profil Google.
   ) {
     try {
       const { data: userData } = await supabase.auth.getUser();

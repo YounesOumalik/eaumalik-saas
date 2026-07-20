@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { createSupabaseServerClient, createSupabaseServiceRoleClient, requireUser, effectivePermissions } from '@/lib/supabase/server';
 import { getDevUserFromCookie } from '@/lib/auth/devSession';
 import { isMockMode } from '@/lib/api-guard';
+import { getAppOrigin } from '@/lib/app-origin';
 
 /** Profil agent minimal renvoyé au front pour signer les actions (annulation, etc.). */
 export interface CurrentAgentProfile {
@@ -94,10 +95,7 @@ export async function registerUserAction(input: RegisterInput) {
         address: parsed.data.address ?? null,
         referred_by: parsed.data.referredBy ?? null,
       },
-      emailRedirectTo:
-        process.env.NEXT_PUBLIC_APP_URL
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
-          : undefined,
+      emailRedirectTo: `${getAppOrigin()}/login`,
     },
   });
 

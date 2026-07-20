@@ -32,14 +32,13 @@ const nextConfig = {
     // résolve vers node_modules/pdfkit/js/data/ et non .next/server/vendor-chunks/.
     serverComponentsExternalPackages: ['pdfkit'],
     serverActions: {
-      // Origin serveur autorisée pour Server Actions.
-      // Production : valeur issue de NEXT_PUBLIC_APP_URL. Dev : localhost.
+      // Origins autorisees pour les Server Actions.
+      // Multi-domaine : eaumalik.com (clients) + admin.eaumalik.com (staff).
+      // Dev : localhost uniquement.
       allowedOrigins:
         process.env.NODE_ENV === 'development'
           ? ['localhost:3000']
-          : process.env.NEXT_PUBLIC_APP_URL
-            ? [process.env.NEXT_PUBLIC_APP_URL.replace(/^https?:\/\//, '')]
-            : [],
+          : ['eaumalik.com', 'www.eaumalik.com', 'admin.eaumalik.com'],
     },
   },
   webpack: (config, { dev }) => {

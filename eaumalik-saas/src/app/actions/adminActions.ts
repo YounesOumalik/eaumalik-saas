@@ -57,6 +57,7 @@ async function gate() {
 }
 
 import { isMockMode } from '@/lib/api-guard';
+import { getAppOrigin } from '@/lib/app-origin';
 import { hashPassword } from '@/lib/auth/password';
 
 function getSupabaseOrThrow() {
@@ -243,7 +244,7 @@ export async function sendStaffPasswordResetAction(raw: unknown) {
     if (targetError) throw targetError;
     if (!target?.email) return { success: false as const, error: 'Compte introuvable.' };
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://eaumalik.com';
+    const appUrl = getAppOrigin();
     const { error } = await supabase.auth.resetPasswordForEmail(target.email, {
       redirectTo: `${appUrl}/login/reinitialiser`,
     });
