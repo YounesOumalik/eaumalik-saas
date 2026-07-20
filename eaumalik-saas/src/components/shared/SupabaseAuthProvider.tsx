@@ -48,24 +48,29 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   // which can cause session flapping (and apparent automatic logouts).
   const supabase = useMemo(() => maybeSupabaseBrowserClient(), []);
 
-  const fetchProfile = useCallback(async (uid: string) => {
+  const fetchProfile = useCallback(async (uid: string, currentUser?: any) => {
     if (!supabase) return;
     const { data } = await supabase
       .from('users')
       .select('role, permissions, full_name')
       .eq('id', uid)
       .single();
-    // `isAdmin` couvre superadmin ET administrator (droits étendus).
-    // Pour les opérations super-admin only (ex. supprimer superadmin), on
-    // utilise `isSuperAdmin` calculé via role === 'admin'.
-    const r = (data?.role as string) ?? '';
+
+    // Fallback : si la RLS empeche de lire public.users (vue bridge),
+    // on utilise le user_metadata.role du JWT Supabase (toujours present).
+    // Cela garantit que l admin voit sa sidebar meme si les policies
+    // RLS sont momentanement restrictives.
+    const dbRole = (data?.role as string) ?? '';
+    const jwtRole = (currentUser?.user_metadata?.role as string) ?? '';
+    const r = dbRole || jwtRole;
+
     setRole(r || null);
     setIsAdmin(r === 'admin' || r === 'administrator');
     setPermissions((data?.permissions as Record<string, boolean> | null) ?? null);
     setDisplayName(
-      (data?.full_name as string | undefined) ?? user?.email ?? ''
+      (data?.full_name as string | undefined) ?? currentUser?.email ?? ''
     );
-  }, [supabase, user?.email]);
+  }, [supabase]);
 
   const refresh = useCallback(async () => {
     if (!supabase) {
@@ -76,7 +81,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     setSession(data.session);
     setUser(data.session?.user ?? null);
     if (data.session?.user) {
-      await fetchProfile(data.session.user.id);
+      await fetchProfile(data.session.user.id, data.session.user);
     } else {
       setRole(null);
       setIsAdmin(false);
@@ -96,7 +101,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
-        void fetchProfile(newSession.user.id);
+        void fetchProfile(newSession.user.id, newSession.user);
       } else {
         setIsAdmin(false);
         setRole(null);
