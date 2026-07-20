@@ -1,6 +1,13 @@
 import HeroSection from '@/components/landing/HeroSection';
 
-export const revalidate = 60;
+// La page d'accueil fait des appels Supabase (listProducts, listActivePromotions)
+// qui retournent 401 pendant le build si l'API n'est pas authentifiée. On force
+// le rendu dynamique : la page est rendue à chaque requête, où les cookies et
+// headers sont disponibles. Le cache HTTP (Cache-Control) reste géré en aval
+// par Caddy/Nginx. ISR retiré car incompatible avec un build reproductible sans
+// dépendance réseau stable côté build.
+export const dynamic = 'force-dynamic';
+
 import FiltrationSection from '@/components/landing/FiltrationSection';
 import BoutiquePromotions from '@/components/boutique/BoutiquePromotions';
 import ProductsPreview from '@/components/landing/ProductsPreview';

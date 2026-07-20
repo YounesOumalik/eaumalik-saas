@@ -3,6 +3,11 @@ import BoutiqueClient from './BoutiqueClient';
 import { Metadata } from 'next';
 import { toPublicProduct, withPublicMediaUrl } from '@/lib/public-media';
 
+// Forçage du rendu dynamique (cf. commentaire dans page.tsx) : les requêtes
+// Supabase (listProducts, listActivePromotions) retournent 401 pendant le build
+// si l'API n'est pas authentifiée. Le rendu à la demande évite ce piège.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Boutique — Purificateurs d\'eau et Filtres',
   description:
