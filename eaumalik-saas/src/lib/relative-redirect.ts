@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { safeCallbackPath } from './navigation';
+import { browserSafeRequestOrigin } from './request-origin';
 
 type SearchValue = string | number | boolean | null | undefined;
 
@@ -40,9 +41,11 @@ export function absoluteRedirectUrl(
  * `TypeError: Invalid URL` (ERR_INVALID_URL) — ce qui casse TOUTES les routes
  * protégées (/admin, /crm, /client) et la redirection post-Google.
  *
- * On utilise `request.nextUrl.origin` comme base : derrière un reverse-proxy
- * correctement configuré (Caddy envoie X-Forwarded-Proto + Host), cet origin
- * est l'origin public (ex: https://eaumalik.com), pas le bind address interne.
+ * On déduit l'origine publique à partir des headers X-Forwarded-* (et non de
+ * `request.nextUrl.origin`, qui peut rester figé sur l'adresse interne du
+ * container Docker, ex: http://0.0.0.0:3100). Résultat : on redirige TOUJOURS
+ * vers un host public joignable depuis le navigateur (ex: https://eaumalik.com),
+ * jamais vers une addresse non routable.
  */
 export function absoluteRedirectResponse(
   request: NextRequest,
@@ -50,7 +53,8 @@ export function absoluteRedirectResponse(
   searchParams: Record<string, SearchValue> = {},
   status: 307 | 302 = 307
 ): NextResponse {
-  const target = absoluteRedirectUrl(request.nextUrl.origin, pathname, searchParams);
+  const origin = browserSafeRequestOrigin(request);
+  const target = absoluteRedirectUrl(origin, pathname, searchParams);
   return new NextResponse(null, {
     status,
     headers: { Location: target.toString() },

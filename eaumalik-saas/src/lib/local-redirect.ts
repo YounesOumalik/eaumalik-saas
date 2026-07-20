@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { safeCallbackPath } from './navigation';
+import { browserSafeRequestOrigin } from './request-origin';
 
 type SearchValue = string | number | boolean | null | undefined;
 
@@ -40,10 +41,14 @@ export function localRedirect(
 }
 
 /**
- * Variante avec Location ABSOLUE, basée sur `request.nextUrl.origin`.
- * À utiliser dans les Route Handlers qui peuvent servir de redirects après
- * action (ex: /api/auth/callback après OAuth Google) quand on veut garantir
- * une URL valide côté navigateur et côté runtime Next.js.
+ * Variante avec Location ABSOLUE, basée sur les headers X-Forwarded-* (et
+ * non `request.nextUrl.origin`, qui peut rester figé sur l'adresse interne
+ * du container Docker). Garantit qu'on redirige vers un host public joignable
+ * depuis le navigateur (ex: https://eaumalik.com), jamais vers
+ * http://0.0.0.0:3100 ou http://localhost:3100.
+ *
+ * À utiliser dans les Route Handlers qui servent de redirects après action
+ * (ex: /api/auth/callback après OAuth Google).
  */
 export function absoluteLocalRedirect(
   request: NextRequest,
@@ -52,7 +57,8 @@ export function absoluteLocalRedirect(
   status: 307 | 302 = 307
 ): NextResponse {
   const safePathname = safeCallbackPath(pathname, '/');
-  const target = new URL(safePathname, request.nextUrl.origin);
+  const origin = browserSafeRequestOrigin(request);
+  const target = new URL(safePathname, origin);
 
   for (const [key, value] of Object.entries(searchParams)) {
     if (value !== null && value !== undefined) {
