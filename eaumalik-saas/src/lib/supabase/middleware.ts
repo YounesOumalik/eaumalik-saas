@@ -103,9 +103,17 @@ export async function updateSupabaseSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith('/login')
   ) {
     try {
-      const { data: userIdData } = await supabase.auth.getUser();
-      const userId = userIdData?.user?.id;
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
+      const userId = user?.id;
       if (!userId) {
+        return response;
+      }
+
+      // Admins et staff : dispenses du check telephone/ville.
+      // Ils se connectent par email/mdp et accedent a /admin ou /crm.
+      const role = (user?.user_metadata?.role as string) ?? 'client';
+      if (role === 'admin' || role === 'staff') {
         return response;
       }
 
