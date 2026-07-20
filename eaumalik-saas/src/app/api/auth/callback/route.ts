@@ -1,7 +1,7 @@
 import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { SUPABASE_COOKIE_OPTIONS } from '@/lib/supabase/cookies';
-import { localRedirect } from '@/lib/local-redirect';
+import { absoluteLocalRedirect } from '@/lib/local-redirect';
 import { safeCallbackPath } from '@/lib/navigation';
 
 /** Completes the PKCE exchange after Supabase redirects back from Google. */
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   );
 
   if (!code) {
-    return localRedirect('/login', {
+    return absoluteLocalRedirect(request, '/login', {
       callbackUrl,
       error: 'oauth_code_missing',
     });
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   // Cookies must be written on this redirect response. Mutating a separate
   // cookie store would lose Set-Cookie headers when the response is returned.
-  const response = localRedirect('/login/google-complete', { callbackUrl });
+  const response = absoluteLocalRedirect(request, '/login/google-complete', { callbackUrl });
   const pendingCookies: Parameters<SetAllCookies>[0] = [];
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    const errorResponse = localRedirect('/login', {
+    const errorResponse = absoluteLocalRedirect(request, '/login', {
       callbackUrl,
       error: 'oauth_exchange_failed',
     });

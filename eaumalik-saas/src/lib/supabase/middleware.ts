@@ -15,7 +15,7 @@
 import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { SUPABASE_COOKIE_OPTIONS } from './cookies';
-import { relativeRedirectLocation } from '../relative-redirect';
+import { absoluteRedirectResponse } from '../relative-redirect';
 
 const ADMIN_PREFIX = '/admin';
 const CRM_PREFIX = '/crm';
@@ -82,17 +82,15 @@ export async function updateSupabaseSession(request: NextRequest) {
     return redirect;
   };
 
-  // Protection des routes privées. Keep Location relative: request.url may
-  // contain Docker's bind address (0.0.0.0:3100) behind a reverse proxy.
+  // Protection des routes privées. On utilise une Location ABSOLUE car le
+  // runtime Next.js (web/sandbox) valide le header Location avec `new URL(loc)`
+  // SANS base → une Location relative fait crasher le middleware
+  // (TypeError: Invalid URL), cassant toutes les routes protégées.
+  // `request.nextUrl.origin` = origin public derrière Caddy (X-Forwarded-*).
   if (isProtected(request.nextUrl.pathname) && !isAuthed) {
     return withSessionCookies(
-      new NextResponse(null, {
-        status: 307,
-        headers: {
-          Location: relativeRedirectLocation('/login', {
-            callbackUrl: request.nextUrl.pathname + request.nextUrl.search,
-          }),
-        },
+      absoluteRedirectResponse(request, '/login', {
+        callbackUrl: request.nextUrl.pathname + request.nextUrl.search,
       })
     );
   }
@@ -141,13 +139,8 @@ export async function updateSupabaseSession(request: NextRequest) {
 
       if (!isComplete) {
         return withSessionCookies(
-          new NextResponse(null, {
-            status: 307,
-            headers: {
-              Location: relativeRedirectLocation('/login/google-complete', {
-                callbackUrl: request.nextUrl.pathname + request.nextUrl.search,
-              }),
-            },
+          absoluteRedirectResponse(request, '/login/google-complete', {
+            callbackUrl: request.nextUrl.pathname + request.nextUrl.search,
           })
         );
       }
