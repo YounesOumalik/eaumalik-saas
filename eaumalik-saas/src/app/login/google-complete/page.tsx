@@ -1,7 +1,7 @@
 'use client';
 
 import { Phone, MapPin, Loader2, CheckCircle2 } from 'lucide-react';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
@@ -34,6 +34,11 @@ function GoogleCompleteInner() {
   const searchParams = useSearchParams();
   const callbackUrl = safeCallbackPath(searchParams.get('callbackUrl'), '/client');
   const { user, loading: authLoading } = useSupabaseAuth();
+  // Un seul client pour tout le cycle de vie du composant : eviter qu'un
+  // deuxieme createBrowserClient (avec son propre cookie-parser) relise les
+  // cookies avant qu'ils soient attaches au document, ce qui ferait
+  // auth.getUser() renvoyer null meme apres un login Google reussi.
+  const supabase = useMemo(() => maybeSupabaseBrowserClient(), []);
 
   const [submitting, setSubmitting] = useState(false);
   const [phone, setPhone] = useState('');
@@ -55,8 +60,7 @@ function GoogleCompleteInner() {
       return;
     }
 
-    const profileClient = maybeSupabaseBrowserClient();
-    if (!profileClient) {
+    if (!supabase) {
       setError('Configuration Supabase manquante.');
       setProfileChecked(true);
       return;
@@ -64,7 +68,7 @@ function GoogleCompleteInner() {
 
     void (async () => {
       try {
-        const { data: row, error: profileError } = await profileClient
+        const { data: row, error: profileError } = await supabase
           .from('users')
           .select('phone, city')
           .eq('id', user.id)
@@ -102,13 +106,17 @@ function GoogleCompleteInner() {
       return;
     }
 
+    if (submitting) return;
     setSubmitting(true);
     try {
-      const supabase = maybeSupabaseBrowserClient();
       if (!supabase) throw new Error('Supabase manquant');
-
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) throw new Error('Utilisateur non connecte');
+      // Source de verite : le user deja charge dans le contexte React (via
+      // SupabaseAuthProvider). JAMAIS refaire un auth.getUser() ici, ca
+      // instancierait un cookie-parser potentiellement desynchronise des
+      // cookies qui viennent d'etre poses par le callback OAuth, et
+      // getUser() renverrait null => "Utilisateur non connecte" bloqueur.
+      if (!user) throw new Error('Utilisateur non connecte');
+      const currentUser = { id: user.id };
 
       const { error: updateErr } = await supabase
         .from('users')
@@ -117,7 +125,14 @@ function GoogleCompleteInner() {
 
       if (updateErr) throw updateErr;
 
-      await supabase.auth.updateUser({ data: { phone, city } });
+      // Best-effort : mise a jour du user_metadata. Si elle echoue (JWT
+      // expire, reseau), on ne bloque pas la fin d'inscription : la table
+      // users a deja ete mise a jour.
+      try {
+        await supabase.auth.updateUser({ data: { phone, city } });
+      } catch {
+        /* noop */
+      }
 
       setSuccess('Profil complete avec succes !');
 
