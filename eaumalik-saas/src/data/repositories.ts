@@ -418,6 +418,86 @@ export async function createOrder(input: {
   return { ...(data as Order), items: input.items as unknown as OrderItem[] };
 }
 
+/**
+ * Réclame les commandes orphelines (user_id NULL) qui correspondent au user
+ * courant : correspondance par client_phone (clé métier fiable, requise
+ * à la fois au signup et au checkout) puis, en fallback, par client_name
+ * normalisé. Une fois rattachées, les commandes apparaissent dans
+ * l'espace client ET la policy RLS `Orders self-read` les expose.
+ *
+ * Sans cette étape, les commandes créées en mode invité (avant
+ * authentification) restent invisibles côté client.
+ */
+export async function claimOrphanOrdersForUser(input: {
+  userId: string;
+  email: string;
+  phone?: string | null;
+  fullName?: string | null;
+}): Promise<number> {
+  if (!input.userId) return 0;
+  const phone = (input.phone ?? '').trim();
+  const name = (input.fullName ?? '').trim().toLowerCase();
+
+  if (shouldUseMocks()) {
+    const orders = readOrders();
+    let updated = 0;
+    const next = orders.map((o: any) => {
+      if (o.user_id) return o;
+      const matchPhone = phone && o.client_phone && o.client_phone === phone;
+      const matchName = name && o.client_name && o.client_name.trim().toLowerCase() === name;
+      if (matchPhone || matchName) {
+        updated += 1;
+        return { ...o, user_id: input.userId, updated_at: new Date().toISOString() };
+      }
+      return o;
+    });
+    if (updated > 0) {
+      writeOrders(next);
+      // Effet de bord : si une commande rattachée est livrée, on s'assure que
+      // les fiches maintenance sont créées (parcours déjà couvert par le
+      // listener côté admin, mais on rejoue la garantie côté client).
+      try {
+        const { ensureMaintenanceForOrder } = await import('@/data/repositories');
+        for (const o of next) {
+          if (o.user_id === input.userId && o.status === 'livree') {
+            await ensureMaintenanceForOrder(o as Order);
+          }
+        }
+      } catch {
+        /* no-op */
+      }
+    }
+    return updated;
+  }
+
+  const supabase = await getSupabaseAdmin();
+  // Match par téléphone (prioritaire), puis par nom. On fait deux updates
+  // séquentiels pour rester compatible PostgREST (pas de OR multi-colonnes
+  // quand l'une attend une égalité stricte et l'autre une comparaison lower).
+  let totalUpdated = 0;
+  if (phone) {
+    const { data, error } = await supabase
+      .from('orders')
+      .update({ user_id: input.userId, updated_at: new Date().toISOString() })
+      .is('user_id', null)
+      .eq('client_phone', phone)
+      .select('id');
+    if (error) throw error;
+    totalUpdated += (data ?? []).length;
+  }
+  if (name) {
+    const { data, error } = await supabase
+      .from('orders')
+      .update({ user_id: input.userId, updated_at: new Date().toISOString() })
+      .is('user_id', null)
+      .ilike('client_name', name)
+      .select('id');
+    if (error) throw error;
+    totalUpdated += (data ?? []).length;
+  }
+  return totalUpdated;
+}
+
 // ============================================================================
 // USERS / CLIENTS
 // ============================================================================

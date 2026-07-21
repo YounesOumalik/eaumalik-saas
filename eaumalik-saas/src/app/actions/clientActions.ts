@@ -20,6 +20,7 @@ import {
   writeNewsRaw,
   readProductsRaw,
   listMaintenanceRecordsForUser,
+  claimOrphanOrdersForUser,
 } from '@/data/repositories';
 import type { MaintenanceRecord } from '@/types';
 
@@ -134,6 +135,17 @@ function normalizeMessage(row: any) {
 export async function getClientDashboardData() {
   const user = await getCurrentUser();
   if (!user) return { success: false as const, error: 'Non authentifié.' };
+
+  // Réclame les commandes orphelines (user_id NULL) qui matchent ce user
+  // par téléphone / nom. Étape indispensable : sans elle, les commandes
+  // créées en mode invité (avant l'authentification) restent invisibles côté
+  // client à cause de la policy RLS `Orders self-read` (user_id = auth.uid()).
+  await claimOrphanOrdersForUser({
+    userId: user.id,
+    email: user.email,
+    phone: (user as any).phone ?? null,
+    fullName: (user as any).full_name ?? null,
+  });
 
   // Mock : mêmes données fonctionnelles que Supabase, depuis data-store/*.json.
   if (isMockMode()) {
