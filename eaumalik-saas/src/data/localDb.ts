@@ -20,6 +20,9 @@ const NEWS_FILE = path.join(DB_DIR, 'news.json');
 const MAINTENANCE_FILE = path.join(DB_DIR, 'maintenance.json');
 const PASSWORD_RESETS_FILE = path.join(DB_DIR, 'password_resets.json');
 const RESTOCK_HISTORY_FILE = path.join(DB_DIR, 'restock_history.json');
+const LOCATIONS_FILE = path.join(DB_DIR, 'locations.json');
+const PRODUCT_LOCATION_STOCK_FILE = path.join(DB_DIR, 'product_location_stock.json');
+const TRANSFER_REQUESTS_FILE = path.join(DB_DIR, 'transfer_requests.json');
 
 // Initialize with mock data if files don't exist
 if (!fs.existsSync(PRODUCTS_FILE)) {
@@ -75,6 +78,22 @@ if (!fs.existsSync(NEWS_FILE)) {
 }
 if (!fs.existsSync(RESTOCK_HISTORY_FILE)) {
   fs.writeFileSync(RESTOCK_HISTORY_FILE, JSON.stringify([], null, 2));
+}
+if (!fs.existsSync(LOCATIONS_FILE)) {
+  // Seed 3 localités pour le mode mock (réplique du seed SQL 0014_locations.sql).
+  const now = new Date().toISOString();
+  const seeded = [
+    { id: 'loc-depot-casa', code: 'D-CASA-DEPOT', name: 'Dépôt principal — Casablanca', type: 'depot', address: '', city: 'Casablanca', phone: '', capacity_units: 0, capacity_area_m2: 0, is_active: true, is_archived: false, notes: 'Seed initial', created_at: now, updated_at: now },
+    { id: 'loc-magasin-casa', code: 'M-CASA-CENTRAL', name: 'Magasin central — Casablanca', type: 'magasin', address: '', city: 'Casablanca', phone: '', capacity_units: 0, capacity_area_m2: 0, is_active: true, is_archived: false, notes: 'Seed initial', created_at: now, updated_at: now },
+    { id: 'loc-presentoir-casa', code: 'P-SHOWROOM', name: 'Showroom / Présentoir', type: 'presentoir', address: '', city: 'Casablanca', phone: '', capacity_units: 0, capacity_area_m2: 0, is_active: true, is_archived: false, notes: 'Seed initial', created_at: now, updated_at: now },
+  ];
+  fs.writeFileSync(LOCATIONS_FILE, JSON.stringify(seeded, null, 2));
+}
+if (!fs.existsSync(PRODUCT_LOCATION_STOCK_FILE)) {
+  fs.writeFileSync(PRODUCT_LOCATION_STOCK_FILE, JSON.stringify([], null, 2));
+}
+if (!fs.existsSync(TRANSFER_REQUESTS_FILE)) {
+  fs.writeFileSync(TRANSFER_REQUESTS_FILE, JSON.stringify([], null, 2));
 }
 
 // ---------------------------------------------------------
@@ -278,4 +297,42 @@ export function readMaintenance(): MaintenanceBundle {
 
 export function writeMaintenance(bundle: MaintenanceBundle) {
   fs.writeFileSync(MAINTENANCE_FILE, JSON.stringify(bundle, null, 2));
+}
+
+// ---------------------------------------------------------
+// Locations (dépôts / magasins / présentoirs) — mock JSON
+// Format : tableau de MockLocation (snake_case compatible DB).
+// Migré depuis data-store/ pour aligner avec le pattern des autres tables.
+// ---------------------------------------------------------
+
+export interface MockLocation {
+  id: string;
+  code: string;
+  name: string;
+  type: 'depot' | 'magasin' | 'presentoir';
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  capacity_units: number;
+  capacity_area_m2: number;
+  is_active: boolean;
+  is_archived: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function readLocationsRaw(): MockLocation[] {
+  try {
+    const data = fs.readFileSync(LOCATIONS_FILE, 'utf-8');
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as MockLocation[];
+  } catch {
+    return [];
+  }
+}
+
+export function writeLocationsRaw(locations: MockLocation[]): void {
+  fs.writeFileSync(LOCATIONS_FILE, JSON.stringify(locations, null, 2));
 }

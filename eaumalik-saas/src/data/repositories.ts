@@ -290,8 +290,15 @@ export async function adjustProductStock(
     reason: StockMovementReason;
     note?: string | null;
     created_by?: string | null;
+    /**
+     * Si fourni, le mouvement s'applique à une localité spécifique : on maj
+     * `product_location_stock` (et le trigger SQL recalcule `products.stock`
+     * global en SUM). Si null/absent, comportement legacy : maj directe de
+     * `products.stock` sans localité (back-compat avec l'existant).
+     */
+    locality_id?: string | null;
   },
-): Promise<{ product: Product; event: ProductRestock }> {
+): Promise<{ product: Product; event: ProductRestock; locality_stock?: number | null }> {
   if (!Number.isFinite(input.delta) || !Number.isInteger(input.delta) || input.delta === 0) {
     throw new Error('Quantité invalide : entier non-zéro attendu.');
   }
@@ -340,16 +347,56 @@ export async function adjustProductStock(
     created_at: new Date().toISOString(),
   };
 
+  // ----- MODE MOCK -----
   if (shouldUseMocks()) {
     const list = readProducts();
     const idx = list.findIndex(p => p.id === productId);
     if (idx === -1) throw new Error('Produit introuvable.');
+
+    // Si localité précisée : on maj product_location_stock et on RECALCULE
+    // manuellement le stock global (le trigger SQL n'existe pas en mock).
+    if (input.locality_id) {
+      const path = require('path');
+      const fs = require('fs');
+      const plsFile = path.join(process.cwd(), 'data-store', 'product_location_stock.json');
+      let arr: Array<{ product_id: string; location_id: string; quantity: number; updated_at: string }> = [];
+      if (fs.existsSync(plsFile)) arr = JSON.parse(fs.readFileSync(plsFile, 'utf-8'));
+      const existing = arr.find((r) => r.product_id === productId && r.location_id === input.locality_id);
+      const previousQty = existing?.quantity ?? 0;
+      const newQty = Math.max(0, previousQty + event.quantity);
+      if (existing) {
+        existing.quantity = newQty;
+        existing.updated_at = event.created_at;
+      } else {
+        arr.push({ product_id: productId, location_id: input.locality_id, quantity: newQty, updated_at: event.created_at });
+      }
+      fs.writeFileSync(plsFile, JSON.stringify(arr, null, 2));
+
+      // Recalcule products.stock = SUM(qty) pour ce produit (mock : pas de trigger).
+      const newGlobal = arr
+        .filter((r) => r.product_id === productId)
+        .reduce((acc, r) => acc + r.quantity, 0);
+      list[idx] = {
+        ...list[idx],
+        stock: newGlobal,
+        is_out_of_stock: newGlobal === 0 ? true : (newGlobal > 0 ? false : list[idx].is_out_of_stock),
+        updated_at: event.created_at,
+      };
+      writeProducts(list);
+
+      const history = readRestockHistory();
+      // Marque la localité source (pour les entrées : c'est aussi la destination).
+      history.push({ ...event, source_location_id: input.locality_id } as any);
+      writeRestockHistory(history);
+      return { product: list[idx], event, locality_stock: newQty };
+    }
+
+    // Pas de localité : comportement legacy inchangé.
     const previousStock = list[idx].stock ?? 0;
     const newStock = Math.max(0, previousStock + event.quantity);
     list[idx] = {
       ...list[idx],
       stock: newStock,
-      // Auto-flag : on coche is_out_of_stock si on tombe à 0 suite à une sortie.
       is_out_of_stock: newStock === 0 ? true : (newStock > 0 ? false : list[idx].is_out_of_stock),
       updated_at: event.created_at,
     };
@@ -365,6 +412,77 @@ export async function adjustProductStock(
   // puis on INSERT l'événement. Service role pour contourner la RLS.
   const supabase = await getSupabaseAdmin();
 
+  // ----- CAS AVEC LOCALITÉ -----
+  if (input.locality_id) {
+    // Upsert dans product_location_stock. Le trigger SQL recalcule products.stock.
+    const { data: upserted, error: upErr } = await supabase
+      .from('product_location_stock')
+      .upsert({
+        product_id: productId,
+        location_id: input.locality_id,
+        updated_at: event.created_at,
+      }, { onConflict: 'product_id,location_id' })
+      .select('quantity')
+      .single();
+    // upErr possible si ligne absente (premier mouvement sur cette localité).
+    // On lit alors la ligne ou on l'insère directement.
+    let currentQty = (upserted as any)?.quantity ?? null;
+    if (currentQty === null) {
+      const { data: existing } = await supabase
+        .from('product_location_stock')
+        .select('quantity')
+        .eq('product_id', productId)
+        .eq('location_id', input.locality_id)
+        .maybeSingle();
+      currentQty = existing?.quantity ?? 0;
+    }
+    const newQty = Math.max(0, currentQty + event.quantity);
+    const { error: writeErr } = await supabase
+      .from('product_location_stock')
+      .upsert({
+        product_id: productId,
+        location_id: input.locality_id,
+        quantity: newQty,
+        updated_at: event.created_at,
+      }, { onConflict: 'product_id,location_id' });
+    if (writeErr) throw writeErr;
+
+    // Lecture du stock global recalculé par le trigger SQL.
+    const { data: prodRow, error: prodErr } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
+    if (prodErr || !prodRow) throw prodErr ?? new Error('Produit introuvable.');
+
+    const { error: histErr } = await supabase
+      .from('product_restock_history')
+      .insert({
+        id: event.id,
+        product_id: event.product_id,
+        quantity: event.quantity,
+        restock_date: event.restock_date,
+        reason: event.reason,
+        note: event.note,
+        created_by: event.created_by,
+        created_at: event.created_at,
+        source_location_id: input.locality_id,
+      });
+    if (histErr) {
+      // Rollback : on remet la localité à son ancienne quantité.
+      await supabase.from('product_location_stock').upsert({
+        product_id: productId,
+        location_id: input.locality_id,
+        quantity: currentQty,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'product_id,location_id' });
+      throw histErr;
+    }
+
+    return { product: prodRow as Product, event, locality_stock: newQty };
+  }
+
+  // ----- CAS SANS LOCALITÉ (legacy, back-compat) -----
   const { data: row, error: readErr } = await supabase
     .from('products')
     .select('id, stock')
@@ -1615,6 +1733,610 @@ export async function readArchivedUsersRaw(): Promise<any[]> {
   const { data, error } = await supabase.from('users_archive').select('*');
   if (error) throw error;
   return data ?? [];
+}
+
+// ============================================================================
+// LOCATIONS (dépôts / magasins / présentoirs) — cf. migration 0014_locations.sql
+// Surface minimale suffisante pour servir la StaffManager (sélection des
+// localités affectées à un sous-rôle logistique). L'UI admin complète
+// (CRUD, inventaire, transferts) viendra avec `/admin/locations`.
+// ============================================================================
+
+import type { Location, LocationType, ProductLocationStockEntry, TransferRequestRow } from '@/types';
+import { readLocationsRaw as _readLocationsMock, writeLocationsRaw as _writeLocationsMock } from './localDb';
+
+/** Liste les localités. Filtre optionnel par type + statut actif/archivé. */
+export async function listLocations(filters?: {
+  type?: LocationType;
+  includeArchived?: boolean;
+  onlyActive?: boolean;
+}): Promise<Location[]> {
+  const wantsType = filters?.type;
+  const includeArchived = filters?.includeArchived ?? false;
+  const onlyActive = filters?.onlyActive ?? false;
+
+  if (shouldUseMocks()) {
+    const all = _readLocationsMock();
+    return all
+      .filter((l) => (includeArchived ? true : !l.is_archived))
+      .filter((l) => (onlyActive ? l.is_active : true))
+      .filter((l) => (wantsType ? l.type === wantsType : true))
+      .map(normalizeMockLocation);
+  }
+
+  const supabase = await getSupabaseAdmin();
+  let query = supabase.from('locations').select('*').order('type', { ascending: true }).order('name', { ascending: true });
+  if (!includeArchived) query = query.eq('is_archived', false);
+  if (onlyActive) query = query.eq('is_active', true);
+  if (wantsType) query = query.eq('type', wantsType);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).map((row) => normalizeSupabaseLocation(row));
+}
+
+/** Convertit un enregistrement snake_case (mock) vers la forme camelCase consommée par l'UI. */
+function normalizeMockLocation(row: any): Location {
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    type: row.type as LocationType,
+    address: row.address ?? null,
+    city: row.city ?? null,
+    phone: row.phone ?? null,
+    capacity_units: Number(row.capacity_units ?? 0),
+    capacity_area_m2: Number(row.capacity_area_m2 ?? 0),
+    is_active: Boolean(row.is_active),
+    is_archived: Boolean(row.is_archived),
+    notes: row.notes ?? null,
+    created_at: String(row.created_at ?? new Date().toISOString()),
+    updated_at: String(row.updated_at ?? new Date().toISOString()),
+  };
+}
+
+/** Le mock stocke déjà en snake_case compatible, mais on s'assure du typage. */
+function normalizeSupabaseLocation(row: any): Location {
+  return normalizeMockLocation(row);
+}
+
+// ============================================================================
+// CRUD localités — suit le pattern mock (JSON) / Supabase (service_role).
+// ============================================================================
+
+export interface LocationInput {
+  code: string;
+  name: string;
+  type: LocationType;
+  address?: string | null;
+  city?: string | null;
+  phone?: string | null;
+  capacity_units?: number;
+  capacity_area_m2?: number;
+  is_active?: boolean;
+  notes?: string | null;
+}
+
+export async function createLocation(input: LocationInput): Promise<Location> {
+  const now = new Date().toISOString();
+  if (shouldUseMocks()) {
+    const all = _readLocationsMock();
+    if (all.some((l) => l.code === input.code)) {
+      throw new Error(`Code localité déjà utilisé : ${input.code}`);
+    }
+    const row = {
+      id: `loc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      code: input.code,
+      name: input.name,
+      type: input.type,
+      address: input.address ?? null,
+      city: input.city ?? null,
+      phone: input.phone ?? null,
+      capacity_units: input.capacity_units ?? 0,
+      capacity_area_m2: input.capacity_area_m2 ?? 0,
+      is_active: input.is_active ?? true,
+      is_archived: false,
+      notes: input.notes ?? null,
+      created_at: now,
+      updated_at: now,
+    };
+    all.push(row);
+    _writeLocationsMock(all);
+    return normalizeMockLocation(row);
+  }
+
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('locations')
+    .insert({
+      code: input.code,
+      name: input.name,
+      type: input.type,
+      address: input.address ?? null,
+      city: input.city ?? null,
+      phone: input.phone ?? null,
+      capacity_units: input.capacity_units ?? 0,
+      capacity_area_m2: input.capacity_area_m2 ?? 0,
+      is_active: input.is_active ?? true,
+      is_archived: false,
+      notes: input.notes ?? null,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return normalizeSupabaseLocation(data);
+}
+
+export async function updateLocation(id: string, partial: Partial<LocationInput>): Promise<Location> {
+  if (shouldUseMocks()) {
+    const all = _readLocationsMock();
+    const idx = all.findIndex((l) => l.id === id);
+    if (idx < 0) throw new Error('Localité introuvable.');
+    if (partial.code && all.some((l) => l.code === partial.code && l.id !== id)) {
+      throw new Error(`Code localité déjà utilisé : ${partial.code}`);
+    }
+    all[idx] = {
+      ...all[idx],
+      ...partial,
+      updated_at: new Date().toISOString(),
+    };
+    _writeLocationsMock(all);
+    return normalizeMockLocation(all[idx]);
+  }
+
+  const supabase = await getSupabaseAdmin();
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (partial.code !== undefined) patch.code = partial.code;
+  if (partial.name !== undefined) patch.name = partial.name;
+  if (partial.type !== undefined) patch.type = partial.type;
+  if (partial.address !== undefined) patch.address = partial.address;
+  if (partial.city !== undefined) patch.city = partial.city;
+  if (partial.phone !== undefined) patch.phone = partial.phone;
+  if (partial.capacity_units !== undefined) patch.capacity_units = partial.capacity_units;
+  if (partial.capacity_area_m2 !== undefined) patch.capacity_area_m2 = partial.capacity_area_m2;
+  if (partial.is_active !== undefined) patch.is_active = partial.is_active;
+  if (partial.notes !== undefined) patch.notes = partial.notes;
+  const { data, error } = await supabase.from('locations').update(patch).eq('id', id).select('*').single();
+  if (error) throw error;
+  return normalizeSupabaseLocation(data);
+}
+
+export async function archiveLocation(id: string): Promise<Location> {
+  return updateLocation(id, { /* no field changes, just flip archived */ } as any)
+    .then(async (loc) => {
+      if (shouldUseMocks()) {
+        const all = _readLocationsMock();
+        const idx = all.findIndex((l) => l.id === id);
+        all[idx].is_archived = true;
+        all[idx].updated_at = new Date().toISOString();
+        _writeLocationsMock(all);
+        return normalizeMockLocation(all[idx]);
+      }
+      const supabase = await getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from('locations').update({ is_archived: true, updated_at: new Date().toISOString() })
+        .eq('id', id).select('*').single();
+      if (error) throw error;
+      return normalizeSupabaseLocation(data);
+    });
+}
+
+export async function restoreLocation(id: string): Promise<Location> {
+  if (shouldUseMocks()) {
+    const all = _readLocationsMock();
+    const idx = all.findIndex((l) => l.id === id);
+    if (idx < 0) throw new Error('Localité introuvable.');
+    all[idx].is_archived = false;
+    all[idx].updated_at = new Date().toISOString();
+    _writeLocationsMock(all);
+    return normalizeMockLocation(all[idx]);
+  }
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('locations').update({ is_archived: false, updated_at: new Date().toISOString() })
+    .eq('id', id).select('*').single();
+  if (error) throw error;
+  return normalizeSupabaseLocation(data);
+}
+
+export async function purgeLocation(id: string): Promise<void> {
+  if (shouldUseMocks()) {
+    const all = _readLocationsMock();
+    const filtered = all.filter((l) => l.id !== id);
+    if (filtered.length === all.length) throw new Error('Localité introuvable.');
+    _writeLocationsMock(filtered);
+    return;
+  }
+  const supabase = await getSupabaseAdmin();
+  const { error } = await supabase.from('locations').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================================
+// product_location_stock — répartition du stock par localité
+// ============================================================================
+
+export type { ProductLocationStockEntry } from '@/types';
+
+// (les types canoniques vivent dans @/types — réexport ci-dessus pour rétrocompat.)
+
+/** Lit les répartitions de stock par localité, joint produit + localité. */
+export async function listProductLocationStock(filters?: {
+  productId?: string;
+  locationId?: string;
+  onlyPositive?: boolean;
+}): Promise<ProductLocationStockEntry[]> {
+  if (shouldUseMocks()) {
+    return listProductLocationStockMock(filters);
+  }
+  const supabase = await getSupabaseAdmin();
+  let query = supabase.from('product_stock_by_location').select('*');
+  if (filters?.productId) query = query.eq('product_id', filters.productId);
+  if (filters?.locationId) query = query.eq('location_id', filters.locationId);
+  if (filters?.onlyPositive) query = query.gt('quantity', 0);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    product_id: row.product_id,
+    location_id: row.location_id,
+    quantity: Number(row.quantity),
+    updated_at: row.updated_at,
+    product: row.product_name
+      ? { id: row.product_id, name: row.product_name, category: row.product_category, stock: 0 }
+      : undefined,
+    location: row.location_code
+      ? {
+          id: row.location_id, code: row.location_code, name: row.location_name,
+          type: row.location_type, address: null, city: null, phone: null,
+          capacity_units: 0, capacity_area_m2: 0, is_active: true, is_archived: false,
+          notes: null, created_at: '', updated_at: '',
+        }
+      : undefined,
+  }));
+}
+
+function listProductLocationStockMock(filters?: {
+  productId?: string;
+  locationId?: string;
+  onlyPositive?: boolean;
+}): ProductLocationStockEntry[] {
+  // Pas de table mock pour product_location_stock : on retourne vide sauf si
+  // le fichier existe.
+  try {
+    const path = require('path');
+    const fs = require('fs');
+    const file = path.join(process.cwd(), 'data-store', 'product_location_stock.json');
+    if (!fs.existsSync(file)) return [];
+    const raw: Array<{ product_id: string; location_id: string; quantity: number; updated_at: string }> =
+      JSON.parse(fs.readFileSync(file, 'utf-8'));
+    const locations = _readLocationsMock();
+    const products = readProducts();
+    return raw
+      .filter((r) => (filters?.productId ? r.product_id === filters.productId : true))
+      .filter((r) => (filters?.locationId ? r.location_id === filters.locationId : true))
+      .filter((r) => (filters?.onlyPositive ? r.quantity > 0 : true))
+      .map((r) => {
+        const loc = locations.find((l) => l.id === r.location_id);
+        const prod = products.find((p) => p.id === r.product_id);
+        return {
+          product_id: r.product_id,
+          location_id: r.location_id,
+          quantity: r.quantity,
+          updated_at: r.updated_at,
+          product: prod
+            ? { id: prod.id, name: prod.name, category: prod.category, stock: prod.stock }
+            : undefined,
+          location: loc ? normalizeMockLocation(loc) : undefined,
+        };
+      });
+  } catch {
+    return [];
+  }
+}
+
+export async function upsertProductLocationStock(
+  productId: string,
+  locationId: string,
+  quantity: number,
+): Promise<void> {
+  if (shouldUseMocks()) {
+    const path = require('path');
+    const fs = require('fs');
+    const file = path.join(process.cwd(), 'data-store', 'product_location_stock.json');
+    let arr: Array<{ product_id: string; location_id: string; quantity: number; updated_at: string }> = [];
+    if (fs.existsSync(file)) arr = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    const idx = arr.findIndex((r) => r.product_id === productId && r.location_id === locationId);
+    if (idx >= 0) arr[idx].quantity = quantity;
+    else arr.push({ product_id: productId, location_id: locationId, quantity, updated_at: new Date().toISOString() });
+    arr[idx >= 0 ? idx : arr.length - 1].updated_at = new Date().toISOString();
+    fs.writeFileSync(file, JSON.stringify(arr, null, 2));
+    return;
+  }
+  const supabase = await getSupabaseAdmin();
+  const { error } = await supabase.from('product_location_stock').upsert(
+    { product_id: productId, location_id: locationId, quantity, updated_at: new Date().toISOString() },
+    { onConflict: 'product_id,location_id' },
+  );
+  if (error) throw error;
+}
+
+// ============================================================================
+// TRANSFERS — exécute un transfert atomique (mock direct, prod via RPC).
+// ============================================================================
+
+export type { TransferRequestRow } from '@/types';
+
+export async function listTransferRequests(filters?: {
+  status?: TransferRequestRow['status'];
+  productId?: string;
+  locationId?: string;
+  requesterId?: string;
+}): Promise<TransferRequestRow[]> {
+  if (shouldUseMocks()) {
+    return listTransferRequestsMock(filters);
+  }
+  const supabase = await getSupabaseAdmin();
+  let query = supabase.from('transfer_request_details').select('*').order('created_at', { ascending: false });
+  if (filters?.status) query = query.eq('status', filters.status);
+  if (filters?.productId) query = query.eq('product_id', filters.productId);
+  if (filters?.locationId) query = query.or(`source_location_id.eq.${filters.locationId},destination_location_id.eq.${filters.locationId}`);
+  if (filters?.requesterId) query = query.eq('requester_id', filters.requesterId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as TransferRequestRow[];
+}
+
+function listTransferRequestsMock(filters?: {
+  status?: TransferRequestRow['status'];
+  productId?: string;
+  locationId?: string;
+  requesterId?: string;
+}): TransferRequestRow[] {
+  try {
+    const path = require('path');
+    const fs = require('fs');
+    const file = path.join(process.cwd(), 'data-store', 'transfer_requests.json');
+    if (!fs.existsSync(file)) return [];
+    const rows: TransferRequestRow[] = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    return rows
+      .filter((r) => (filters?.status ? r.status === filters.status : true))
+      .filter((r) => (filters?.productId ? r.product_id === filters.productId : true))
+      .filter((r) => (filters?.locationId ? r.source_location_id === filters.locationId || r.destination_location_id === filters.locationId : true))
+      .filter((r) => (filters?.requesterId ? r.requester_id === filters.requesterId : true));
+  } catch {
+    return [];
+  }
+}
+
+export async function createTransferRequest(input: {
+  product_id: string;
+  source_location_id: string;
+  destination_location_id: string;
+  quantity: number;
+  request_type?: 'outbound' | 'inbound';
+  requester_id: string;
+  reason?: string;
+}): Promise<TransferRequestRow> {
+  const now = new Date().toISOString();
+  const row: TransferRequestRow = {
+    id: `tr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    product_id: input.product_id,
+    source_location_id: input.source_location_id,
+    destination_location_id: input.destination_location_id,
+    quantity: input.quantity,
+    request_type: input.request_type ?? 'outbound',
+    requester_id: input.requester_id,
+    reason: input.reason ?? null,
+    status: 'pending',
+    validator_id: null,
+    validated_at: null,
+    validator_comment: null,
+    executed_at: null,
+    created_at: now,
+    updated_at: now,
+  };
+
+  if (shouldUseMocks()) {
+    const path = require('path');
+    const fs = require('fs');
+    const file = path.join(process.cwd(), 'data-store', 'transfer_requests.json');
+    let arr: TransferRequestRow[] = [];
+    if (fs.existsSync(file)) arr = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    arr.unshift(row);
+    fs.writeFileSync(file, JSON.stringify(arr, null, 2));
+    return row;
+  }
+
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('transfer_requests')
+    .insert({
+      product_id: input.product_id,
+      source_location_id: input.source_location_id,
+      destination_location_id: input.destination_location_id,
+      quantity: input.quantity,
+      request_type: input.request_type ?? 'outbound',
+      requester_id: input.requester_id,
+      reason: input.reason ?? null,
+      status: 'pending',
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as TransferRequestRow;
+}
+
+export async function updateTransferRequestStatus(
+  requestId: string,
+  patch: { status: TransferRequestRow['status']; validator_id?: string; validator_comment?: string },
+): Promise<TransferRequestRow> {
+  const now = new Date().toISOString();
+  if (shouldUseMocks()) {
+    const path = require('path');
+    const fs = require('fs');
+    const file = path.join(process.cwd(), 'data-store', 'transfer_requests.json');
+    let arr: TransferRequestRow[] = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    const idx = arr.findIndex((r) => r.id === requestId);
+    if (idx < 0) throw new Error('Demande introuvable.');
+    arr[idx] = {
+      ...arr[idx],
+      ...patch,
+      validated_at: patch.status === 'approved' || patch.status === 'rejected' ? now : arr[idx].validated_at,
+      updated_at: now,
+    };
+    fs.writeFileSync(file, JSON.stringify(arr, null, 2));
+    return arr[idx];
+  }
+
+  const supabase = await getSupabaseAdmin();
+  const update: Record<string, unknown> = { status: patch.status, updated_at: now };
+  if (patch.validator_id) update.validator_id = patch.validator_id;
+  if (patch.validator_comment !== undefined) update.validator_comment = patch.validator_comment;
+  if (patch.status === 'approved' || patch.status === 'rejected') update.validated_at = now;
+  const { data, error } = await supabase.from('transfer_requests').update(update).eq('id', requestId).select('*').single();
+  if (error) throw error;
+  return data as TransferRequestRow;
+}
+
+/**
+ * Exécute un transfert atomique :
+ *  - Mock : vérifie le stock source, décrémente, incrémente la dest, écrit 2
+ *    lignes dans restock_history, recalcule products.stock.
+ *  - Supabase : appelle la RPC `eaumalik.execute_transfer_request(p_request_id)`.
+ */
+export async function executeTransferRequest(requestId: string): Promise<{
+  ok: boolean;
+  error?: string;
+  new_source_qty?: number;
+  new_dest_qty?: number;
+  new_global_stock?: number;
+}> {
+  const tr = await listTransferRequests({}).then((rows) => rows.find((r) => r.id === requestId));
+  if (!tr) return { ok: false, error: 'Demande introuvable.' };
+  if (tr.status !== 'approved') return { ok: false, error: `Demande non approuvée (status=${tr.status}).` };
+
+  if (shouldUseMocks()) {
+    const entries = await listProductLocationStock({ productId: tr.product_id });
+    const source = entries.find((e) => e.location_id === tr.source_location_id);
+    if (!source || source.quantity < tr.quantity) {
+      return { ok: false, error: 'Stock insuffisant en source.' };
+    }
+    const newSourceQty = source.quantity - tr.quantity;
+    const dest = entries.find((e) => e.location_id === tr.destination_location_id);
+    const newDestQty = (dest?.quantity ?? 0) + tr.quantity;
+    await upsertProductLocationStock(tr.product_id, tr.source_location_id, newSourceQty);
+    await upsertProductLocationStock(tr.product_id, tr.destination_location_id, newDestQty);
+
+    // Audit restock_history (mock)
+    const restock = readRestockHistory();
+    const transferGroupId = `tr-${requestId}`;
+    const srcCode = tr.source_code ?? source.location?.code ?? tr.source_location_id;
+    const dstCode = tr.destination_code ?? dest?.location?.code ?? tr.destination_location_id;
+    restock.unshift(
+      {
+        id: `${transferGroupId}-out`,
+        product_id: tr.product_id,
+        quantity: -tr.quantity,
+        restock_date: new Date().toISOString().slice(0, 10),
+        reason: 'transfer',
+        note: `Transfert sortant vers ${dstCode}`,
+        created_by: `transfer-request:${requestId}`,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: `${transferGroupId}-in`,
+        product_id: tr.product_id,
+        quantity: tr.quantity,
+        restock_date: new Date().toISOString().slice(0, 10),
+        reason: 'transfer',
+        note: `Transfert entrant depuis ${srcCode}`,
+        created_by: `transfer-request:${requestId}`,
+        created_at: new Date().toISOString(),
+      },
+    );
+    writeRestockHistory(restock);
+
+    // Recalcul products.stock global (mock : SUM sur le tableau mock).
+    const all = await listProductLocationStock({ productId: tr.product_id });
+    const newGlobal = all.reduce((acc, e) => acc + e.quantity, 0);
+    const products = readProducts();
+    const idx = products.findIndex((p) => p.id === tr.product_id);
+    if (idx >= 0) {
+      products[idx].stock = newGlobal;
+      writeProducts(products);
+    }
+
+    await updateTransferRequestStatus(requestId, { status: 'executed' });
+    return { ok: true, new_source_qty: newSourceQty, new_dest_qty: newDestQty, new_global_stock: newGlobal };
+  }
+
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase.rpc('execute_transfer_request', { p_request_id: requestId });
+  if (error) return { ok: false, error: error.message };
+  // La RPC retourne un SETOF (ok, error, new_source_qty, new_dest_qty, new_global_stock).
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.ok) return { ok: false, error: row?.error ?? "Échec de l'exécution." };
+  await updateTransferRequestStatus(requestId, { status: 'executed' });
+  return {
+    ok: true,
+    new_source_qty: row.new_source_qty,
+    new_dest_qty: row.new_dest_qty,
+    new_global_stock: row.new_global_stock,
+  };
+}
+
+// ============================================================================
+// VISIBILITÉ — localités visibles selon le rôle + affectations du user.
+// ============================================================================
+
+import { LOGISTICS_ROLE_TO_LOCATION_TYPE, LOGISTICS_ROLES } from '@/lib/supabase/server';
+
+export interface LocationVisibilityUser {
+  role: string;
+  managed_location_ids?: string[] | null;
+}
+
+/**
+ * Renvoie la liste des localités que cet utilisateur peut VOIR.
+ *  - admin / administrator / sales / stock_manager / admin_assistant : tout
+ *  - depot_manager / store_manager / presentoir_manager : intersection
+ *    managed_location_ids × localités du type correspondant à leur rôle
+ *  - autre (client, etc.) : []
+ *
+ * IMPORTANT : la fonction est conservative — un store_manager ne peut PAS
+ * voir un dépôt même si son UUID est dans managed_location_ids (sécurité).
+ */
+export function getVisibleLocationsForUser(
+  user: LocationVisibilityUser,
+  allLocations: Location[],
+): Location[] {
+  const role = user.role;
+  if (['admin', 'administrator', 'sales', 'stock_manager', 'admin_assistant'].includes(role)) {
+    return allLocations.filter((l) => !l.is_archived);
+  }
+  if ((LOGISTICS_ROLES as readonly string[]).includes(role)) {
+    const wantedType = LOGISTICS_ROLE_TO_LOCATION_TYPE[role as 'depot_manager' | 'store_manager' | 'presentoir_manager'];
+    const managed = (user.managed_location_ids ?? []).map(String);
+    return allLocations.filter(
+      (l) => !l.is_archived && l.type === wantedType && managed.includes(l.id),
+    );
+  }
+  return [];
+}
+
+/** Détermine si un user peut modifier une localité (créer/supprimer/archiver). */
+export function canManageLocation(
+  user: LocationVisibilityUser,
+  location: Location,
+): boolean {
+  const role = user.role;
+  if (['admin', 'administrator'].includes(role)) return true;
+  // Les sous-rôles logistiques peuvent gérer leurs localités affectées (UI future).
+  if ((LOGISTICS_ROLES as readonly string[]).includes(role)) {
+    const wantedType = LOGISTICS_ROLE_TO_LOCATION_TYPE[role as 'depot_manager' | 'store_manager' | 'presentoir_manager'];
+    const managed = (user.managed_location_ids ?? []).map(String);
+    return location.type === wantedType && managed.includes(location.id);
+  }
+  return false;
 }
 
 export async function readOrdersRaw(): Promise<any[]> {
