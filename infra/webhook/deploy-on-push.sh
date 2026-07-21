@@ -118,7 +118,38 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-# ---------- 6. Smoke test ----------
+# ---------- 6. Migrations SQL idempotentes (auto) ----------
+# Applique les .sql dans supabase/migrations/ qui n'ont pas encore été joués
+# sur la base prod. Suit l'état dans eaumalik._applied_migrations.
+# En cas d'échec → rollback du container sur l'image précédente.
+echo "→ Application des migrations SQL en attente…"
+if [ -f "$APP_DIR/scripts/apply-pending-migrations.sh" ]; then
+  if bash "$APP_DIR/scripts/apply-pending-migrations.sh"; then
+    echo "✅ Migrations SQL OK"
+  else
+    echo "❌ Migrations SQL échouées — rollback container vers $PREV"
+    if [ -n "$PREV" ]; then
+      docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+      docker run -d \
+        --name "$CONTAINER_NAME" \
+        --restart unless-stopped \
+        --network "$NETWORK_NAME" \
+        --env-file "$ENV_FILE" \
+        -e HOSTNAME=0.0.0.0 \
+        -e PORT="$PORT" \
+        -p "127.0.0.1:${PORT}:${PORT}" \
+        --log-driver json-file \
+        --log-opt max-size=20m \
+        --log-opt max-file=5 \
+        "$PREV" || true
+    fi
+    exit 1
+  fi
+else
+  echo "  (script apply-pending-migrations.sh absent, skip)"
+fi
+
+# ---------- 7. Smoke test ----------
 echo "→ Smoke test HTTP $PORT"
 HTTP_CODE=$(curl -fsS -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/" 2>/dev/null || echo "000")
 if [ "$HTTP_CODE" = "200" ]; then
@@ -129,7 +160,7 @@ else
   exit 1
 fi
 
-# ---------- 7. Cleanup vieux tags (garder les 3 derniers) ----------
+# ---------- 8. Cleanup vieux tags (garder les 3 derniers) ----------
 echo "→ Cleanup : garder les 3 derniers tags"
 docker images "$IMAGE_NAME" --format '{{.Tag}} {{.CreatedAt}}' \
   | grep -v 'latest' \
