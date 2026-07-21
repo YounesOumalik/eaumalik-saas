@@ -10,6 +10,85 @@ export const CATEGORY_LABELS: Record<ProductCategory, string> = {
   industriel: "Traitement de l'eau professionnel",
   consommables: 'Filtres de rechange & Pièces',
 };
+
+// ============================================================================
+// Module Logistique : localités (dépôts / magasins / présentoirs)
+// Cf. migration 0014_locations.sql.
+// ============================================================================
+
+export type LocationType = 'depot' | 'magasin' | 'presentoir';
+
+export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
+  depot: 'Dépôt (entrepôt / stockage)',
+  magasin: 'Magasin (point de vente / retrait)',
+  presentoir: 'Présentoir (showroom / exposition)',
+};
+
+/** Forme "métier" d'une localité telle que consommée par l'UI. Les colonnes
+ *  snake_case de la DB sont mappées 1-pour-1 vers des clés camelCase pour
+ *  rester cohérent avec le reste du domaine (Product, Order, etc.). */
+export interface Location {
+  id: string;
+  code: string;
+  name: string;
+  type: LocationType;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  /** Plafond de capacité en nombre d'articles. 0 = non renseigné. */
+  capacity_units: number;
+  /** Plafond de capacité en m² (surface). 0 = non renseigné. */
+  capacity_area_m2: number;
+  is_active: boolean;
+  is_archived: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Répartition du stock par localité (jointure UI). */
+export interface ProductLocationStockEntry {
+  product_id: string;
+  location_id: string;
+  quantity: number;
+  updated_at: string;
+  product?: { id: string; name: string; category: string; stock: number };
+  location?: Location;
+}
+
+/** Ligne d'une demande de transfert (jointure UI complète). */
+export type TransferStatus = 'pending' | 'approved' | 'rejected' | 'executed' | 'cancelled';
+
+export interface TransferRequestRow {
+  id: string;
+  product_id: string;
+  source_location_id: string;
+  destination_location_id: string;
+  quantity: number;
+  request_type: 'outbound' | 'inbound';
+  requester_id: string;
+  reason: string | null;
+  status: TransferStatus;
+  validator_id: string | null;
+  validated_at: string | null;
+  validator_comment: string | null;
+  executed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  // Champs joints via la vue transfer_request_details
+  product_name?: string;
+  product_category?: string;
+  source_code?: string;
+  source_name?: string;
+  source_type?: LocationType;
+  destination_code?: string;
+  destination_name?: string;
+  destination_type?: LocationType;
+  requester_name?: string;
+  requester_role?: string;
+  validator_name?: string;
+  validator_role?: string;
+}
 export interface Product {
   id: string;
   name: string;
@@ -48,7 +127,8 @@ export type StockMovementReason =
   | 'direct_sale'
   | 'correction'
   | 'loss'
-  | 'other';
+  | 'other'
+  | 'transfer';
 
 export const STOCK_MOVEMENT_REASON_LABELS: Record<StockMovementReason, string> = {
   restock:     'Approvisionnement (réassort)',
@@ -57,6 +137,7 @@ export const STOCK_MOVEMENT_REASON_LABELS: Record<StockMovementReason, string> =
   correction:  'Correction d\'inventaire',
   loss:        'Perte / casse / vol',
   other:       'Autre',
+  transfer:    'Transfert entre localités',
 };
 
 /**
@@ -84,6 +165,12 @@ export interface ProductRestock {
   /** Auteur de l'opération (email ou nom libre). */
   created_by: string | null;
   created_at: string; // ISO timestamp
+  /** Localité impactée par le mouvement (migration 0014). Null = mouvement
+   *  global sans localité (legacy / back-compat). */
+  source_location_id?: string | null;
+  destination_location_id?: string | null;
+  /** UUID partagé entre les 2 lignes d'un même transfert. */
+  transfer_group_id?: string | null;
 }
 
 export type OrderStatus =
@@ -146,7 +233,28 @@ export interface OrderItem {
   line_total: number;
 }
 
-export type UserRole = 'client' | 'admin' | 'administrator';
+/**
+ * Rôles utilisateurs EAUMALIK.
+ * - `client` : rôle par défaut (visiteur / acheteur).
+ * - `admin` / `administrator` : admin-staff (cf. `requireAdmin()`).
+ * - `sales` / `technician` / `stock_manager` / `admin_assistant` : personnel
+ *   métier historique (CRM, maintenance, stock global).
+ * - `depot_manager` / `store_manager` / `presentoir_manager` : sous-rôles
+ *   logistiques avec visibilité restreinte à leurs localités affectées
+ *   (cf. `getVisibleLocationsForUser`).
+ */
+export type UserRole =
+  | 'client'
+  | 'admin'
+  | 'administrator'
+  | 'sales'
+  | 'technician'
+  | 'stock_manager'
+  | 'admin_assistant'
+  | 'depot_manager'
+  | 'store_manager'
+  | 'presentoir_manager';
+
 export interface User {
   id: string;
   email: string;
@@ -157,6 +265,15 @@ export interface User {
   city: string | null;
   google_id: string | null;
   role: UserRole;
+  /**
+   * Liste d'UUIDs de localités que cet utilisateur peut gérer
+   * (lecture + écriture + transferts). Renseigné uniquement pour les
+   * sous-rôles logistiques (`depot_manager`, `store_manager`,
+   * `presentoir_manager`). Doit être filtré par type correspondant
+   * au rôle côté serveur (cf. `LOGISTICS_ROLE_TO_LOCATION_TYPE`).
+   * Champ introduit par la migration 0014_locations.sql.
+   */
+  managed_location_ids?: string[] | null;
   nps_score: number | null;
   /** Code de parrainage unique (8 caractères alphanumériques en majuscules). */
   referral_code?: string | null;
