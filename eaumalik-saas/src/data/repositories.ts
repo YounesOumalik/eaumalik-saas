@@ -428,6 +428,32 @@ export async function listRestockHistory(productId: string): Promise<ProductRest
   return (data ?? []) as ProductRestock[];
 }
 
+/**
+ * Liste l'historique GLOBAL des mouvements de stock (tous produits),
+ * du plus récent au plus ancien. Utilisé par le dashboard
+ * `/admin/stocks` pour alimenter les graphes "Entrées / Sorties" et
+ * l'indicateur d'activité récente.
+ *
+ * ⚠️ Volumétrie : peut croître. Le dashboard limite l'usage via
+ * `sinceDays` (défaut 90j) pour éviter de charger des années.
+ */
+export async function listAllRestockHistory(sinceDays = 90): Promise<ProductRestock[]> {
+  const sinceIso = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  if (shouldUseMocks()) {
+    return readRestockHistory()
+      .filter(r => r.created_at >= sinceIso)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('product_restock_history')
+    .select('*')
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ProductRestock[];
+}
+
 // ============================================================================
 // ORDERS
 // ============================================================================
