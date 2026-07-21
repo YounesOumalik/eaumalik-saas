@@ -27,6 +27,9 @@ import {
   CircleDot,
   Circle,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime, daysUntil } from '@/lib/utils';
@@ -34,7 +37,7 @@ import { changeOwnPasswordAction, sendClientMessageAction, updateUserProfileActi
 import { useToast } from '@/components/shared/ToastProvider';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 import { OrderTimeline } from '@/components/admin/OrderTracker';
-import type { MaintenanceRecord, MaintenanceIntervention, InterventionType, InterventionOutcome } from '@/types';
+import type { MaintenanceRecord, MaintenanceIntervention, InterventionType, InterventionOutcome, OrderStatus } from '@/types';
 
 interface Props {
   initialData: {
@@ -609,77 +612,7 @@ export default function ClientDashboard({ initialData }: Props) {
                 <p className="text-sm">Vous n&apos;avez passé aucune commande pour le moment.</p>
               </div>
             ) : (
-              <div className="space-y-5">
-                {initialData.userOrders.map(order => (
-                  <article
-                    key={order.id}
-                    className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] p-4 sm:p-5"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-                      <div>
-                        <h4 className="font-display font-bold text-base">Commande {order.order_number}</h4>
-                        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                          Passée le {new Date(order.created_at).toLocaleDateString('fr-FR')}
-                        </p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        order.status === 'livree' ? 'bg-success-soft text-success' :
-                          order.status === 'annulee' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'
-                      }`}>
-                        {ORDER_STATUS_LABELS[order.status] ?? order.status}
-                      </span>
-                    </div>
-
-                    <OrderTimeline order={order} />
-
-                    {Array.isArray(order.items) && order.items.length > 0 && (
-                      <div className="mt-5 pt-4 border-t border-[color:var(--border)]">
-                        <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-                          Articles
-                        </div>
-                        <div className="space-y-1 text-sm">
-                          {order.items.map((item: any) => (
-                            <div key={item.id} className="flex items-center justify-between gap-3">
-                              <span>{item.product_name} × {item.quantity}</span>
-                              <span className="font-semibold whitespace-nowrap">{formatCurrency(item.line_total)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {order.notes && (
-                      <div className="mt-5 pt-4 border-t border-[color:var(--border)]">
-                        <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-                          Historique du traitement
-                        </div>
-                        <pre
-                          className="whitespace-pre-wrap break-words text-xs leading-5 rounded-xl p-3"
-                          style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)', fontFamily: 'inherit' }}
-                        >
-                          {order.notes}
-                        </pre>
-                      </div>
-                    )}
-
-                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <span style={{ color: 'var(--text-muted)' }}>Total : <strong className="text-sm" style={{ color: 'var(--text)' }}>{formatCurrency(order.total)}</strong></span>
-                      {order.status !== 'en_attente' && order.status !== 'annulee' ? (
-                        <a
-                          href={`/api/invoice?order_id=${order.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary-light hover:underline font-bold"
-                        >
-                          Télécharger la facture (PDF)
-                        </a>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>Facture disponible après confirmation</span>
-                      )}
-                    </div>
-                  </article>
-                ))}
-              </div>
+              <ClientOrdersList orders={initialData.userOrders} />
             )}
           </div>
         )}
@@ -832,6 +765,205 @@ function PasswordInput({
         </button>
       </div>
     </div>
+  );
+}
+
+// ============================================================================
+// Onglet Commandes compact
+// - Mode compact par défaut : 1 ligne récap (n° / date / statut / total / arrow)
+// - Bouton "Voir le détail" par ligne qui déplie la timeline + articles + notes
+// - Bouton global "Tout déplier / Tout replier"
+// ============================================================================
+
+function ClientOrdersList({ orders }: { orders: any[] }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const toggle = useCallback((id: string) => {
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+  const expandAll = () => {
+    const next: Record<string, boolean> = {};
+    for (const o of orders) next[o.id] = true;
+    setExpanded(next);
+  };
+  const collapseAll = () => setExpanded({});
+  const allExpanded = orders.length > 0 && orders.every(o => expanded[o.id]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={allExpanded ? collapseAll : expandAll}
+          className="btn-outline text-[11px] py-1 px-3 inline-flex items-center gap-1.5"
+          aria-label={allExpanded ? 'Tout replier' : 'Tout déplier'}
+        >
+          {allExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          {allExpanded ? 'Tout replier' : 'Tout déplier'}
+        </button>
+      </div>
+      <div className="space-y-2">
+        {orders.map(order => (
+          <ClientOrderRow
+            key={order.id}
+            order={order}
+            expanded={!!expanded[order.id]}
+            onToggle={() => toggle(order.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ClientOrderRow({
+  order,
+  expanded,
+  onToggle,
+}: {
+  order: any;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const status = order.status as OrderStatus;
+  const statusClass =
+    status === 'livree' ? 'bg-success-soft text-success'
+    : status === 'annulee' ? 'bg-danger-soft text-danger'
+    : status === 'en_livraison' ? 'text-primary-light'
+    : status === 'traitee' ? 'text-primary-light'
+    : 'bg-warning-soft text-warning';
+  // Couleur de fond de l'icône gauche : si pas de classe bg-* on prend
+  // un fond neutre semi-transparent lisible en clair ET sombre.
+  const iconBgClass = (() => {
+    switch (status) {
+      case 'livree': return 'bg-success-soft';
+      case 'annulee': return 'bg-danger-soft';
+      case 'en_livraison':
+      case 'traitee':
+        return '';
+      default: return 'bg-warning-soft';
+    }
+  })();
+
+  // Petit résumé produits pour la ligne compacte (max 2 articles).
+  const compactItems = (order.items ?? []).slice(0, 2);
+  const extraItems = Math.max(0, (order.items?.length ?? 0) - compactItems.length);
+
+  return (
+    <article
+      className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] overflow-hidden"
+    >
+      {/* Ligne compacte (toujours visible) */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={`order-details-${order.id}`}
+        className="w-full text-left p-4 sm:p-4 flex items-center gap-3 hover:bg-[color:var(--bg-card)] transition-colors"
+      >
+        <span
+          className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBgClass} text-primary-light`}
+          aria-hidden="true"
+          style={
+            !iconBgClass
+              ? { background: 'var(--bg-card)', border: '1px solid var(--border)' }
+              : undefined
+          }
+        >
+          {status === 'livree' ? <CheckCircle2 size={18} />
+            : status === 'annulee' ? <X size={18} />
+            : <ShoppingBag size={18} />}
+        </span>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-display font-bold text-sm">
+              Commande {order.order_number}
+            </span>
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${statusClass}`}>
+              {ORDER_STATUS_LABELS[status] ?? status}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <span>{new Date(order.created_at).toLocaleDateString('fr-FR')}</span>
+            {compactItems.length > 0 && (
+              <>
+                <span>·</span>
+                <span className="truncate">
+                  {compactItems.map((it: any) => `${it.product_name} ×${it.quantity}`).join(' · ')}
+                  {extraItems > 0 && ` · +${extraItems}`}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="text-right flex-shrink-0">
+          <div className="font-display font-extrabold text-sm">{formatCurrency(order.total)}</div>
+          <div className="text-[10px] mt-0.5 inline-flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+            {expanded ? 'Replier' : 'Voir le détail'}
+            {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </div>
+        </div>
+      </button>
+
+      {/* Contenu développé */}
+      {expanded && (
+        <div
+          id={`order-details-${order.id}`}
+          className="px-4 sm:px-5 pb-5 pt-1 border-t border-[color:var(--border)]"
+        >
+          <OrderTimeline order={order} />
+
+          {Array.isArray(order.items) && order.items.length > 0 && (
+            <div className="mt-5 pt-4 border-t border-[color:var(--border)]">
+              <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                Articles
+              </div>
+              <div className="space-y-1 text-sm">
+                {order.items.map((item: any) => (
+                  <div key={item.id} className="flex items-center justify-between gap-3">
+                    <span>{item.product_name} × {item.quantity}</span>
+                    <span className="font-semibold whitespace-nowrap">{formatCurrency(item.line_total)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {order.notes && (
+            <div className="mt-5 pt-4 border-t border-[color:var(--border)]">
+              <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                Historique du traitement
+              </div>
+              <pre
+                className="whitespace-pre-wrap break-words text-xs leading-5 rounded-xl p-3"
+                style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)', fontFamily: 'inherit' }}
+              >
+                {order.notes}
+              </pre>
+            </div>
+          )}
+
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <span style={{ color: 'var(--text-muted)' }}>
+              Total : <strong className="text-sm" style={{ color: 'var(--text)' }}>{formatCurrency(order.total)}</strong>
+            </span>
+            {status !== 'en_attente' && status !== 'annulee' ? (
+              <a
+                href={`/api/invoice?order_id=${order.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-light hover:underline font-bold"
+              >
+                Télécharger la facture (PDF)
+              </a>
+            ) : (
+              <span style={{ color: 'var(--text-muted)' }}>Facture disponible après confirmation</span>
+            )}
+          </div>
+        </div>
+      )}
+    </article>
   );
 }
 
