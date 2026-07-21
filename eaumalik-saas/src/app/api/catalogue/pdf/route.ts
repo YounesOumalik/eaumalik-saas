@@ -43,10 +43,11 @@ export async function GET() {
   // On évite un fs.readFileSync ici pour rester compatible avec
   // `output: 'standalone'` : Next.js ne bundlera pas le fallback dans
   // l'image standalone, mais le binaire reste servi via l'URL statique.
-  const fallbackUrl = new URL(
-    '/catalogue/Catalogue_EauMalik.pdf',
-    process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-  );
+  // L'URL absolue est construite via getAppOrigin() (cf. fix O-03 origin)
+  // pour respecter l'hôte public (eaumalik.com) derrière le reverse-proxy,
+  // plutôt que de tomber sur http://0.0.0.0:3100 ou localhost.
+  const { getAppOrigin } = await import('@/lib/app-origin');
+  const fallbackUrl = new URL('/catalogue/Catalogue_EauMalik.pdf', getAppOrigin());
   return NextResponse.redirect(fallbackUrl, {
     status: 302,
     headers: {
