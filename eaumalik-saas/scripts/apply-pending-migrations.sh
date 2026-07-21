@@ -83,17 +83,18 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$DB_CONTAINER"; then
+if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$DB_CONTAINER"; then
   err "Container DB '$DB_CONTAINER' introuvable (docker ps)"
   err "  → soit le nom est différent (override avec EAUMALIK_DB_CONTAINER=...)"
-  err "  → soit la DB est ailleurs (modifier ce script)"
+  err "  → soit ton user n'a pas accès au socket Docker (groupes : $(id -Gn))"
+  err "  → ajoutes-toi au groupe 'docker' : sudo usermod -aG docker \$USER"
   exit 1
 fi
 ok "Container DB : $DB_CONTAINER"
 
 # Helper : exécuter du SQL dans le container DB
 db_psql() {
-  sudo docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -A -t "$@"
+  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -A -t "$@"
 }
 
 # ----- Création de la table de tracking si absente -----
