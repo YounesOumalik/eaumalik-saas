@@ -14,8 +14,8 @@ const NAV_LINKS = [
   { href: '/#accueil', label: 'Accueil' },
   { href: '/#filtration', label: 'Filtration' },
   { href: '/#offres', label: 'Promotion' },
-  { href: '/#catalogue', label: 'Catalogue' },
   { href: '/#industriel', label: 'Professionnels' },
+  { href: '/#catalogue-flipbook', label: 'Catalogue' },
   { href: '/boutique', label: 'Boutique' },
   { href: '/#contact', label: 'Contact' },
 ];
