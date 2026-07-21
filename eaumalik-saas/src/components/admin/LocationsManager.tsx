@@ -293,11 +293,11 @@ export default function LocationsManager({ initialLocations, initialStock, initi
                   les capacités (unités / m²) pour activer les alertes visuelles.
                 </li>
                 <li>
-                  <strong>Inventaire</strong> : sélectionnez une localité pour voir les produits qui s'y trouvent
+                  <strong>Inventaire</strong> : sélectionnez une localité pour voir les produits qui s&apos;y trouvent
                   et leur quantité. Le bouton « Transférer » crée une demande (workflow 2 niveaux).
                 </li>
                 <li>
-                  <strong>Workflows</strong> : file d'attente des transferts. <code className="text-[10px] px-1 rounded" style={{ background: 'var(--bg-card-hover)' }}>admin</code> et <code className="text-[10px] px-1 rounded" style={{ background: 'var(--bg-card-hover)' }}>administrator</code> peuvent
+                  <strong>Workflows</strong> : file d&apos;attente des transferts. <code className="text-[10px] px-1 rounded" style={{ background: 'var(--bg-card-hover)' }}>admin</code> et <code className="text-[10px] px-1 rounded" style={{ background: 'var(--bg-card-hover)' }}>administrator</code> peuvent
                   approuver / rejeter / exécuter. Le demandeur peut annuler.
                 </li>
                 <li>
@@ -309,7 +309,7 @@ export default function LocationsManager({ initialLocations, initialStock, initi
                 onClick={() => setShowHelp(false)}
                 className="mt-2 text-[11px] underline opacity-80 hover:opacity-100"
               >
-                Masquer l'aide
+                Masquer l&apos;aide
               </button>
             </div>
           </div>
