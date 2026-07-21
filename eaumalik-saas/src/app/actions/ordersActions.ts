@@ -23,6 +23,7 @@ import { z } from 'zod';
 import {
   createSupabaseServiceRoleClient,
   createSupabaseServerClient,
+  requirePermission,
 } from '@/lib/supabase/server';
 import { isMockMode } from '@/lib/api-guard';
 import {
@@ -137,12 +138,23 @@ export async function createManualOrderAction(
   }
   const data = parsed.data;
 
-  // Garde : seul le personnel authentifié peut créer une commande manuelle.
+  // Garde : seul le personnel avec la permission can_validate_orders peut créer une commande manuelle.
   let agent;
   try {
     agent = await getCurrentAgent();
+    if (!isMockMode()) {
+      await requirePermission('can_validate_orders');
+    } else {
+      const dev = await getDevUserFromCookie();
+      if (!dev) throw new Error('Authentification requise.');
+      const isAdmin = dev.role === 'admin' || dev.role === 'administrator';
+      const hasPerm = dev.permissions?.can_validate_orders === true;
+      if (!isAdmin && !hasPerm) {
+        throw new Error('Permission requise : can_validate_orders.');
+      }
+    }
   } catch (e: any) {
-    return { success: false, error: e?.message ?? 'Authentification requise.' };
+    return { success: false, error: e?.message ?? 'Accès interdit.' };
   }
 
   // Le parrain DOIT être dans la table `users` avec un `referral_code`.

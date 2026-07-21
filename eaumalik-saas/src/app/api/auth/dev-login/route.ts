@@ -4,6 +4,7 @@ import { readUsersRaw, writeUsersRaw } from '@/data/repositories';
 import { verifyCaptchaPayload } from '@/lib/captcha';
 import { setDevSessionCookie as setDevCookie } from '@/lib/auth/devSession';
 import { hashPassword, isHashedPassword, verifyPassword } from '@/lib/auth/password';
+import { isMockMode } from '@/lib/api-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,11 +26,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: NextRequest) {
   // Route dev/mock uniquement — jamais active en production (Supabase gère l'auth).
-  const mockMode =
-    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!mockMode) {
+  if (!isMockMode()) {
     return NextResponse.json({ error: 'Route désactivée en production.' }, { status: 404 });
   }
   try {

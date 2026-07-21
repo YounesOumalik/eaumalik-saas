@@ -15,5 +15,4 @@ out/
 .turbo
 # Cache TypeScript (régénéré à chaque typecheck)
 tsconfig.tsbuildinfo
-# Lockfile (on régénère via npm install dans l'environnement de prod)
-package-lock.json
+

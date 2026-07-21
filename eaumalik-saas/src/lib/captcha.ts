@@ -201,10 +201,17 @@ export type CaptchaVerifyResult =
 
 /**
  * Signe un payload `{ answer, iat }` en token base64url compact :
- *   base64url(JSON({answer,iat})) + "." + base64url(hmac_sha256(secret, JSON))
+ *   base64url(JSON({hash,iat})) + "." + base64url(hmac_sha256(secret, JSON))
+ * 
+ * SÉCURITÉ : La réponse en clair n'est JAMAIS stockée dans le token/cookie.
+ * À la place, on y stocke son hash SHA-256 pour que le client ne puisse pas le décoder.
  */
 export function signCaptchaPayload(payload: CaptchaPayload): string {
-  const body = base64url(JSON.stringify({ answer: payload.answer, iat: payload.iat }));
+  const hashedAnswer = crypto
+    .createHash('sha256')
+    .update(payload.answer.toLowerCase().trim())
+    .digest('hex');
+  const body = base64url(JSON.stringify({ hash: hashedAnswer, iat: payload.iat }));
   const sig = hmac(body);
   return `${body}.${sig}`;
 }
@@ -213,8 +220,7 @@ export function signCaptchaPayload(payload: CaptchaPayload): string {
  * Vérifie un token + une réponse soumise par l'utilisateur.
  * - `token` : valeur du cookie `eaumalik_captcha` (peut être null/undefined).
  * - `submitted` : valeur saisie par l'utilisateur (sera trim+lowercase).
- * Comparaison en temps constant. Le token est considéré comme « single-use »
- * côté appelant : le cookie doit être effacé après une vérification réussie.
+ * Comparaison en temps constant du hash SHA-256 de la réponse soumise.
  */
 export function verifyCaptchaPayload(token: string | undefined | null, submitted: string | undefined | null): CaptchaVerifyResult {
   if (!token || !submitted) return { ok: false, reason: 'missing' };
@@ -228,24 +234,24 @@ export function verifyCaptchaPayload(token: string | undefined | null, submitted
   if (!timingSafeEqualStr(sig, expectedSig)) return { ok: false, reason: 'tampered' };
 
   // Décodage + expiration.
-  let parsed: { answer?: string; iat?: number };
+  let parsed: { hash?: string; iat?: number };
   try {
     parsed = JSON.parse(base64urlDecode(body).toString('utf8'));
   } catch {
     return { ok: false, reason: 'tampered' };
   }
-  if (!parsed || typeof parsed.answer !== 'string' || typeof parsed.iat !== 'number') {
+  if (!parsed || typeof parsed.hash !== 'string' || typeof parsed.iat !== 'number') {
     return { ok: false, reason: 'tampered' };
   }
   const ageSec = (Date.now() - parsed.iat) / 1000;
   if (ageSec > CAPTCHA_TTL_SECONDS) return { ok: false, reason: 'expired' };
 
-  // Comparaison answer (case-insensitive, trim).
-  const expected = parsed.answer.toLowerCase().trim();
+  // Comparaison answer par hash (case-insensitive, trim).
   const got = submitted.toLowerCase().trim();
-  if (expected.length === 0 || got.length === 0) return { ok: false, reason: 'missing' };
-  if (expected.length !== got.length) return { ok: false, reason: 'invalid' };
-  if (!timingSafeEqualStr(expected, got)) return { ok: false, reason: 'invalid' };
+  if (got.length === 0) return { ok: false, reason: 'missing' };
+
+  const submittedHash = crypto.createHash('sha256').update(got).digest('hex');
+  if (!timingSafeEqualStr(parsed.hash, submittedHash)) return { ok: false, reason: 'invalid' };
 
   return { ok: true };
 }

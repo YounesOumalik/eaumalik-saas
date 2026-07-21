@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createNews, updateNews, deleteNews } from '@/data/repositories';
 import { requireAdmin } from '@/lib/supabase/server';
+import { isMockMode } from '@/lib/api-guard';
 
 const NewsInputSchema = z.object({
   title: z.string().min(3, 'Titre trop court (min. 3 caractères).').max(160, 'Titre trop long.'),
@@ -28,13 +29,6 @@ const NewsInputSchema = z.object({
     .or(z.literal('').transform(() => null)),
 });
 
-function isMockMode(): boolean {
-  return (
-    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
-  );
-}
 
 async function gate() {
   // En mode mock (data-store JSON) on bypass l'auth Supabase — la session

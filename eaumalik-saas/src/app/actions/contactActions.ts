@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/server';
 import { readMessages, writeMessages } from '@/data/localDb';
+import { isMockMode } from '@/lib/api-guard';
 
 // ============================================================================
 // Schéma — demande de contact / devis public (visiteur anonyme)
@@ -19,14 +20,6 @@ const PublicInquirySchema = z.object({
   volume: z.string().max(50).optional().or(z.literal('')),
   message: z.string().min(1, 'Message vide.').max(2000),
 });
-
-function isMockMode(): boolean {
-  return (
-    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
-  );
-}
 
 // ============================================================================
 // Action publique — aucune authentification requise

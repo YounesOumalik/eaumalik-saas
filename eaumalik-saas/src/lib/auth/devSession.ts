@@ -1,5 +1,6 @@
 import 'server-only';
 import crypto from 'node:crypto';
+import { isMockMode } from '@/lib/api-guard';
 
 /**
  * Helpers de session pour le mode dev/mock (sans Supabase).
@@ -85,11 +86,7 @@ export async function getDevUserFromCookie(): Promise<DevUser | null> {
 
 /** Vrai si on est en mode mock/dev (pas de Supabase configuré). */
 export function isDevMockMode(): boolean {
-  return (
-    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
-  );
+  return isMockMode();
 }
 
 /** Ecrit le cookie de session dev signé. */

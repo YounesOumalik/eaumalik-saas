@@ -20,7 +20,11 @@ test('dev session signatures survive dots in JSON values', async () => {
   process.env.CAPTCHA_SECRET = 'test-only-secret';
   const { signPayload, verifyPayload } = await importTypeScript(
     '../src/lib/auth/devSession.ts',
-    [["import 'server-only';", '']]
+    [
+      ["import 'server-only';", ''],
+      ["import { isMockMode } from '@/lib/api-guard';", "const isMockMode = () => true;"],
+      ["import { isMockMode } from '../api-guard';", "const isMockMode = () => true;"]
+    ]
   );
   const payload = {
     id: 'u-test',
@@ -49,10 +53,25 @@ test('mock passwords are stored as scrypt hashes', async () => {
 test('protected redirects are safe and absolute for the Edge runtime', async () => {
   const { absoluteRedirectUrl, relativeRedirectLocation } = await importTypeScript(
     '../src/lib/relative-redirect.ts',
-    [[
-      "import { safeCallbackPath } from './navigation';",
-      "const safeCallbackPath = (value, fallback = '/') => value && value.startsWith('/') && !value.startsWith('//') ? value : fallback;",
-    ]]
+    [
+      // `next/server` n'est pas résolvable hors d'un projet Next ; on le stubbe.
+      // Les fonctions testées (absoluteRedirectUrl, relativeRedirectLocation)
+      // n'utilisent pas NextResponse/NextRequest directement.
+      [
+        "import { NextResponse, type NextRequest } from 'next/server';",
+        "class NextResponse { constructor(body, init) { this.body = body; this.status = init?.status; this.headers = new Map(Object.entries(init?.headers ?? {})); } }",
+      ],
+      [
+        "import { safeCallbackPath } from './navigation';",
+        "const safeCallbackPath = (value, fallback = '/') => value && value.startsWith('/') && !value.startsWith('//') ? value : fallback;",
+      ],
+      // request-origin n'est pas non plus résolvable ici (dépend de next/server).
+      // absoluteRedirectUrl/relativeRedirectLocation ne l'appellent pas.
+      [
+        "import { browserSafeRequestOrigin } from './request-origin';",
+        "const browserSafeRequestOrigin = () => 'https://eaumalik.com';",
+      ],
+    ]
   );
   assert.equal(
     relativeRedirectLocation('/login', { callbackUrl: '/client?tab=orders' }),
@@ -128,4 +147,34 @@ test('public pages externalize inline images instead of serializing Base64', asy
   });
   assert.equal('image_url_local' in product, false);
   assert.equal('wholesale_price' in product, false);
+});
+
+test('captcha signatures secure cleartext answers and verify correctly', async () => {
+  process.env.CAPTCHA_SECRET = 'test-only-captcha-secret';
+  const { signCaptchaPayload, verifyCaptchaPayload } = await importTypeScript(
+    '../src/lib/captcha.ts',
+    []
+  );
+  
+  const payload = {
+    answer: 'AbCdE',
+    iat: Date.now(),
+  };
+  
+  const token = signCaptchaPayload(payload);
+  
+  // Verify cookie content does not leak the cleartext answer 'AbCdE' (or case variations)
+  assert.equal(token.includes('AbCdE'), false);
+  assert.equal(token.includes('abcde'), false);
+  
+  // Verification success scenarios
+  assert.deepEqual(verifyCaptchaPayload(token, 'AbCdE'), { ok: true });
+  assert.deepEqual(verifyCaptchaPayload(token, 'abcde'), { ok: true });
+  assert.deepEqual(verifyCaptchaPayload(token, '  ABCDE '), { ok: true });
+  
+  // Verification failure scenarios
+  assert.equal(verifyCaptchaPayload(token, 'wrong').ok, false);
+  assert.equal(verifyCaptchaPayload(token, '').ok, false);
+  assert.equal(verifyCaptchaPayload(null, 'abcde').ok, false);
+  assert.equal(verifyCaptchaPayload(`${token}x`, 'abcde').ok, false);
 });
