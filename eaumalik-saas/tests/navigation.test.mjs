@@ -38,6 +38,37 @@ test('safeCallbackPath uses the requested fallback for an absent value', () => {
   assert.equal(safeCallbackPath(null, '/'), '/');
 });
 
+// Régression critique (2026-07-21) : safeCallbackPath NE DOIT PAS filtrer
+// /login, /admin, /crm, /api. Ces chemins sont des destinations de redirect
+// légitimes pour le middleware (protection routes privées → /login) et le
+// callback OAuth. Les filtrait via isHostileLandingPath créait une boucle :
+// middleware redirect /login → rejeté → fallback / → l'utilisateur n'atteignait
+// jamais /login. Le filtrage des destinations post-login se fait via
+// safePostLoginLanding(), pas safeCallbackPath().
+test('safeCallbackPath allows auth routes as redirect destinations (no loop)', () => {
+  assert.equal(safeCallbackPath('/login', '/'), '/login');
+  assert.equal(safeCallbackPath('/login/google-complete', '/'), '/login/google-complete');
+  assert.equal(safeCallbackPath('/login?callbackUrl=%2Fclient', '/'), '/login?callbackUrl=%2Fclient');
+  assert.equal(safeCallbackPath('/admin', '/'), '/admin');
+  assert.equal(safeCallbackPath('/crm/dashboard', '/'), '/crm/dashboard');
+  assert.equal(safeCallbackPath('/api/auth/callback?code=x', '/'), '/api/auth/callback?code=x');
+});
+
+test('safePostLoginLanding filters hostile post-login destinations', async () => {
+  // Re-import pour récupérer safePostLoginLanding (pas dans le import initial).
+  const { safePostLoginLanding } = await import(moduleUrl);
+  assert.equal(safePostLoginLanding('/client'), '/client');
+  assert.equal(safePostLoginLanding('/panier'), '/panier');
+  // Routes hostiles → /client (fallback)
+  assert.equal(safePostLoginLanding('/login'), '/client');
+  assert.equal(safePostLoginLanding('/api/auth/logout'), '/client');
+  assert.equal(safePostLoginLanding('/admin/users'), '/client');
+  assert.equal(safePostLoginLanding('/crm/dashboard'), '/client');
+  // Valeurs invalides → /client
+  assert.equal(safePostLoginLanding(null), '/client');
+  assert.equal(safePostLoginLanding('https://evil.example'), '/client');
+});
+
 test('browserSafeOrigin replaces IPv4 and IPv6 bind addresses with localhost', () => {
   assert.equal(browserSafeOrigin('http://0.0.0.0:3100'), 'http://localhost:3100');
   assert.equal(browserSafeOrigin('http://[::]:3100'), 'http://localhost:3100');
