@@ -16,6 +16,7 @@ import {
   PanelLeftOpen,
   ShoppingBag,
   ExternalLink,
+  MapPin,
   type LucideIcon,
 } from 'lucide-react';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
@@ -31,6 +32,7 @@ const SIDEBAR_ICONS: Record<string, LucideIcon> = {
   stocks: Warehouse,
   catalogue: Tags,
   comptabilite: TrendingUp,
+  locations: MapPin,
   maintenance: Wrench,
   clients: Users,
   publications: Send,
