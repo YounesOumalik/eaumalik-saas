@@ -63,8 +63,55 @@ git clean -fd --quiet
 # ---------- 2. Build Docker ----------
 cd "$APP_DIR"
 echo "→ docker build (standalone)"
+
+# ⚠️ CRITIQUE : les variables NEXT_PUBLIC_* sont INLINEES au BUILD dans le
+# bundle client (cf. Dockerfile + memory repo §Build-args Docker). Si on
+# ne les passe pas en --build-arg, le bundle client a des strings vides
+# → `maybeSupabaseBrowserClient()` retourne null → `isDevMode = true`
+# → la page /login tente /api/auth/dev-login qui est désactivé en prod
+# → 404 "Route désactivée en production."
+#
+# On lit les valeurs depuis $ENV_FILE (même source que `docker run --env-file`).
+# Le helper `env_get` extrait la valeur d'une clé KEY= du fichier (gère les
+# guillemets, les commentaires, les lignes vides). Les clés absentes sont
+# passées comme chaîne vide (le Dockerfile accepte les valeurs vides, qui
+# retombent sur le mock mode).
+env_get() {
+  local key="$1"
+  local line
+  line=$(grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | head -1)
+  if [[ -z "$line" ]]; then
+    echo ""
+    return
+  fi
+  # Strip "KEY=" et quotes environnantes
+  local val="${line#*=}"
+  val="${val%\"}"
+  val="${val#\"}"
+  val="${val%\'}"
+  val="${val#\'}"
+  echo "$val"
+}
+
+NEXT_PUBLIC_SUPABASE_URL="$(env_get NEXT_PUBLIC_SUPABASE_URL)"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="$(env_get NEXT_PUBLIC_SUPABASE_ANON_KEY)"
+NEXT_PUBLIC_APP_URL="$(env_get NEXT_PUBLIC_APP_URL)"
+NEXT_PUBLIC_USE_MOCKS="$(env_get NEXT_PUBLIC_USE_MOCKS)"
+
+# Sanity check : si une variable critique est vide, on log un WARNING (mais
+# on continue le build — un mock build sans Supabase reste fonctionnel pour
+# les tests visuels).
+if [[ -z "$NEXT_PUBLIC_SUPABASE_URL" || -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]]; then
+  echo "⚠️ ATTENTION : NEXT_PUBLIC_SUPABASE_URL ou NEXT_PUBLIC_SUPABASE_ANON_KEY vide dans $ENV_FILE"
+  echo "  → le bundle client n'aura pas d'URL Supabase et /login tombera en mock mode."
+fi
+
 DOCKER_BUILDKIT=1 docker build \
   --build-arg "CACHE_BUST=$(date +%s)" \
+  --build-arg "NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}" \
+  --build-arg "NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}" \
+  --build-arg "NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}" \
+  --build-arg "NEXT_PUBLIC_USE_MOCKS=${NEXT_PUBLIC_USE_MOCKS}" \
   --tag "${IMAGE_NAME}:${BUILD_TAG}" \
   --tag "${IMAGE_NAME}:latest" \
   --label "org.opencontainers.image.revision=$SHA" \
