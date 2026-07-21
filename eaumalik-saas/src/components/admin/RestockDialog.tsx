@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Boxes, ArrowDownCircle, ArrowUpCircle, PackagePlus, Calendar,
+  Boxes, ArrowDownCircle, ArrowUpCircle, PackagePlus, Calendar, MapPin,
 } from 'lucide-react';
-import type { Product, StockMovementReason } from '@/types';
+import type { Product, StockMovementReason, Location } from '@/types';
 import { STOCK_MOVEMENT_REASON_LABELS } from '@/types';
 import Dialog from '@/components/ui/Dialog';
 import { useToast } from '@/components/shared/ToastProvider';
@@ -29,6 +29,14 @@ interface RestockDialogProps {
       note: string | null;
     },
   ) => void;
+  /**
+   * Catalogue de localités parmi lesquelles choisir (cf. migration 0014).
+   * Si vide/absent, le sélecteur est masqué et le mouvement reste global.
+   * Filtre de visibilité déjà appliqué côté serveur (cf. getVisibleLocationsForUser).
+   */
+  locations?: Location[];
+  /** Localité pré-sélectionnée à l'ouverture (ex. depuis l'onglet Inventaire). */
+  defaultLocationId?: string | null;
 }
 
 /**
@@ -53,7 +61,9 @@ const FREE_DIRECTION_REASONS: ReadonlySet<StockMovementReason> = new Set<StockMo
  * Réutilisable depuis l'écran `/admin/stocks` (dashboard) et depuis
  * `/admin/catalogue` (modification d'un produit).
  */
-export default function RestockDialog({ open, product, onClose, onRestocked }: RestockDialogProps) {
+export default function RestockDialog({
+  open, product, onClose, onRestocked, locations, defaultLocationId,
+}: RestockDialogProps) {
   const toast = useToast();
   const today = new Date().toISOString().slice(0, 10);
 
@@ -63,6 +73,12 @@ export default function RestockDialog({ open, product, onClose, onRestocked }: R
   const [restockDate, setRestockDate] = useState<string>(today);
   const [note, setNote] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+  /** Localité impactée. `null` = mouvement global (legacy, sans localité). */
+  const [localityId, setLocalityId] = useState<string>(defaultLocationId ?? '');
+
+  const showLocalitySelector = !!locations && locations.length > 0;
+  // Localité effective à utiliser (si le user choisit `''` on retombe sur null).
+  const effectiveLocalityId = showLocalitySelector ? (localityId || null) : null;
 
   useEffect(() => {
     if (open) {
@@ -71,8 +87,11 @@ export default function RestockDialog({ open, product, onClose, onRestocked }: R
       setQuantity('');
       setRestockDate(new Date().toISOString().slice(0, 10));
       setNote('');
+      // Pré-remplir avec la localité par défaut (cas typique : ouvert depuis
+      // l'onglet Inventaire sur une localité précise).
+      setLocalityId(defaultLocationId ?? '');
     }
-  }, [open, product?.id]);
+  }, [open, product?.id, defaultLocationId]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +111,10 @@ export default function RestockDialog({ open, product, onClose, onRestocked }: R
   const dateValid = /^\d{4}-\d{2}-\d{2}$/.test(restockDate);
   const noteRequired = reason === 'correction' || reason === 'other';
   const noteValid = !noteRequired || note.trim().length > 0;
-  const canSubmit = !!product && qtyValid && dateValid && noteValid && !submitting;
+  const canSubmit = !!product && qtyValid && dateValid && noteValid && !submitting
+    // Si le sélecteur localité est visible, on exige un choix. Si le catalogue
+    // est vide, on retombe sur le mode global (sélecteur masqué).
+    && (!showLocalitySelector || !!effectiveLocalityId);
 
   const signedDelta = qtyValid ? (direction === 'in' ? Math.trunc(parsedQty) : -Math.trunc(parsedQty)) : 0;
   const newStockPreview = product && qtyValid
@@ -110,11 +132,15 @@ export default function RestockDialog({ open, product, onClose, onRestocked }: R
         restock_date: restockDate,
         reason,
         note: note.trim() ? note.trim().slice(0, 500) : null,
+        locality_id: effectiveLocalityId,
       });
       if (res.success && res.product) {
         const sign = res.event.quantity > 0 ? '+' : '';
+        const locSuffix = effectiveLocalityId
+          ? ` à la localité ${locations?.find((l) => l.id === effectiveLocalityId)?.code ?? ''}`
+          : ' (stock global)';
         toast(
-          `Mouvement enregistré : ${sign}${res.event.quantity} → ${res.product.stock} en stock`,
+          `Mouvement enregistré : ${sign}${res.event.quantity}${locSuffix} → ${res.product.stock} en stock global`,
           'success',
         );
         if (onRestocked) {
@@ -196,6 +222,30 @@ export default function RestockDialog({ open, product, onClose, onRestocked }: R
             </div>
           )}
         </div>
+
+        {showLocalitySelector && (
+          <div>
+            <label className="form-label flex items-center gap-1.5">
+              <MapPin size={12} /> Localité impactée *
+            </label>
+            <select
+              className="form-input"
+              value={localityId}
+              onChange={(e) => setLocalityId(e.target.value)}
+              required
+            >
+              <option value="">— Choisir une localité —</option>
+              {locations!.filter((l) => !l.is_archived && l.is_active).map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.code} — {l.name} ({l.type})
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+              Le mouvement sera appliqué à cette localité ; le stock global du produit sera recalculé automatiquement.
+            </p>
+          </div>
+        )}
 
         <div>
           <label className="form-label">Sens du mouvement</label>

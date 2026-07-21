@@ -5,10 +5,14 @@ import Link from 'next/link';
 import {
   Warehouse, TrendingUp, TrendingDown, AlertTriangle, Package,
   Boxes, ArrowUpRight, ArrowDownRight, ExternalLink, Activity, PackagePlus,
+  Store, PackageOpen,
 } from 'lucide-react';
 import { Chart, registerables } from 'chart.js';
-import type { Product, ProductRestock, ProductCategory } from '@/types';
-import { CATEGORY_LABELS } from '@/types';
+import type {
+  Product, ProductRestock, ProductCategory, Location, LocationType,
+  ProductLocationStockEntry,
+} from '@/types';
+import { CATEGORY_LABELS, LOCATION_TYPE_LABELS } from '@/types';
 import RestockDialog from '@/components/admin/RestockDialog';
 
 Chart.register(...registerables);
@@ -16,26 +20,25 @@ Chart.register(...registerables);
 interface Props {
   products: Product[];
   history: ProductRestock[];
+  /** Localités (toutes, archivées incluses) — fournies par la page server. */
+  locations?: Location[];
+  /** Stock par localité (jointure complète). */
+  stockByLocation?: ProductLocationStockEntry[];
 }
 
-/** Capacité max par catégorie (utilisée pour normaliser les barres de capacité). */
-const CATEGORY_CAPACITY: Record<ProductCategory, number> = {
-  purificateurs: 60,
-  industriel: 30,
-  consommables: 120,
+const LOCATION_ICONS: Record<LocationType, any> = {
+  depot: Warehouse, magasin: Store, presentoir: PackageOpen,
 };
 
-const CATEGORY_DEPOSITS: Record<ProductCategory, { code: string; city: string }> = {
-  purificateurs: { code: 'D-CASA-01', city: 'Casablanca — Roches Noires' },
-  industriel: { code: 'D-CASA-02', city: 'Casablanca — Atelier pro' },
-  consommables: { code: 'D-CASA-03', city: 'Casablanca — Pièces & filtres' },
-};
-
-export default function StocksDashboard({ products, history }: Props) {
+export default function StocksDashboard({
+  products, history, locations = [], stockByLocation = [],
+}: Props) {
   const chartRef = useRef<HTMLCanvasElement | null>(null);
   const chartInstance = useRef<Chart | null>(null);
   // Article dont on déclenche un mouvement de stock.
   const [restockTarget, setRestockTarget] = useState<Product | null>(null);
+  // Localité pré-sélectionnée pour RestockDialog (si ouvert depuis une carte).
+  const [restockLocationId, setRestockLocationId] = useState<string | null>(null);
 
   // ---------- KPIs ----------
   const kpis = useMemo(() => {
@@ -54,40 +57,63 @@ export default function StocksDashboard({ products, history }: Props) {
     return { totalUnits, lowStock, outOfStock, critical, inventoryValue, entries, exits, recent };
   }, [products, history]);
 
-  // ---------- Capacité par "dépôt" (catégorie) ----------
+  // ---------- Capacité par localité (vraies localités du repo) ----------
   const deposits = useMemo(() => {
-    const cats: ProductCategory[] = ['purificateurs', 'industriel', 'consommables'];
-    return cats.map(cat => {
-      const prods = products.filter(p => p.category === cat);
-      const used = prods.reduce((s, p) => s + p.stock, 0);
-      const cap = Math.max(CATEGORY_CAPACITY[cat], used);
-      const ratio = cap > 0 ? (used / cap) * 100 : 0;
-      const reference = prods[0];
-      return {
-        category: cat,
-        label: CATEGORY_LABELS[cat],
-        deposit: CATEGORY_DEPOSITS[cat],
-        productCount: prods.length,
-        used,
-        capacity: cap,
-        ratio,
-        lowStock: prods.filter(p => p.stock <= p.stock_alert_threshold).length,
-      };
-    });
-  }, [products]);
+    // Si aucune localité n'est enregistrée : état vide.
+    if (locations.length === 0) return [];
+
+    return locations
+      .filter((l) => !l.is_archived)
+      .map((loc) => {
+        const used = stockByLocation
+          .filter((s) => s.location_id === loc.id)
+          .reduce((s, e) => s + e.quantity, 0);
+        // Capacité déclarée : 0 = non renseigné → on affiche la valeur
+        // observée comme capacité (ratio 0%, pas de warning).
+        const declaredCap = loc.capacity_units;
+        const cap = declaredCap > 0 ? declaredCap : 0;
+        const ratio = cap > 0 ? Math.min(999, (used / cap) * 100) : 0;
+        const overCapacity = cap > 0 && used > cap;
+        return {
+          location: loc,
+          used,
+          capacity: cap,
+          ratio,
+          overCapacity,
+          productCount: stockByLocation.filter((s) => s.location_id === loc.id && s.quantity > 0).length,
+        };
+      })
+      // Tri : dépôts d'abord, puis magasins, puis présentoirs ; alphabétique à type égal.
+      .sort((a, b) => {
+        const order: Record<LocationType, number> = { depot: 0, magasin: 1, presentoir: 2 };
+        if (a.location.type !== b.location.type) return order[a.location.type] - order[b.location.type];
+        return a.location.name.localeCompare(b.location.name);
+      });
+  }, [locations, stockByLocation]);
 
   // ---------- Catégories (regroupement pour le tableau) ----------
+  // Le tableau reste par catégorie de produit (UI existante, lisible pour
+  // les ops). On indique dans le bandeau du groupe la localité PRINCIPALE
+  // (la 1re localité active du type correspondant à la catégorie par défaut).
   const grouped = useMemo(() => {
     const order: ProductCategory[] = ['purificateurs', 'industriel', 'consommables'];
+    const typeByCategory: Record<ProductCategory, LocationType> = {
+      purificateurs: 'magasin',
+      industriel: 'depot',
+      consommables: 'magasin',
+    };
     return order
-      .map(cat => ({
-        category: cat,
-        label: CATEGORY_LABELS[cat],
-        deposit: CATEGORY_DEPOSITS[cat],
-        items: products.filter(p => p.category === cat && !p.is_archived),
-      }))
-      .filter(g => g.items.length > 0);
-  }, [products]);
+      .map((cat) => {
+        const mainLoc = locations.find((l) => l.type === typeByCategory[cat] && !l.is_archived && l.is_active);
+        return {
+          category: cat,
+          label: CATEGORY_LABELS[cat],
+          depositLabel: mainLoc ? `${mainLoc.code} — ${mainLoc.name}` : 'Aucune localité assignée',
+          items: products.filter((p) => p.category === cat && !p.is_archived),
+        };
+      })
+      .filter((g) => g.items.length > 0);
+  }, [products, locations]);
 
   // ---------- Graphique mouvements 14j ----------
   useEffect(() => {
@@ -178,7 +204,13 @@ export default function StocksDashboard({ products, history }: Props) {
   // Ouvre la modale RestockDialog pour l'article ciblé. Après confirmation
   // et écriture serveur, on recharge la page (les `products` et `history`
   // du dashboard sont SSR-fetched) pour rafraîchir les KPIs et le tableau.
-  const openMovement = (p: Product) => setRestockTarget(p);
+  const openMovement = (p: Product) => {
+    setRestockTarget(p);
+    // Pré-remplir la localité avec celle où le produit est physiquement
+    // présent (1re localité avec qty > 0), ou `null` si aucune.
+    const firstLoc = stockByLocation.find((s) => s.product_id === p.id && s.quantity > 0);
+    setRestockLocationId(firstLoc?.location_id ?? null);
+  };
   const closeMovement = () => setRestockTarget(null);
 
   return (
@@ -247,41 +279,79 @@ export default function StocksDashboard({ products, history }: Props) {
         </div>
 
         <div className="glass-card p-5" style={{ transform: 'none' }}>
-          <div className="flex items-center gap-2 mb-3">
-            <Warehouse size={16} style={{ color: 'var(--primary-light)' }} />
-            <h3 className="font-display font-bold text-sm">Capacité des dépôts</h3>
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <div className="flex items-center gap-2">
+              <Warehouse size={16} style={{ color: 'var(--primary-light)' }} />
+              <h3 className="font-display font-bold text-sm">Capacité des localités</h3>
+            </div>
+            <Link href="/admin/locations" className="text-[10px] underline opacity-80 hover:opacity-100">
+              Gérer →
+            </Link>
           </div>
-          <div className="space-y-3">
-            {deposits.map(d => (
-              <div key={d.category}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-xs">{d.label}</span>
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                      {d.deposit.code} • {d.deposit.city}
-                    </span>
+          {deposits.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-4 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+              <p className="mb-2">Aucune localité enregistrée.</p>
+              <Link href="/admin/locations" className="btn-primary btn-sm inline-flex items-center gap-1">
+                <Warehouse size={11} /> Créer une localité
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {deposits.map((d) => {
+                const Icon = LOCATION_ICONS[d.location.type];
+                return (
+                  <div key={d.location.id}>
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Icon size={12} style={{ color: 'var(--primary-light)' }} className="shrink-0" />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-xs truncate">{d.location.name}</div>
+                          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            <span className="font-mono">{d.location.code}</span>
+                            {d.location.city ? <> • {d.location.city}</> : null}
+                            {' • '}{LOCATION_TYPE_LABELS[d.location.type]}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold shrink-0">
+                        {d.used}
+                        {d.capacity > 0 && (
+                          <span style={{ color: 'var(--text-muted)' }}>/{d.capacity}</span>
+                        )}
+                      </span>
+                    </div>
+                    {d.capacity > 0 ? (
+                      <>
+                        <div className="capacity-bar">
+                          <div
+                            className={`capacity-bar__fill ${d.ratio >= 100 ? 'is-danger' : d.ratio >= 70 ? 'is-warning' : 'is-ok'}`}
+                            style={{ width: `${Math.min(100, d.ratio)}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between mt-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          <span>{d.productCount} article{d.productCount > 1 ? 's' : ''}</span>
+                          {d.overCapacity && (
+                            <span className="flex items-center gap-1" style={{ color: 'var(--danger)' }}>
+                              <AlertTriangle size={10} /> Sur-capacité
+                            </span>
+                          )}
+                          {!d.overCapacity && d.ratio >= 70 && (
+                            <span className="flex items-center gap-1" style={{ color: 'var(--warning)' }}>
+                              <AlertTriangle size={10} /> {Math.round(d.ratio)}%
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        Capacité non renseignée. Renseignez-la pour activer les alertes.
+                      </p>
+                    )}
                   </div>
-                  <span className="text-xs font-bold">
-                    {d.used}<span style={{ color: 'var(--text-muted)' }}>/{d.capacity}</span>
-                  </span>
-                </div>
-                <div className="capacity-bar">
-                  <div
-                    className={`capacity-bar__fill ${d.ratio >= 90 ? 'is-danger' : d.ratio >= 70 ? 'is-warning' : 'is-ok'}`}
-                    style={{ width: `${Math.min(100, d.ratio)}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between mt-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  <span>{d.productCount} articles</span>
-                  {d.lowStock > 0 && (
-                    <span className="flex items-center gap-1" style={{ color: 'var(--warning)' }}>
-                      <AlertTriangle size={10} /> {d.lowStock} alerte{d.lowStock > 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -295,36 +365,41 @@ export default function StocksDashboard({ products, history }: Props) {
             </h3>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {kpis.lowStock.map(p => (
-              <Link
-                key={p.id}
-                href="/admin/catalogue"
-                className="alert-tile"
-                title="Voir dans le catalogue"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold truncate">{p.name}</div>
-                    <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {CATEGORY_DEPOSITS[p.category].code}
+            {kpis.lowStock.map(p => {
+              // Localité principale du produit (1re localité où il a du stock > 0).
+              const mainLoc = stockByLocation.find((s) => s.product_id === p.id && s.quantity > 0);
+              const locCode = mainLoc?.location?.code ?? '—';
+              return (
+                <Link
+                  key={p.id}
+                  href="/admin/catalogue"
+                  className="alert-tile"
+                  title="Voir dans le catalogue"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold truncate">{p.name}</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        {locCode}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-sm" style={{ color: p.stock === 0 ? 'var(--danger)' : 'var(--warning)' }}>
+                        {p.stock}
+                      </div>
+                      <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                        seuil {p.stock_alert_threshold}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="font-bold text-sm" style={{ color: p.stock === 0 ? 'var(--danger)' : 'var(--warning)' }}>
-                      {p.stock}
+                  {p.stock === 0 && (
+                    <div className="badge badge-annulee mt-2 text-[9px]">
+                      <AlertTriangle size={9} /> Rupture totale
                     </div>
-                    <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                      seuil {p.stock_alert_threshold}
-                    </div>
-                  </div>
-                </div>
-                {p.stock === 0 && (
-                  <div className="badge badge-annulee mt-2 text-[9px]">
-                    <AlertTriangle size={9} /> Rupture totale
-                  </div>
-                )}
-              </Link>
-            ))}
+                  )}
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}
@@ -340,7 +415,7 @@ export default function StocksDashboard({ products, history }: Props) {
                 <span className="badge badge-traitee text-[10px]">{group.items.length} articles</span>
               </div>
               <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                Dépôt : <span className="font-semibold" style={{ color: 'var(--text)' }}>{group.deposit.code}</span> — {group.deposit.city}
+                Localité principale : <span className="font-semibold" style={{ color: 'var(--text)' }}>{group.depositLabel}</span>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -368,7 +443,7 @@ export default function StocksDashboard({ products, history }: Props) {
                           <div className="flex flex-col">
                             <span>{p.name}</span>
                             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                              {group.deposit.code}
+                              {stockByLocation.find((s) => s.product_id === p.id && s.quantity > 0)?.location?.code ?? '—'}
                               {p.is_featured && <> • ⭐ Vedette</>}
                             </span>
                           </div>
@@ -450,11 +525,14 @@ export default function StocksDashboard({ products, history }: Props) {
         </div>
       )}
 
-      {/* Modale Mouvement de stock — même composant que celui du catalogue */}
+      {/* Modale Mouvement de stock — même composant que celui du catalogue,
+          enrichi avec le catalogue des localités (migration 0014). */}
       <RestockDialog
         open={restockTarget !== null}
         product={restockTarget}
         onClose={closeMovement}
+        locations={locations}
+        defaultLocationId={restockLocationId}
         onRestocked={() => {
           // Le dashboard est SSR-fetched : on recharge pour rafraîchir KPIs,
           // graphique, alertes et le stock de chaque article.

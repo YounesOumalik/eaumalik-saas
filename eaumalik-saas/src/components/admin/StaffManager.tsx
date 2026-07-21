@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Plus, Edit2, Trash2, Shield, Archive, RotateCcw, AlertTriangle, Mail } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Plus, Edit2, Trash2, Shield, Archive, RotateCcw, AlertTriangle, Mail, MapPin, Warehouse, Store, PackageOpen } from 'lucide-react';
 import { useToast } from '@/components/shared/ToastProvider';
 import Dialog from '@/components/ui/Dialog';
 import {
@@ -12,7 +12,9 @@ import {
   restoreArchivedStaffAction,
   purgeArchivedStaffAction,
 } from '@/app/actions/adminActions';
+import { listLocationsAction } from '@/app/actions/locationsActions';
 import { formatCurrency } from '@/lib/utils';
+import type { Location, LocationType } from '@/types';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Superadministrateur',
@@ -21,6 +23,23 @@ const ROLE_LABELS: Record<string, string> = {
   stock_manager: 'Gestionnaire de Stock',
   sales: 'Commercial',
   admin_assistant: 'Assistante d\'Administration',
+  depot_manager: 'Gestionnaire de Dépôt',
+  store_manager: 'Gestionnaire de Magasin',
+  presentoir_manager: 'Gestionnaire de Présentoir',
+};
+
+/** Rôles logistiques qui déclenchent l'affichage du bloc « Localités affectées ». */
+const LOGISTICS_ROLES = ['depot_manager', 'store_manager', 'presentoir_manager'] as const;
+/** Mapping rôle logistique → type de localité géré (cf. serveur). */
+const LOGISTICS_ROLE_TO_TYPE: Record<typeof LOGISTICS_ROLES[number], LocationType> = {
+  depot_manager: 'depot',
+  store_manager: 'magasin',
+  presentoir_manager: 'presentoir',
+};
+const LOGISTICS_TYPE_LABEL: Record<LocationType, string> = {
+  depot: 'dépôts',
+  magasin: 'magasins',
+  presentoir: 'présentoirs',
 };
 
 const DEFAULT_PERMISSIONS = {
@@ -30,6 +49,9 @@ const DEFAULT_PERMISSIONS = {
   can_follow_prospects: false,
   can_view_comptabilite: false,
   can_view_stocks: false,
+  // Logistique (migration 0014_locations.sql) — false par défaut, l'admin les coche.
+  can_view_locations: false,
+  can_manage_locations: false,
 };
 
 type Tab = 'active' | 'archived';
@@ -67,8 +89,15 @@ export default function StaffManager({
   const [role, setRole] = useState('sales');
   const [password, setPassword] = useState('');
   const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS);
+  const [managedLocationIds, setManagedLocationIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [resetSubmitting, setResetSubmitting] = useState<string | null>(null);
+
+  // Catalogue de localités affichées dans le multi-select du formulaire.
+  // Chargé à l'ouverture de la modale + à chaque changement de rôle logistique
+  // (car le type change → on filtre sur un autre set).
+  const [availableLocations, setAvailableLocations] = useState<Location[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
 
   const toast = useToast();
 
@@ -79,6 +108,7 @@ export default function StaffManager({
     setPhone('');
     setRole('sales');
     setPassword('');
+    setManagedLocationIds([]);
     setPermissions({
       can_view_products: true,
       can_edit_products: false,
@@ -86,6 +116,8 @@ export default function StaffManager({
       can_follow_prospects: true,
       can_view_comptabilite: false,
       can_view_stocks: false,
+      can_view_locations: false,
+      can_manage_locations: false,
     });
     setModalOpen(true);
   };
@@ -98,69 +130,156 @@ export default function StaffManager({
     setRole(member.role);
     setPassword('');
     setPermissions(member.permissions || DEFAULT_PERMISSIONS);
+    setManagedLocationIds(Array.isArray(member.managed_location_ids) ? member.managed_location_ids : []);
     setModalOpen(true);
   };
 
+  /**
+   * Change le rôle et suggère une matrice de permissions par défaut.
+   *
+   * Non-mutatif : si l'admin a déjà coché/décoché manuellement des cases
+   * depuis la dernière suggestion, on lui demande confirmation avant
+   * d'écraser ses choix (sinon on conserve ce qu'il a fait). Cela évite
+   * le pattern précédent où `handleRoleChange` réinitialisait
+   * silencieusement les toggles.
+   */
   const handleRoleChange = (selectedRole: string) => {
-    setRole(selectedRole);
-    // Auto-suggest permissions based on role
-    if (selectedRole === 'admin') {
-      setPermissions({
-        can_view_products: true,
-        can_edit_products: true,
-        can_validate_orders: true,
-        can_follow_prospects: true,
-        can_view_comptabilite: true,
-        can_view_stocks: true,
-      });
-    } else if (selectedRole === 'administrator') {
-      // Administrateur : tous les droits sauf suppression de superadmin
-      setPermissions({
-        can_view_products: true,
-        can_edit_products: true,
-        can_validate_orders: true,
-        can_follow_prospects: true,
-        can_view_comptabilite: true,
-        can_view_stocks: true,
-      });
-    } else if (selectedRole === 'technician') {
-      setPermissions({
-        can_view_products: true,
-        can_edit_products: false,
-        can_validate_orders: false,
-        can_follow_prospects: false,
-        can_view_comptabilite: false,
-        can_view_stocks: true,
-      });
-    } else if (selectedRole === 'stock_manager') {
-      setPermissions({
-        can_view_products: true,
-        can_edit_products: true,
-        can_validate_orders: false,
-        can_follow_prospects: false,
-        can_view_comptabilite: false,
-        can_view_stocks: true,
-      });
-    } else if (selectedRole === 'sales') {
-      setPermissions({
-        can_view_products: true,
-        can_edit_products: false,
-        can_validate_orders: true,
-        can_follow_prospects: true,
-        can_view_comptabilite: false,
-        can_view_stocks: false,
-      });
-    } else if (selectedRole === 'admin_assistant') {
-      setPermissions({
-        can_view_products: true,
-        can_edit_products: false,
-        can_validate_orders: true,
-        can_follow_prospects: true,
-        can_view_comptabilite: false,
-        can_view_stocks: true,
-      });
+    if (selectedRole === role) return;
+
+    const suggested = permissionsForRole(selectedRole);
+    const currentlyEdited = JSON.stringify(permissions) !== JSON.stringify(permissionsForRole(role));
+    if (currentlyEdited) {
+      const accept = window.confirm(
+        'Vous avez modifié manuellement les permissions. '
+          + 'Changer de rôle va les réinitialiser selon le modèle standard pour « '
+          + (ROLE_LABELS[selectedRole] || selectedRole)
+          + ' ». Continuer ?'
+      );
+      if (!accept) return;
     }
+    setRole(selectedRole);
+    setPermissions(suggested);
   };
+
+  /** Matrice par défaut pour un rôle donné (utilisée aussi à l'init). */
+  function permissionsForRole(r: string) {
+    if (r === 'admin') {
+      return {
+        can_view_products: true, can_edit_products: true,
+        can_validate_orders: true, can_follow_prospects: true,
+        can_view_comptabilite: true, can_view_stocks: true,
+        can_view_locations: true, can_manage_locations: true,
+      };
+    }
+    if (r === 'administrator') {
+      return {
+        can_view_products: true, can_edit_products: true,
+        can_validate_orders: true, can_follow_prospects: true,
+        can_view_comptabilite: true, can_view_stocks: true,
+        can_view_locations: true, can_manage_locations: true,
+      };
+    }
+    if (r === 'technician') {
+      return {
+        can_view_products: true, can_edit_products: false,
+        can_validate_orders: false, can_follow_prospects: false,
+        can_view_comptabilite: false, can_view_stocks: true,
+        can_view_locations: false, can_manage_locations: false,
+      };
+    }
+    if (r === 'stock_manager') {
+      return {
+        can_view_products: true, can_edit_products: true,
+        can_validate_orders: false, can_follow_prospects: false,
+        can_view_comptabilite: false, can_view_stocks: true,
+        can_view_locations: true, can_manage_locations: true,
+      };
+    }
+    if (r === 'sales') {
+      return {
+        can_view_products: true, can_edit_products: false,
+        can_validate_orders: true, can_follow_prospects: true,
+        can_view_comptabilite: false, can_view_stocks: false,
+        can_view_locations: false, can_manage_locations: false,
+      };
+    }
+    if (r === 'admin_assistant') {
+      return {
+        can_view_products: true, can_edit_products: false,
+        can_validate_orders: true, can_follow_prospects: true,
+        can_view_comptabilite: false, can_view_stocks: true,
+        can_view_locations: true, can_manage_locations: false,
+      };
+    }
+    // Sous-rôles logistiques : le rôle gère ses localités. On suggère
+    // view_products + view_locations par défaut ; manage_locations est
+    // explicitement cochable par l'admin.
+    if (r === 'depot_manager') {
+      return {
+        can_view_products: true, can_edit_products: false,
+        can_validate_orders: false, can_follow_prospects: false,
+        can_view_comptabilite: false, can_view_stocks: true,
+        can_view_locations: true, can_manage_locations: true,
+      };
+    }
+    if (r === 'store_manager') {
+      return {
+        can_view_products: true, can_edit_products: false,
+        can_validate_orders: true, can_follow_prospects: false,
+        can_view_comptabilite: false, can_view_stocks: false,
+        can_view_locations: true, can_manage_locations: true,
+      };
+    }
+    if (r === 'presentoir_manager') {
+      return {
+        can_view_products: true, can_edit_products: false,
+        can_validate_orders: false, can_follow_prospects: false,
+        can_view_comptabilite: false, can_view_stocks: false,
+        can_view_locations: true, can_manage_locations: false,
+      };
+    }
+    return DEFAULT_PERMISSIONS;
+  }
+
+  /**
+   * Charge les localités filtrées par type quand un rôle logistique est
+   * sélectionné (et à l'ouverture de la modale si on édite un profil
+   * logistique déjà sauvegardé). Re-fetch à chaque changement de rôle
+   * logistique pour actualiser le catalogue.
+   */
+  useEffect(() => {
+    if (!modalOpen) return;
+    const isLogistics = (LOGISTICS_ROLES as readonly string[]).includes(role);
+    if (!isLogistics) {
+      // Rôle non-logistique : on vide le catalogue et reset des affectations
+      // (un rôle non-logistique n'a pas de localités à gérer).
+      if (managedLocationIds.length > 0) setManagedLocationIds([]);
+      setAvailableLocations([]);
+      return;
+    }
+    const wantedType = LOGISTICS_ROLE_TO_TYPE[role as typeof LOGISTICS_ROLES[number]];
+    let cancelled = false;
+    setLocationsLoading(true);
+    listLocationsAction({ type: wantedType, onlyActive: true, includeArchived: false })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.success) setAvailableLocations(res.locations);
+        else {
+          setAvailableLocations([]);
+          toast('Impossible de charger les localités : ' + res.error, 'error');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableLocations([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLocationsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, modalOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,6 +293,7 @@ export default function StaffManager({
         phone,
         role,
         permissions,
+        managed_location_ids: managedLocationIds,
       });
 
       if (res.success) {
@@ -202,6 +322,7 @@ export default function StaffManager({
         phone,
         role,
         permissions,
+        managed_location_ids: managedLocationIds,
       });
 
       if (res.success && res.staff) {
@@ -430,6 +551,8 @@ export default function StaffManager({
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                     member.role === 'admin' ? 'bg-danger-soft text-danger'
                     : member.role === 'administrator' ? 'bg-amber-500/15 text-amber-400'
+                    : (LOGISTICS_ROLES as readonly string[]).includes(member.role)
+                      ? 'bg-emerald-500/15 text-emerald-400'
                     : 'bg-primary-soft text-primary-light'
                   }`}>
                     {ROLE_LABELS[member.role] || member.role}
@@ -470,6 +593,19 @@ export default function StaffManager({
                             )}
                             {member.permissions?.can_view_comptabilite && (
                               <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/15 text-indigo-400">Voir Compta.</span>
+                            )}
+                            {member.permissions?.can_view_locations && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/15 text-emerald-400">Voir Localités</span>
+                            )}
+                            {member.permissions?.can_manage_locations && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/15 text-emerald-400">Gérer Logistique</span>
+                            )}
+                            {(LOGISTICS_ROLES as readonly string[]).includes(member.role)
+                              && Array.isArray(member.managed_location_ids)
+                              && member.managed_location_ids.length > 0 && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-slate-500/15 text-slate-300">
+                                {member.managed_location_ids.length} localité{member.managed_location_ids.length > 1 ? 's' : ''}
+                              </span>
                             )}
                             {!member.permissions && (
                               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
@@ -640,6 +776,11 @@ export default function StaffManager({
                       <option value="technician">Technicien</option>
                       <option value="stock_manager">Gestionnaire de Stock</option>
                       <option value="admin_assistant">Assistante d&apos;Administration</option>
+                      <optgroup label="Logistique — gestion des localités">
+                        <option value="depot_manager">Gestionnaire de Dépôt</option>
+                        <option value="store_manager">Gestionnaire de Magasin</option>
+                        <option value="presentoir_manager">Gestionnaire de Présentoir</option>
+                      </optgroup>
                       <option value="administrator">Administrateur (Droits Étendus)</option>
                       {currentUserRole === 'admin' && (
                         <option value="admin">Superadministrateur (Accès Total)</option>
@@ -724,7 +865,99 @@ export default function StaffManager({
                         />
                         <span>Consulter la comptabilité</span>
                       </label>
+                      <label className="flex items-center gap-2.5 p-2 rounded-lg bg-[color:var(--bg-card)] border border-[color:var(--border)] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={permissions.can_view_locations}
+                          onChange={e => setPermissions(p => ({ ...p, can_view_locations: e.target.checked }))}
+                          className="rounded text-cyan-500 focus:ring-cyan-500 bg-[color:var(--bg-card-hover)]"
+                        />
+                        <span>Consulter les localités</span>
+                      </label>
+                      <label className="flex items-center gap-2.5 p-2 rounded-lg bg-[color:var(--bg-card)] border border-[color:var(--border)] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={permissions.can_manage_locations}
+                          onChange={e => setPermissions(p => ({ ...p, can_manage_locations: e.target.checked }))}
+                          className="rounded text-cyan-500 focus:ring-cyan-500 bg-[color:var(--bg-card-hover)]"
+                        />
+                        <span>Gérer la logistique (modifications + transferts)</span>
+                      </label>
                     </div>
+                  </div>
+                )}
+
+                {/* Bloc « Localités affectées » — visible UNIQUEMENT pour les
+                    sous-rôles logistiques (depot/store/presentoir_manager). */}
+                {(LOGISTICS_ROLES as readonly string[]).includes(role) && (
+                  <div className="border-t border-[color:var(--border)] pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="form-label font-bold flex items-center gap-2">
+                        <MapPin size={14} />
+                        Localités affectées
+                        <span className="text-[10px] font-normal opacity-70">
+                          (type : {LOGISTICS_TYPE_LABEL[LOGISTICS_ROLE_TO_TYPE[role as typeof LOGISTICS_ROLES[number]]]})
+                        </span>
+                      </span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {managedLocationIds.length} sélectionnée{managedLocationIds.length > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {locationsLoading ? (
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Chargement des localités…
+                      </p>
+                    ) : availableLocations.length === 0 ? (
+                      <div className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-xs">
+                        <AlertTriangle size={14} className="inline-block mr-1.5 -mt-0.5" />
+                        Aucune {LOGISTICS_TYPE_LABEL[LOGISTICS_ROLE_TO_TYPE[role as typeof LOGISTICS_ROLES[number]]]} active n&apos;est enregistrée.
+                        Vous pouvez en créer depuis <strong>Logistique</strong> (menu latéral) puis revenir affecter ce profil.
+                      </div>
+                    ) : (
+                      <div className="grid sm:grid-cols-2 gap-2 text-xs max-h-56 overflow-y-auto pr-1">
+                        {availableLocations.map((loc) => {
+                          const checked = managedLocationIds.includes(loc.id);
+                          return (
+                            <label
+                              key={loc.id}
+                              className="flex items-center gap-2.5 p-2 rounded-lg bg-[color:var(--bg-card)] border border-[color:var(--border)] cursor-pointer hover:border-cyan-500/40"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setManagedLocationIds((prev) =>
+                                      prev.includes(loc.id) ? prev : [...prev, loc.id]
+                                    );
+                                  } else {
+                                    setManagedLocationIds((prev) =>
+                                      prev.filter((id) => id !== loc.id)
+                                    );
+                                  }
+                                }}
+                                className="rounded text-cyan-500 focus:ring-cyan-500 bg-[color:var(--bg-card-hover)]"
+                              />
+                              <span className="flex-1 min-w-0">
+                                <span className="font-mono text-[10px] opacity-70 mr-1.5">{loc.code}</span>
+                                <span className="truncate">{loc.name}</span>
+                                {loc.city ? (
+                                  <span className="block text-[10px] opacity-60">{loc.city}</span>
+                                ) : null}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {managedLocationIds.length === 0 && availableLocations.length > 0 && (
+                      <div className="mt-3 rounded-lg border border-warning/40 bg-warning/5 p-3 text-xs flex items-start gap-2">
+                        <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                        <span>
+                          Sans localité affectée, ce profil n&apos;aura accès à aucune structure et verra une page vide sur /admin/locations.
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </form>

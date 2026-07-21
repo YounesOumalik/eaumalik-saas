@@ -17,3 +17,14 @@ package.json
 .env.*.local
 *.log
 .DS_Store
+
+# Tests Playwright (artefacts)
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Mock data-store (contient potentiellement des secrets legacy —
+# généré au runtime par src/data/localDb.ts). À NE PAS versionner.
+eaumalik-saas/data-store/users.json
+eaumalik-saas/data-store/users_archive.json
+eaumalik-saas/data-store/password_resets.json

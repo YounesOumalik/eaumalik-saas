@@ -19,7 +19,10 @@ export type AdminPermissionKey =
   | 'can_view_stocks'
   | 'can_view_products'
   | 'can_view_comptabilite'
-  | 'can_follow_prospects';
+  | 'can_follow_prospects'
+  // Logistique (cf. migration 0014_locations.sql)
+  | 'can_view_locations'
+  | 'can_manage_locations';
 
 export type AdminNavItem = {
   /** Identifiant technique stable, utilisé comme `data-tab` et clé React. */
@@ -73,6 +76,13 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
     href: '/admin/comptabilite',
     scope: 'admin',
     permissionKey: 'can_view_comptabilite',
+  },
+  {
+    id: 'locations',
+    label: 'Logistique',
+    href: '/admin/locations',
+    scope: 'admin',
+    permissionKey: 'can_view_locations',
   },
   {
     id: 'maintenance',

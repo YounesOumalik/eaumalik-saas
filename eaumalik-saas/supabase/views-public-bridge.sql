@@ -34,6 +34,12 @@ CREATE VIEW public.company_profile AS SELECT * FROM eaumalik.company_profile;
 CREATE VIEW public.maintenance_alerts AS SELECT * FROM eaumalik.maintenance_alerts;
 CREATE VIEW public.messages AS SELECT * FROM eaumalik.messages;
 CREATE VIEW public.news AS SELECT * FROM eaumalik.news;
+-- Module logistique (migration 0014/0015)
+CREATE VIEW public.locations AS SELECT * FROM eaumalik.locations;
+CREATE VIEW public.product_location_stock AS SELECT * FROM eaumalik.product_location_stock;
+CREATE VIEW public.transfer_requests AS SELECT * FROM eaumalik.transfer_requests;
+CREATE VIEW public.product_stock_by_location AS SELECT * FROM eaumalik.product_stock_by_location;
+CREATE VIEW public.transfer_request_details AS SELECT * FROM eaumalik.transfer_request_details;
 -- Bridge maintenance (ajoutés en 0004 mais absents du bridge initial)
 CREATE VIEW public.maintenance_records AS
   SELECT id, client_name, client_phone, client_city, client_address,
@@ -56,6 +62,15 @@ ALTER VIEW public.messages          OWNER TO postgres;
 ALTER VIEW public.news              OWNER TO postgres;
 ALTER VIEW public.maintenance_records      OWNER TO postgres;
 ALTER VIEW public.maintenance_interventions OWNER TO postgres;
+ALTER VIEW public.locations                OWNER TO postgres;
+ALTER VIEW public.product_location_stock   OWNER TO postgres;
+ALTER VIEW public.transfer_requests        OWNER TO postgres;
+ALTER VIEW public.product_stock_by_location OWNER TO postgres;
+ALTER VIEW public.transfer_request_details OWNER TO postgres;
+
+-- Le code Next.js écrit via la service_role directement dans eaumalik.* ;
+-- pas besoin de triggers INSTEAD OF pour ces nouvelles vues (pas d'écriture
+-- client-side sur locations / stock / transfers).
 
 -- Vue user_profile_complete : exposée au middleware via PostgREST pour
 -- décider si un user authentifié doit être forcé à compléter son profil

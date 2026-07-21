@@ -14,6 +14,20 @@ import {
   writeUsersRaw,
 } from '@/data/repositories';
 
+/** Liste blanche des rôles acceptés par les Server Actions staff.
+ *  Sync avec le CHECK SQL `users_role_check` (migration 0014_locations.sql). */
+const STAFF_ROLES = [
+  'admin',
+  'administrator',
+  'sales',
+  'technician',
+  'stock_manager',
+  'admin_assistant',
+  'depot_manager',
+  'store_manager',
+  'presentoir_manager',
+] as const;
+
 const PermissionsSchema = z.object({
   can_view_products: z.boolean(),
   can_edit_products: z.boolean(),
@@ -21,7 +35,18 @@ const PermissionsSchema = z.object({
   can_follow_prospects: z.boolean(),
   can_view_comptabilite: z.boolean(),
   can_view_stocks: z.boolean(),
+  // Logistique (cf. migration 0014_locations.sql). Toutes deux false par défaut
+  // pour rétro-compat avec les profils existants.
+  can_view_locations: z.boolean().optional().default(false),
+  can_manage_locations: z.boolean().optional().default(false),
 });
+
+/** UUIDs de localités affectées à un sous-rôle logistique.
+ *  Côté DB c'est une colonne `managed_location_ids UUID[]`. */
+const ManagedLocationsSchema = z
+  .array(z.string().uuid('Identifiant de localité invalide.'))
+  .max(50, 'Trop de localités affectées (max 50).')
+  .default([]);
 
 const StaffCreateSchema = z.object({
   email: z.string().email('Email invalide.'),
@@ -31,16 +56,18 @@ const StaffCreateSchema = z.object({
     .regex(/[0-9]/, 'Doit contenir un chiffre.'),
   full_name: z.string().min(3).max(100),
   phone: z.string().regex(/^0[6-7][0-9]{8}$/, 'Numéro marocain invalide.').optional().or(z.literal('')),
-  role: z.string().min(1).max(40),
+  role: z.enum(STAFF_ROLES, { errorMap: () => ({ message: 'Rôle invalide.' }) }),
   permissions: PermissionsSchema,
+  managed_location_ids: ManagedLocationsSchema.optional(),
 });
 
 const StaffUpdateSchema = z.object({
   email: z.string().email(),
   full_name: z.string().min(3).max(100),
   phone: z.string().regex(/^0[6-7][0-9]{8}$/).optional().or(z.literal('')),
-  role: z.string().min(1).max(40),
+  role: z.enum(STAFF_ROLES, { errorMap: () => ({ message: 'Rôle invalide.' }) }),
   permissions: PermissionsSchema,
+  managed_location_ids: ManagedLocationsSchema.optional(),
 });
 
 const PasswordResetTargetSchema = z.object({
@@ -144,6 +171,8 @@ export async function createStaffUserAction(raw: unknown) {
       phone: parsed.data.phone || null,
       role: parsed.data.role,
       permissions: parsed.data.permissions,
+      // Persistance des localités affectées (table introduite par migration 0014).
+      managed_location_ids: parsed.data.managed_location_ids ?? [],
     }).eq('id', data.user.id);
     if (updateErr) throw updateErr;
     revalidatePath('/admin/personnels');
@@ -188,6 +217,13 @@ export async function updateStaffUserAction(id: string, raw: unknown) {
       phone: parsed.data.phone,
       role: parsed.data.role,
       permissions: parsed.data.permissions,
+      // Si le payload inclut des localités, on les persiste ; sinon on NE
+      // touche PAS la colonne (un update partiel sans la clé préserve la
+      // valeur existante). On envoie `[]` quand le rôle change vers un rôle
+      // non-logistique pour nettoyer.
+      ...(parsed.data.managed_location_ids !== undefined
+        ? { managed_location_ids: parsed.data.managed_location_ids }
+        : {}),
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase.from('users').update(update).eq('id', id);

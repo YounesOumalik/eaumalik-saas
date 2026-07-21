@@ -84,7 +84,9 @@ export interface AuthUser {
 }
 
 /** Liste des rôles métier reconnus (synchro avec le CHECK constraint
- *  users_role_check côté DB). */
+ *  users_role_check côté DB).
+ *  ⚠️ Toute modification DOIT être reportée dans la migration SQL
+ *  0014_locations.sql (étend users_role_check) avant d'être utilisée. */
 export const ALL_ROLES = [
   'client',
   'admin',
@@ -93,8 +95,25 @@ export const ALL_ROLES = [
   'technician',
   'stock_manager',
   'admin_assistant',
+  // Sous-rôles logistiques (cf. migration 0014_locations.sql)
+  'depot_manager',
+  'store_manager',
+  'presentoir_manager',
 ] as const;
 export type RealRole = (typeof ALL_ROLES)[number];
+
+/** Rôles logistiques qui gèrent des localités spécifiques. La visibilité
+ *  est restreinte à leurs localités affectées (cf. `getVisibleLocationsForUser`). */
+export const LOGISTICS_ROLES = ['depot_manager', 'store_manager', 'presentoir_manager'] as const;
+export type LogisticsRole = (typeof LOGISTICS_ROLES)[number];
+
+/** Mapping rôle logistique → type de localité qu'il gère. Une affectation à
+ *  un autre type est rejetée par `getVisibleLocationsForUser`. */
+export const LOGISTICS_ROLE_TO_LOCATION_TYPE: Record<LogisticsRole, 'depot' | 'magasin' | 'presentoir'> = {
+  depot_manager: 'depot',
+  store_manager: 'magasin',
+  presentoir_manager: 'presentoir',
+};
 
 /**Renvoie l'utilisateur authentifie via Supabase Auth (ou session dev en mode mock),
  * ou jete AuthError(401).
@@ -182,6 +201,9 @@ function effectivePermissions(user: AuthUser): Record<string, boolean> {
     'can_follow_prospects',
     'can_view_comptabilite',
     'can_view_stocks',
+    // Logistique (cf. migration 0014_locations.sql)
+    'can_view_locations',
+    'can_manage_locations',
   ]) {
     // Admin-staff : toujours true. Sinon : valeur explicite du profil (false / true),
     // fallback à false si non renseigne.
