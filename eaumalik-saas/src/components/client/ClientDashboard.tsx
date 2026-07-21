@@ -16,8 +16,6 @@ import {
   ShoppingBag,
   ExternalLink,
   LogOut,
-  Eye,
-  EyeOff,
   PanelLeftClose,
   PanelLeftOpen,
   CheckCircle2,
@@ -33,7 +31,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime, daysUntil } from '@/lib/utils';
-import { changeOwnPasswordAction, sendClientMessageAction, updateUserProfileAction } from '@/app/actions/clientActions';
+import { sendClientMessageAction, updateUserProfileAction } from '@/app/actions/clientActions';
 import { useToast } from '@/components/shared/ToastProvider';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 import { OrderTimeline } from '@/components/admin/OrderTracker';
@@ -50,7 +48,7 @@ interface Props {
       address?: string;
       referral_code: string;
       cashback_balance: number;
-      /** Vrai si le compte est connecte via Google OAuth (aucun mot de passe local). */
+      /** Vrai si le compte est authentifié via Google OAuth. */
       isGoogleUser: boolean;
     };
     referredUsers: any[];
@@ -110,13 +108,6 @@ export default function ClientDashboard({ initialData }: Props) {
   const [city, setCity] = useState(initialData.user.city || '');
   const [address, setAddress] = useState(initialData.user.address || '');
   const [updating, setUpdating] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [passwordConfirmation, setPasswordConfirmation] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,26 +125,6 @@ export default function ClientDashboard({ initialData }: Props) {
       toast('Erreur : ' + res.error, 'error');
     }
     setUpdating(false);
-  };
-
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (changingPassword) return;
-    setChangingPassword(true);
-    const res = await changeOwnPasswordAction({
-      current_password: currentPassword,
-      new_password: newPassword,
-      confirmation: passwordConfirmation,
-    });
-    if (res.success) {
-      toast('Mot de passe modifié avec succès.', 'success');
-      setCurrentPassword('');
-      setNewPassword('');
-      setPasswordConfirmation('');
-    } else {
-      toast('Erreur : ' + res.error, 'error');
-    }
-    setChangingPassword(false);
   };
 
   // Auto scroll chat
@@ -218,15 +189,13 @@ export default function ClientDashboard({ initialData }: Props) {
     [activeTab]
   );
 
-  // Commande en PREMIER : ouvre le suivi des commandes du client.
-  // L'onglet Maintenance s'affiche dès qu'une commande a été livrée OU qu'une
-  // fiche de maintenance existe deja pour ce client (cas ou l'admin en cree
-  // une a la main avant que la commande passe en statut 'livree').
+  // Parrainage en PREMIER (page d'accueil du dashboard client), puis
+  // Commande, puis Maintenance si le client a du matériel installé.
   const hasMaintenanceAccess = initialData.userOrders.some((order: any) => order.status === 'livree')
     || initialData.maintenanceRecords.length > 0;
   const navItems: NavItem[] = [
-    { id: 'orders', label: 'Commande', icon: ShoppingBag },
     { id: 'parrainage', label: 'Parrainage & Cashback', icon: Gift },
+    { id: 'orders', label: 'Commande', icon: ShoppingBag },
     ...(hasMaintenanceAccess
       ? [{ id: 'maintenance', label: 'Maintenance Filtres', icon: ShieldAlert }]
       : []),
@@ -678,91 +647,10 @@ export default function ClientDashboard({ initialData }: Props) {
                 {updating ? 'Enregistrement...' : 'Enregistrer les modifications'}
               </button>
             </form>
-
-            {!initialData.user.isGoogleUser && (
-              <div className="border-t border-[color:var(--border)] mt-8 pt-6">
-                <h4 className="font-display font-bold text-base mb-1">Modifier mon mot de passe</h4>
-                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-                  Votre mot de passe reste confidentiel et n’est jamais visible par l’administration.
-                </p>
-                <form onSubmit={handleChangePassword} className="space-y-4">
-                <PasswordInput
-                  label="Mot de passe actuel"
-                  value={currentPassword}
-                  onChange={setCurrentPassword}
-                  visible={showCurrentPassword}
-                  onToggle={() => setShowCurrentPassword(value => !value)}
-                  autoComplete="current-password"
-                  disabled={changingPassword}
-                />
-                <PasswordInput
-                  label="Nouveau mot de passe"
-                  value={newPassword}
-                  onChange={setNewPassword}
-                  visible={showNewPassword}
-                  onToggle={() => setShowNewPassword(value => !value)}
-                  autoComplete="new-password"
-                  disabled={changingPassword}
-                />
-                <PasswordInput
-                  label="Confirmer le nouveau mot de passe"
-                  value={passwordConfirmation}
-                  onChange={setPasswordConfirmation}
-                  visible={showPasswordConfirmation}
-                  onToggle={() => setShowPasswordConfirmation(value => !value)}
-                  autoComplete="new-password"
-                  disabled={changingPassword}
-                />
-                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                  Minimum 12 caractères, avec majuscule, minuscule et chiffre.
-                </p>
-                <button type="submit" disabled={changingPassword} className="btn-outline w-full justify-center py-2.5 text-sm disabled:opacity-50">
-                  {changingPassword ? 'Modification...' : 'Modifier le mot de passe'}
-                </button>
-                </form>
-              </div>
-            )}
           </div>
         )}
       </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function PasswordInput({
-  label, value, onChange, visible, onToggle, autoComplete, disabled,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  visible: boolean;
-  onToggle: () => void;
-  autoComplete: string;
-  disabled: boolean;
-}) {
-  return (
-    <div>
-      <label className="form-label">{label} *</label>
-      <div className="relative">
-        <input
-          type={visible ? 'text' : 'password'}
-          required
-          className="form-input pr-10"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          autoComplete={autoComplete}
-          disabled={disabled}
-        />
-        <button
-          type="button"
-          onClick={onToggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
-          aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-        >
-          {visible ? <EyeOff size={16} /> : <Eye size={16} />}
-        </button>
       </div>
     </div>
   );
@@ -1009,6 +897,7 @@ const CLIENT_OUTCOME_LABELS: Record<InterventionOutcome, string> = {
 function ClientMaintenanceTab({ initialRecords }: { initialRecords: MaintenanceRecord[] }) {
   const [records, setRecords] = useState<MaintenanceRecord[]>(initialRecords);
   const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -1024,6 +913,18 @@ function ClientMaintenanceTab({ initialRecords }: { initialRecords: MaintenanceR
       setLoading(false);
     }
   }, []);
+
+  const toggle = useCallback((id: string) => {
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
+  const expandAll = () => {
+    const next: Record<string, boolean> = {};
+    for (const r of records) next[r.id] = true;
+    setExpanded(next);
+  };
+  const collapseAll = () => setExpanded({});
+  const allExpanded = records.length > 0 && records.every(r => expanded[r.id]);
 
   if (records.length === 0) {
     return (
@@ -1046,31 +947,136 @@ function ClientMaintenanceTab({ initialRecords }: { initialRecords: MaintenanceR
   }
 
   return (
-    <div className="space-y-6" style={{ transform: 'none' }}>
-      <div className="glass-card p-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h3 className="font-display font-bold text-lg mb-2 flex items-center gap-2">
-            <ShieldAlert size={18} className="text-sky-400" /> Suivi de la Maintenance
-          </h3>
-          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Retrouvez le calendrier de maintenance, le détail des interventions et l&apos;historique des changements de filtres pour chaque appareil installé.
-          </p>
+    <div className="space-y-3" style={{ transform: 'none' }}>
+      <div className="glass-card p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <ShieldAlert size={16} className="text-sky-400" />
+          <h3 className="font-display font-bold text-base">Suivi de la Maintenance</h3>
+          <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>
+            · {records.length} appareil{records.length > 1 ? 's' : ''} installé{records.length > 1 ? 's' : ''}
+          </span>
         </div>
-        <button
-          type="button"
-          onClick={refresh}
-          disabled={loading}
-          className="btn-outline inline-flex items-center gap-2 text-xs disabled:opacity-50"
-          title="Recharger les interventions"
-        >
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> {loading ? 'Actualisation...' : 'Actualiser'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={allExpanded ? collapseAll : expandAll}
+            className="btn-outline text-[11px] py-1 px-3 inline-flex items-center gap-1.5"
+            aria-label={allExpanded ? 'Tout replier' : 'Tout déplier'}
+          >
+            {allExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {allExpanded ? 'Tout replier' : 'Tout déplier'}
+          </button>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={loading}
+            className="btn-outline text-[11px] py-1 px-3 inline-flex items-center gap-1.5 disabled:opacity-50"
+            title="Recharger les interventions"
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Actualisation...' : 'Actualiser'}
+          </button>
+        </div>
       </div>
 
-      {records.map(record => (
-        <ClientMaintenanceCard key={record.id} record={record} />
-      ))}
+      <div className="space-y-2">
+        {records.map(record => (
+          <ClientMaintenanceRow
+            key={record.id}
+            record={record}
+            expanded={!!expanded[record.id]}
+            onToggle={() => toggle(record.id)}
+          />
+        ))}
+      </div>
     </div>
+  );
+}
+
+function ClientMaintenanceRow({
+  record,
+  expanded,
+  onToggle,
+}: {
+  record: MaintenanceRecord;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const statusStyle = CLIENT_MAINTENANCE_STATUS_STYLE[record.status];
+  const statusLabel = CLIENT_MAINTENANCE_STATUS_LABELS[record.status];
+  const dueIn = record.next_service_date ? daysUntil(record.next_service_date) : null;
+  const dueBadge = (() => {
+    if (dueIn === null || record.status === 'resilie') return null;
+    if (dueIn < 0) {
+      return { text: `En retard de ${Math.abs(dueIn)} j`, color: 'text-danger', bg: 'bg-danger-soft', icon: AlertTriangle };
+    }
+    if (dueIn <= 30) {
+      return { text: `Dans ${dueIn} j`, color: 'text-warning', bg: 'bg-warning-soft', icon: CalendarClock };
+    }
+    return { text: `Dans ${dueIn} j`, color: 'text-success', bg: 'bg-success-soft', icon: CheckCircle2 };
+  })();
+  const interventionCount = record.interventions?.length ?? record.intervention_count ?? 0;
+
+  return (
+    <article className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] overflow-hidden">
+      {/* Ligne compacte */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={`maint-details-${record.id}`}
+        className="w-full text-left p-4 flex items-center gap-3 hover:bg-[color:var(--bg-card)] transition-colors"
+      >
+        <span
+          className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${statusStyle.bg} text-primary-light`}
+          aria-hidden="true"
+        >
+          <Wrench size={16} />
+        </span>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-display font-bold text-sm truncate">{record.product_name}</span>
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${statusStyle.bg} ${statusStyle.fg}`}>
+              {statusLabel}
+            </span>
+            {dueBadge && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${dueBadge.bg} ${dueBadge.color}`}>
+                <dueBadge.icon size={10} /> {dueBadge.text}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <span>Installé le {formatDate(record.install_date)}</span>
+            <span>·</span>
+            <span>{interventionCount} intervention{interventionCount > 1 ? 's' : ''}</span>
+            {record.next_service_date && record.status !== 'resilie' && (
+              <>
+                <span>·</span>
+                <span>Prochain : {formatDate(record.next_service_date)}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="text-right flex-shrink-0">
+          <div className="text-[10px] mt-0.5 inline-flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+            {expanded ? 'Replier' : 'Voir le détail'}
+            {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </div>
+        </div>
+      </button>
+
+      {/* Contenu développé : on réutilise ClientMaintenanceCard existant */}
+      {expanded && (
+        <div
+          id={`maint-details-${record.id}`}
+          className="border-t border-[color:var(--border)]"
+        >
+          <ClientMaintenanceCard record={record} />
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -1090,7 +1096,7 @@ function ClientMaintenanceCard({ record }: { record: MaintenanceRecord }) {
   })();
 
   return (
-    <article className="glass-card p-6" style={{ transform: 'none' }}>
+    <div className="p-4 sm:p-5" style={{ transform: 'none' }}>
       {/* Header */}
       <header className="flex flex-wrap items-start justify-between gap-3 pb-4 mb-4" style={{ borderBottom: '1px solid var(--border)' }}>
         <div>
@@ -1185,7 +1191,7 @@ function ClientMaintenanceCard({ record }: { record: MaintenanceRecord }) {
           </ol>
         )}
       </div>
-    </article>
+    </div>
   );
 }
 

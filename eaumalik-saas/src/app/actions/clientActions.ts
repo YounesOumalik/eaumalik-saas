@@ -25,8 +25,6 @@ import {
 import type { MaintenanceRecord } from '@/types';
 
 import { isMockMode } from '@/lib/api-guard';
-import { hashPassword, verifyPassword } from '@/lib/auth/password';
-import { strongPasswordSchema } from '@/lib/auth/passwordPolicy';
 
 // ============================================================================
 // Schémas Zod (validation stricte des payloads)
@@ -36,20 +34,6 @@ const ProfileUpdateSchema = z.object({
   phone: z.string().regex(/^0[6-7][0-9]{8}$/, 'Numéro marocain invalide.'),
   city: z.string().min(1),
   address: z.string().max(200).optional(),
-});
-
-const ChangePasswordSchema = z.object({
-  current_password: z.string().min(1, 'Mot de passe actuel requis.'),
-  new_password: strongPasswordSchema,
-  confirmation: z.string().min(1, 'Confirmation du mot de passe requise.'),
-}).superRefine((value, ctx) => {
-  if (value.new_password !== value.confirmation) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['confirmation'],
-      message: 'Les deux mots de passe ne correspondent pas.',
-    });
-  }
 });
 
 const NewsSchema = z.object({
@@ -787,61 +771,4 @@ export async function updateUserProfileAction(raw: unknown) {
 
   revalidatePath('/client');
   return { success: true as const };
-}
-
-/** Modification du mot de passe du compte courant, séparée du profil. */
-export async function changeOwnPasswordAction(raw: unknown) {
-  const parsed = ChangePasswordSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Validation échouée.' };
-  }
-  const auth = await getOptionalUser();
-  if (!auth) return { success: false as const, error: 'Non authentifié.' };
-
-  // Garde-fou : un compte Google OAuth n'a pas de mot de passe local a modifier.
-  // On refuse cote serveur pour empecher tout bypass via curl/devtools.
-  if (!isMockMode()) {
-    const supabaseProbe = createSupabaseServerClient();
-    const { data: probe } = await supabaseProbe
-      .from('users')
-      .select('google_id')
-      .eq('id', auth.id)
-      .single();
-    if (probe?.google_id) {
-      return { success: false as const, error: 'Compte Google : mot de passe géré par Google.' };
-    }
-  }
-
-  try {
-    if (isMockMode()) {
-      const users = await readUsersRaw();
-      const index = users.findIndex((item: any) => item.id === auth.id);
-      if (index === -1) return { success: false as const, error: 'Profil introuvable.' };
-      if (!verifyPassword(parsed.data.current_password, users[index].password)) {
-        return { success: false as const, error: 'Mot de passe actuel incorrect.' };
-      }
-      users[index] = {
-        ...users[index],
-        password: hashPassword(parsed.data.new_password),
-        updated_at: new Date().toISOString(),
-      };
-      await writeUsersRaw(users);
-      console.info('[security] password_changed', { user_id: auth.id, created_at: new Date().toISOString() });
-      return { success: true as const };
-    }
-
-    const supabase = createSupabaseServerClient();
-    const { error: reauthError } = await supabase.auth.signInWithPassword({
-      email: auth.email,
-      password: parsed.data.current_password,
-    });
-    if (reauthError) return { success: false as const, error: 'Mot de passe actuel incorrect.' };
-
-    const { error } = await supabase.auth.updateUser({ password: parsed.data.new_password });
-    if (error) return { success: false as const, error: 'Mot de passe non mis à jour.' };
-    console.info('[security] password_changed', { user_id: auth.id, created_at: new Date().toISOString() });
-    return { success: true as const };
-  } catch {
-    return { success: false as const, error: 'Modification du mot de passe impossible.' };
-  }
 }

@@ -4,6 +4,7 @@ import 'server-only';
 import type {
   Product, Order, OrderItem, User, MaintenanceAlert, CompanyProfile, News,
   MaintenanceRecord, MaintenanceIntervention, InterventionType, MaintenanceProgramStatus,
+  ProductRestock,
 } from '@/types';
 import {
   MOCK_PRODUCTS, MOCK_USERS, MOCK_ORDERS, MOCK_ORDER_ITEMS,
@@ -18,6 +19,8 @@ import {
   writeUsers,
   readArchivedUsers,
   writeArchivedUsers,
+  readRestockHistory,
+  writeRestockHistory,
   readNews,
   writeNews,
   readMessages,
@@ -261,6 +264,133 @@ export async function updateProductStock(productId: string, delta: number): Prom
   const { data } = await supabase.from('products').select('stock').eq('id', productId).single();
   if (!data) return;
   await supabase.from('products').update({ stock: Math.max(0, data.stock + delta) }).eq('id', productId);
+}
+
+/**
+ * Enregistre un approvisionnement (réassort) pour un produit :
+ *  - ajoute `quantity` au stock existant (incrément, jamais décrément) ;
+ *  - journalise l'événement dans `restock_history` (quantité, date, auteur, note).
+ *
+ * Retourne le produit mis à jour + l'événement créé. Le `restock_date` est la
+ * date effective d'approvisionnement saisie par l'admin (YYYY-MM-DD), distincte
+ * du `created_at` qui est l'instant serveur de l'enregistrement.
+ *
+ * En cas de stock NULL en base, on part de 0. Si la quantité ajoutée est
+ * négative ou nulle, l'appelant reçoit une erreur (un "approvisionnement"
+ * négatif n'a pas de sens — utiliser `updateProductStock` pour décrémenter).
+ */
+export async function restockProduct(
+  productId: string,
+  input: {
+    quantity: number;
+    restock_date: string; // YYYY-MM-DD
+    note?: string | null;
+    created_by?: string | null;
+  },
+): Promise<{ product: Product; event: ProductRestock }> {
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0) {
+    throw new Error('Quantité d\'approvisionnement invalide (doit être > 0).');
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.restock_date)) {
+    throw new Error('Date d\'approvisionnement invalide (format YYYY-MM-DD attendu).');
+  }
+
+  const event: ProductRestock = {
+    id: `rs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    product_id: productId,
+    quantity: Math.trunc(input.quantity),
+    restock_date: input.restock_date,
+    note: input.note?.trim() ? input.note.trim().slice(0, 500) : null,
+    created_by: input.created_by ?? null,
+    created_at: new Date().toISOString(),
+  };
+
+  if (shouldUseMocks()) {
+    const list = readProducts();
+    const idx = list.findIndex(p => p.id === productId);
+    if (idx === -1) throw new Error('Produit introuvable.');
+    const previousStock = list[idx].stock ?? 0;
+    list[idx] = {
+      ...list[idx],
+      stock: previousStock + event.quantity,
+      updated_at: event.created_at,
+    };
+    writeProducts(list);
+
+    const history = readRestockHistory();
+    history.push(event);
+    writeRestockHistory(history);
+    return { product: list[idx], event };
+  }
+
+  // Mode Supabase : on incrémente le stock de manière atomique via une expression
+  // SQL, puis on insère l'événement de réassort. Service role pour contourner la RLS.
+  const supabase = await getSupabaseAdmin();
+
+  // 1) Lecture du stock courant (pour calculer le nouveau stock à retourner
+  //    et vérifier l'existence du produit en une seule requête).
+  const { data: row, error: readErr } = await supabase
+    .from('products')
+    .select('id, stock')
+    .eq('id', productId)
+    .single();
+  if (readErr || !row) throw new Error('Produit introuvable.');
+
+  // 2) Mise à jour du stock : `GREATEST(stock + ?, 0)` pour rester safe côté serveur.
+  //    PostgREST n'accepte pas les expressions arithmétiques dans le body `.update()`,
+  //    donc on relit le stock, on calcule localement, puis on envoie la valeur absolue.
+  //    Pour éviter une race condition, on pourrait passer par une RPC ; on garde
+  //    une stratégie simple ici (admin only, faible concurrence).
+  const previousStock = (row.stock ?? 0) as number;
+  const newStock = previousStock + event.quantity;
+  const { data: updated, error: updErr } = await supabase
+    .from('products')
+    .update({ stock: newStock, updated_at: event.created_at })
+    .eq('id', productId)
+    .select()
+    .single();
+  if (updErr || !updated) throw updErr ?? new Error('Échec de mise à jour du stock.');
+
+  // 3) Insertion de l'événement dans l'historique.
+  const { error: histErr } = await supabase
+    .from('product_restock_history')
+    .insert({
+      id: event.id,
+      product_id: event.product_id,
+      quantity: event.quantity,
+      restock_date: event.restock_date,
+      note: event.note,
+      created_by: event.created_by,
+      created_at: event.created_at,
+    });
+  if (histErr) {
+    // Rollback best-effort : on remet le stock à sa valeur d'origine.
+    await supabase.from('products').update({ stock: previousStock }).eq('id', productId);
+    throw histErr;
+  }
+
+  return { product: updated as Product, event };
+}
+
+/**
+ * Liste l'historique des approvisionnements pour un produit donné,
+ * du plus récent au plus ancien.
+ */
+export async function listRestockHistory(productId: string): Promise<ProductRestock[]> {
+  if (shouldUseMocks()) {
+    const history = readRestockHistory();
+    return history
+      .filter(r => r.product_id === productId)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('product_restock_history')
+    .select('*')
+    .eq('product_id', productId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ProductRestock[];
 }
 
 // ============================================================================
@@ -1018,6 +1148,8 @@ function hydrateRecordInterventions(records: MaintenanceRecord[], interventions:
 
 /** Liste les fiches de maintenance avec filtres optionnels. */
 export async function listMaintenanceRecords(filters: MaintenanceRecordFilters = {}): Promise<MaintenanceRecord[]> {
+  // Élimine les fiches qui pointent vers des pièces de rechange.
+  try { await pruneMaintenanceRecordsForConsumables(); } catch { /* silencieux */ }
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
     let records = [...bundle.records];
@@ -1073,6 +1205,9 @@ export async function listMaintenanceRecordsForUser(
   filters: MaintenanceRecordFilters = {}
 ): Promise<MaintenanceRecord[]> {
   if (!userId) return [];
+  // Élimine les fiches qui pointent vers des pièces de rechange (règle
+  // business : consommables ne génèrent pas de maintenance). Idempotent.
+  try { await pruneMaintenanceRecordsForConsumables(); } catch { /* silencieux */ }
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
     const myOrders = readOrders().filter(o => o.user_id === userId);
@@ -1148,8 +1283,52 @@ export async function getMaintenanceRecord(id: string): Promise<MaintenanceRecor
 }
 
 /**
+ * Nettoie les fiches de maintenance qui pointent sur une piece de rechange
+ * (category = 'consommables'). Idempotent : safe à appeler à chaque lecture.
+ * - mock : réécrit data-store/maintenance.json si des fiches sont retirees.
+ * - prod : DELETE ... USING sur la table.
+ *
+ * Cote SQL la migration 0012 fait le ménage initial ; ce helper rattrape
+ * les cas où la migration n'a pas encore été appliquée.
+ */
+export async function pruneMaintenanceRecordsForConsumables(): Promise<number> {
+  if (shouldUseMocks()) {
+    const products = readProducts();
+    const consommableIds = new Set(
+      products.filter((p: any) => p.category === 'consommables').map((p: any) => p.id)
+    );
+    if (consommableIds.size === 0) return 0;
+    const bundle = readMaintenance();
+    const before = bundle.records.length;
+    const kept = bundle.records.filter(r => !r.product_id || !consommableIds.has(r.product_id));
+    const keptIds = new Set(kept.map(r => r.id));
+    if (kept.length === before) return 0;
+    bundle.records = kept;
+    bundle.interventions = bundle.interventions.filter(i => keptIds.has(i.record_id));
+    writeMaintenance(bundle);
+    return before - kept.length;
+  }
+  const supabase = await getSupabaseAdmin();
+  // PostgREST ne supporte pas JOIN dans DELETE, on fait un sous-select.
+  const { data, error } = await supabase
+    .from('maintenance_records')
+    .delete()
+    .in('product_id', (await supabase.from('products').select('id').eq('category', 'consommables')).data?.map((p: { id: string }) => p.id) ?? [])
+    .select('id');
+  if (error) throw error;
+  return (data ?? []).length;
+}
+
+/**
  * Crée (si manquant) un programme de maintenance par ligne de produit,
  * à partir d'une commande passée à "livrée".
+ *
+ * NOTE 2026-07-21 : les pièces de rechange (category = 'consommables',
+ * ex : filtre seul, charbon actif, membrane vendue à l'unité) ne
+ * génèrent AUCUNE fiche maintenance. Un filtre seul ne s'installe pas
+ * et ne se maintient pas : il se remplace à l'achat. Cette règle est
+ * appliquée ici pour le mode mock ET par le trigger SQL
+ * `ensure_maintenance_on_delivery` (migration 0012) pour la production.
  */
 export async function ensureMaintenanceForOrder(order: Order): Promise<MaintenanceRecord[]> {
   const createdOrExisting: MaintenanceRecord[] = [];
@@ -1160,15 +1339,19 @@ export async function ensureMaintenanceForOrder(order: Order): Promise<Maintenan
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
     const now = new Date().toISOString();
+    const products = readProducts();
     for (const item of items) {
+      // Lookup catégorie produit (défaut 'purificateurs' si produit inconnu
+      // pour rester permissif en dev mock).
+      const product = products.find(p => p.id === item.product_id);
+      const category = (product?.category as string | undefined) ?? 'purificateurs';
+      if (category === 'consommables') continue;
+
       const exists = bundle.records.find(r => r.order_id === order.id && r.product_id === item.product_id);
       if (exists) {
         createdOrExisting.push(exists);
         continue;
       }
-      // Récupérer durée filtre produit si possible
-      const products = readProducts();
-      const product = products.find(p => p.id === item.product_id);
       const lifespan = product?.filter_lifespan_months && product.filter_lifespan_months > 0
         ? product.filter_lifespan_months
         : 6;

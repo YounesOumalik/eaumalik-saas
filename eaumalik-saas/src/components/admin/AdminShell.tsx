@@ -15,7 +15,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ShoppingBag,
-  KeyRound,
   ExternalLink,
   type LucideIcon,
 } from 'lucide-react';
@@ -36,7 +35,6 @@ const SIDEBAR_ICONS: Record<string, LucideIcon> = {
   clients: Users,
   publications: Send,
   personnels: Users,
-  compte: KeyRound,
 };
 
 const STORAGE_KEY = 'eaumalik.admin.sidebar.collapsed';

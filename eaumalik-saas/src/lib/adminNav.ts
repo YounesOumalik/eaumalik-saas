@@ -102,13 +102,6 @@ export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
     scope: 'admin',
     requiredRole: 'admin-staff',
   },
-  {
-    id: 'compte',
-    label: 'Sécurité du compte',
-    href: '/compte',
-    scope: 'global',
-    staffOnly: true,
-  },
 ];
 
 export type AdminScopeFilter = AdminNavScope | 'all';
