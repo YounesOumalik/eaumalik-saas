@@ -2,13 +2,27 @@
 // Bascule automatiquement en fonction de NEXT_PUBLIC_USE_MOCKS et de la présence des credentials.
 import 'server-only';
 import type {
-  Product, Order, OrderItem, User, MaintenanceAlert, CompanyProfile, News,
-  MaintenanceRecord, MaintenanceIntervention, InterventionType, MaintenanceProgramStatus,
-  ProductRestock, StockMovementReason,
+  Product,
+  Order,
+  OrderItem,
+  User,
+  MaintenanceAlert,
+  CompanyProfile,
+  News,
+  MaintenanceRecord,
+  MaintenanceIntervention,
+  InterventionType,
+  MaintenanceProgramStatus,
+  ProductRestock,
+  StockMovementReason,
 } from '@/types';
 import {
-  MOCK_PRODUCTS, MOCK_USERS, MOCK_ORDERS, MOCK_ORDER_ITEMS,
-  MOCK_MAINTENANCE, MOCK_COMPANY,
+  MOCK_PRODUCTS,
+  MOCK_USERS,
+  MOCK_ORDERS,
+  MOCK_ORDER_ITEMS,
+  MOCK_MAINTENANCE,
+  MOCK_COMPANY,
 } from '@/data/mock';
 import {
   readProducts,
@@ -82,14 +96,15 @@ export async function listProducts(filters?: {
   if (shouldUseMocks()) {
     let list = readProducts();
     if (!filters?.includeArchived) {
-      list = list.filter(p => !p.is_archived);
+      list = list.filter((p) => !p.is_archived);
     }
-    if (filters?.category && filters.category !== 'all') list = list.filter(p => p.category === filters.category);
-    if (filters?.featured) list = list.filter(p => p.is_featured);
+    if (filters?.category && filters.category !== 'all')
+      list = list.filter((p) => p.category === filters.category);
+    if (filters?.featured) list = list.filter((p) => p.is_featured);
     if (filters?.search) {
       const q = filters.search.toLowerCase();
-      list = list.filter(p =>
-        p.name.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q)
+      list = list.filter(
+        (p) => p.name.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q),
       );
     }
     // Tri manuel : sort_order ASC puis created_at DESC pour les égalités.
@@ -111,7 +126,8 @@ export async function listProducts(filters?: {
   if (!filters?.includeArchived) {
     query = query.or('is_archived.is.null,is_archived.eq.false');
   }
-  if (filters?.category && filters.category !== 'all') query = query.eq('category', filters.category);
+  if (filters?.category && filters.category !== 'all')
+    query = query.eq('category', filters.category);
   if (filters?.featured) query = query.eq('is_featured', true);
   if (filters?.search) {
     const safe = sanitizePostgREST(filters.search);
@@ -131,17 +147,19 @@ export async function listProducts(filters?: {
  */
 export async function getPublicInlineImageSource(
   kind: PublicMediaKind,
-  id: string
+  id: string,
 ): Promise<string | null> {
   if (shouldUseMocks()) {
-    const row = kind === 'product'
-      ? readProducts().find(product => product.id === id && !product.is_archived)
-      : readNews().find(news =>
-          news.id === id &&
-          news.target_all !== false &&
-          news.is_archived !== true &&
-          (!news.valid_until || news.valid_until > new Date().toISOString())
-        );
+    const row =
+      kind === 'product'
+        ? readProducts().find((product) => product.id === id && !product.is_archived)
+        : readNews().find(
+            (news) =>
+              news.id === id &&
+              news.target_all !== false &&
+              news.is_archived !== true &&
+              (!news.valid_until || news.valid_until > new Date().toISOString()),
+          );
     return typeof row?.image_url === 'string' ? row.image_url : null;
   }
 
@@ -173,7 +191,9 @@ export async function getPublicInlineImageSource(
   return typeof data.image_url === 'string' ? data.image_url : null;
 }
 
-export async function createProduct(product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> {
+export async function createProduct(
+  product: Omit<Product, 'id' | 'created_at' | 'updated_at'>,
+): Promise<Product> {
   const now = new Date().toISOString();
   const slug = product.slug || product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
@@ -210,11 +230,14 @@ export async function createProduct(product: Omit<Product, 'id' | 'created_at' |
   return data as Product;
 }
 
-export async function updateProduct(id: string, product: Partial<Omit<Product, 'id' | 'created_at' | 'updated_at'>>): Promise<Product> {
+export async function updateProduct(
+  id: string,
+  product: Partial<Omit<Product, 'id' | 'created_at' | 'updated_at'>>,
+): Promise<Product> {
   const now = new Date().toISOString();
   if (shouldUseMocks()) {
     const list = readProducts();
-    const idx = list.findIndex(p => p.id === id);
+    const idx = list.findIndex((p) => p.id === id);
     if (idx !== -1) {
       list[idx] = { ...list[idx], ...product, updated_at: now };
       writeProducts(list);
@@ -225,7 +248,12 @@ export async function updateProduct(id: string, product: Partial<Omit<Product, '
 
   // Écriture admin → service role (cf. note de createProduct ci-dessus).
   const supabase = await getSupabaseAdmin();
-  const { data, error } = await supabase.from('products').update({ ...product, updated_at: now }).eq('id', id).select().single();
+  const { data, error } = await supabase
+    .from('products')
+    .update({ ...product, updated_at: now })
+    .eq('id', id)
+    .select()
+    .single();
   if (error) throw error;
   return data as Product;
 }
@@ -233,7 +261,7 @@ export async function updateProduct(id: string, product: Partial<Omit<Product, '
 export async function deleteProduct(id: string): Promise<void> {
   if (shouldUseMocks()) {
     const list = readProducts();
-    const idx = list.findIndex(p => p.id === id);
+    const idx = list.findIndex((p) => p.id === id);
     if (idx !== -1) {
       list.splice(idx, 1);
       writeProducts(list);
@@ -251,7 +279,7 @@ export async function deleteProduct(id: string): Promise<void> {
 export async function updateProductStock(productId: string, delta: number): Promise<void> {
   if (shouldUseMocks()) {
     const list = readProducts();
-    const p = list.find(x => x.id === productId);
+    const p = list.find((x) => x.id === productId);
     if (p) {
       p.stock = Math.max(0, p.stock + delta);
       writeProducts(list);
@@ -263,7 +291,10 @@ export async function updateProductStock(productId: string, delta: number): Prom
   const supabase = await getSupabaseAdmin();
   const { data } = await supabase.from('products').select('stock').eq('id', productId).single();
   if (!data) return;
-  await supabase.from('products').update({ stock: Math.max(0, data.stock + delta) }).eq('id', productId);
+  await supabase
+    .from('products')
+    .update({ stock: Math.max(0, data.stock + delta) })
+    .eq('id', productId);
 }
 
 /**
@@ -306,7 +337,7 @@ export async function adjustProductStock(
     throw new Error('Quantité trop importante (max ±100 000).');
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.restock_date)) {
-    throw new Error('Date d\'approvisionnement invalide (format YYYY-MM-DD attendu).');
+    throw new Error("Date d'approvisionnement invalide (format YYYY-MM-DD attendu).");
   }
 
   const note = input.note?.trim() ? input.note.trim().slice(0, 500) : null;
@@ -350,7 +381,7 @@ export async function adjustProductStock(
   // ----- MODE MOCK -----
   if (shouldUseMocks()) {
     const list = readProducts();
-    const idx = list.findIndex(p => p.id === productId);
+    const idx = list.findIndex((p) => p.id === productId);
     if (idx === -1) throw new Error('Produit introuvable.');
 
     // Si localité précisée : on maj product_location_stock et on RECALCULE
@@ -359,16 +390,28 @@ export async function adjustProductStock(
       const path = require('path');
       const fs = require('fs');
       const plsFile = path.join(process.cwd(), 'data-store', 'product_location_stock.json');
-      let arr: Array<{ product_id: string; location_id: string; quantity: number; updated_at: string }> = [];
+      let arr: Array<{
+        product_id: string;
+        location_id: string;
+        quantity: number;
+        updated_at: string;
+      }> = [];
       if (fs.existsSync(plsFile)) arr = JSON.parse(fs.readFileSync(plsFile, 'utf-8'));
-      const existing = arr.find((r) => r.product_id === productId && r.location_id === input.locality_id);
+      const existing = arr.find(
+        (r) => r.product_id === productId && r.location_id === input.locality_id,
+      );
       const previousQty = existing?.quantity ?? 0;
       const newQty = Math.max(0, previousQty + event.quantity);
       if (existing) {
         existing.quantity = newQty;
         existing.updated_at = event.created_at;
       } else {
-        arr.push({ product_id: productId, location_id: input.locality_id, quantity: newQty, updated_at: event.created_at });
+        arr.push({
+          product_id: productId,
+          location_id: input.locality_id,
+          quantity: newQty,
+          updated_at: event.created_at,
+        });
       }
       fs.writeFileSync(plsFile, JSON.stringify(arr, null, 2));
 
@@ -379,7 +422,7 @@ export async function adjustProductStock(
       list[idx] = {
         ...list[idx],
         stock: newGlobal,
-        is_out_of_stock: newGlobal === 0 ? true : (newGlobal > 0 ? false : list[idx].is_out_of_stock),
+        is_out_of_stock: newGlobal === 0 ? true : newGlobal > 0 ? false : list[idx].is_out_of_stock,
         updated_at: event.created_at,
       };
       writeProducts(list);
@@ -397,7 +440,7 @@ export async function adjustProductStock(
     list[idx] = {
       ...list[idx],
       stock: newStock,
-      is_out_of_stock: newStock === 0 ? true : (newStock > 0 ? false : list[idx].is_out_of_stock),
+      is_out_of_stock: newStock === 0 ? true : newStock > 0 ? false : list[idx].is_out_of_stock,
       updated_at: event.created_at,
     };
     writeProducts(list);
@@ -417,11 +460,14 @@ export async function adjustProductStock(
     // Upsert dans product_location_stock. Le trigger SQL recalcule products.stock.
     const { data: upserted, error: upErr } = await supabase
       .from('product_location_stock')
-      .upsert({
-        product_id: productId,
-        location_id: input.locality_id,
-        updated_at: event.created_at,
-      }, { onConflict: 'product_id,location_id' })
+      .upsert(
+        {
+          product_id: productId,
+          location_id: input.locality_id,
+          updated_at: event.created_at,
+        },
+        { onConflict: 'product_id,location_id' },
+      )
       .select('quantity')
       .single();
     // upErr possible si ligne absente (premier mouvement sur cette localité).
@@ -437,14 +483,15 @@ export async function adjustProductStock(
       currentQty = existing?.quantity ?? 0;
     }
     const newQty = Math.max(0, currentQty + event.quantity);
-    const { error: writeErr } = await supabase
-      .from('product_location_stock')
-      .upsert({
+    const { error: writeErr } = await supabase.from('product_location_stock').upsert(
+      {
         product_id: productId,
         location_id: input.locality_id,
         quantity: newQty,
         updated_at: event.created_at,
-      }, { onConflict: 'product_id,location_id' });
+      },
+      { onConflict: 'product_id,location_id' },
+    );
     if (writeErr) throw writeErr;
 
     // Lecture du stock global recalculé par le trigger SQL.
@@ -455,27 +502,28 @@ export async function adjustProductStock(
       .single();
     if (prodErr || !prodRow) throw prodErr ?? new Error('Produit introuvable.');
 
-    const { error: histErr } = await supabase
-      .from('product_restock_history')
-      .insert({
-        id: event.id,
-        product_id: event.product_id,
-        quantity: event.quantity,
-        restock_date: event.restock_date,
-        reason: event.reason,
-        note: event.note,
-        created_by: event.created_by,
-        created_at: event.created_at,
-        source_location_id: input.locality_id,
-      });
+    const { error: histErr } = await supabase.from('product_restock_history').insert({
+      id: event.id,
+      product_id: event.product_id,
+      quantity: event.quantity,
+      restock_date: event.restock_date,
+      reason: event.reason,
+      note: event.note,
+      created_by: event.created_by,
+      created_at: event.created_at,
+      source_location_id: input.locality_id,
+    });
     if (histErr) {
       // Rollback : on remet la localité à son ancienne quantité.
-      await supabase.from('product_location_stock').upsert({
-        product_id: productId,
-        location_id: input.locality_id,
-        quantity: currentQty,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'product_id,location_id' });
+      await supabase.from('product_location_stock').upsert(
+        {
+          product_id: productId,
+          location_id: input.locality_id,
+          quantity: currentQty,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'product_id,location_id' },
+      );
       throw histErr;
     }
 
@@ -496,7 +544,7 @@ export async function adjustProductStock(
     .from('products')
     .update({
       stock: newStock,
-      is_out_of_stock: newStock === 0 ? true : (newStock > 0 ? false : undefined),
+      is_out_of_stock: newStock === 0 ? true : newStock > 0 ? false : undefined,
       updated_at: event.created_at,
     })
     .eq('id', productId)
@@ -504,18 +552,16 @@ export async function adjustProductStock(
     .single();
   if (updErr || !updated) throw updErr ?? new Error('Échec de mise à jour du stock.');
 
-  const { error: histErr } = await supabase
-    .from('product_restock_history')
-    .insert({
-      id: event.id,
-      product_id: event.product_id,
-      quantity: event.quantity,
-      restock_date: event.restock_date,
-      reason: event.reason,
-      note: event.note,
-      created_by: event.created_by,
-      created_at: event.created_at,
-    });
+  const { error: histErr } = await supabase.from('product_restock_history').insert({
+    id: event.id,
+    product_id: event.product_id,
+    quantity: event.quantity,
+    restock_date: event.restock_date,
+    reason: event.reason,
+    note: event.note,
+    created_by: event.created_by,
+    created_at: event.created_at,
+  });
   if (histErr) {
     // Rollback best-effort : on remet le stock à sa valeur d'origine.
     await supabase.from('products').update({ stock: previousStock }).eq('id', productId);
@@ -533,7 +579,7 @@ export async function listRestockHistory(productId: string): Promise<ProductRest
   if (shouldUseMocks()) {
     const history = readRestockHistory();
     return history
-      .filter(r => r.product_id === productId)
+      .filter((r) => r.product_id === productId)
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   const supabase = await getSupabaseAdmin();
@@ -559,7 +605,7 @@ export async function listAllRestockHistory(sinceDays = 90): Promise<ProductRest
   const sinceIso = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
   if (shouldUseMocks()) {
     return readRestockHistory()
-      .filter(r => r.created_at >= sinceIso)
+      .filter((r) => r.created_at >= sinceIso)
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   const supabase = await getSupabaseAdmin();
@@ -578,7 +624,10 @@ export async function listAllRestockHistory(sinceDays = 90): Promise<ProductRest
 export async function listOrders(): Promise<Order[]> {
   if (shouldUseMocks()) return readOrders();
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from('orders').select('*, items:order_items(*)').order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*, items:order_items(*)')
+    .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as Order[];
 }
@@ -603,7 +652,7 @@ export async function listOrdersForStaff(): Promise<Order[]> {
 export async function updateOrderStatus(orderId: string, status: Order['status']): Promise<void> {
   if (shouldUseMocks()) {
     const list = readOrders();
-    const o = list.find(x => x.id === orderId);
+    const o = list.find((x) => x.id === orderId);
     if (o) {
       o.status = status;
       const now = new Date().toISOString();
@@ -639,7 +688,10 @@ export async function updateOrderStatus(orderId: string, status: Order['status']
   }
   // Update de statut commande par admin → service role (politique `Orders admin all`).
   const supabase = await getSupabaseAdmin();
-  await supabase.from('orders').update({ status, updated_at: new Date().toISOString() }).eq('id', orderId);
+  await supabase
+    .from('orders')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', orderId);
 }
 
 export async function createOrder(input: {
@@ -696,7 +748,8 @@ export async function createOrder(input: {
   // client anonyme refuse. On force donc le service role pour bypasser la policy.
   const adminSupabase = await getSupabaseAdmin();
   const { data: userData } = await adminSupabase.auth.getUser();
-  const { data, error } = await adminSupabase.from('orders')
+  const { data, error } = await adminSupabase
+    .from('orders')
     .insert({
       order_number,
       user_id: userData?.user?.id ?? null,
@@ -705,7 +758,9 @@ export async function createOrder(input: {
       client_address: input.client_address,
       client_city: input.client_city,
       notes: input.notes ?? null,
-      subtotal, delivery_fee: delivery, total,
+      subtotal,
+      delivery_fee: delivery,
+      total,
       status: 'en_attente',
       payment_method: 'cash_on_delivery',
     })
@@ -714,14 +769,14 @@ export async function createOrder(input: {
   if (error || !data) throw error ?? new Error('Insert order failed');
 
   await adminSupabase.from('order_items').insert(
-    input.items.map(i => ({
+    input.items.map((i) => ({
       order_id: data.id,
       product_id: i.product_id,
       product_name: i.product_name,
       unit_price: i.unit_price,
       quantity: i.quantity,
       line_total: i.unit_price * i.quantity,
-    }))
+    })),
   );
 
   return { ...(data as Order), items: input.items as unknown as OrderItem[] };
@@ -813,7 +868,7 @@ export async function claimOrphanOrdersForUser(input: {
 export async function listClients(): Promise<User[]> {
   if (shouldUseMocks()) {
     const all = readUsers();
-    return all.filter(u => u.role === 'client') as User[];
+    return all.filter((u) => u.role === 'client') as User[];
   }
   const supabase = await getSupabase();
   // On selectionne explicitement les champs liés au parrainage pour que
@@ -821,7 +876,9 @@ export async function listClients(): Promise<User[]> {
   // (parrainage) et afficher le code/email du parrain.
   const { data, error } = await supabase
     .from('users')
-    .select('id, email, full_name, phone, city, address, avatar_url, google_id, role, nps_score, referral_code, referred_by, cashback_balance, created_at, updated_at')
+    .select(
+      'id, email, full_name, phone, city, address, avatar_url, google_id, role, nps_score, referral_code, referred_by, cashback_balance, created_at, updated_at',
+    )
     .eq('role', 'client')
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -831,12 +888,14 @@ export async function listClients(): Promise<User[]> {
 /** Liste complète des clients pour les écrans staff autorisés. */
 export async function listClientsForStaff(): Promise<User[]> {
   if (shouldUseMocks()) {
-    return readUsers().filter(u => u.role === 'client') as User[];
+    return readUsers().filter((u) => u.role === 'client') as User[];
   }
   const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase
     .from('users')
-    .select('id, email, full_name, phone, city, address, avatar_url, google_id, role, nps_score, referral_code, referred_by, cashback_balance, created_at, updated_at')
+    .select(
+      'id, email, full_name, phone, city, address, avatar_url, google_id, role, nps_score, referral_code, referred_by, cashback_balance, created_at, updated_at',
+    )
     .eq('role', 'client')
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -864,7 +923,7 @@ export interface ArchivedStaff {
 export async function listArchivedStaff(): Promise<ArchivedStaff[]> {
   if (shouldUseMocks()) {
     return readArchivedUsers()
-      .filter(u => u.role !== 'client')
+      .filter((u) => u.role !== 'client')
       .sort((a, b) => (b.archived_at || '').localeCompare(a.archived_at || ''));
   }
   const supabase = await getSupabase();
@@ -894,7 +953,7 @@ export async function archiveClient(
     created_at: string | null;
     updated_at: string | null;
   },
-  reason: string | null = null
+  reason: string | null = null,
 ): Promise<ArchivedStaff> {
   const entry: ArchivedStaff = {
     id: client.id,
@@ -914,7 +973,7 @@ export async function archiveClient(
     list.push(entry);
     writeArchivedUsers(list);
     // supprime également de users.json (en mock)
-    const users = readUsers().filter(u => u.id !== client.id);
+    const users = readUsers().filter((u) => u.id !== client.id);
     writeUsers(users);
     return entry;
   }
@@ -944,7 +1003,7 @@ export async function archiveStaff(
     created_at: string | null;
     updated_at: string | null;
   },
-  reason: string | null = null
+  reason: string | null = null,
 ): Promise<ArchivedStaff> {
   const entry: ArchivedStaff = {
     id: staff.id,
@@ -964,7 +1023,7 @@ export async function archiveStaff(
     list.push(entry);
     writeArchivedUsers(list);
     // supprime également de users.json (en mock)
-    const users = readUsers().filter(u => u.id !== staff.id);
+    const users = readUsers().filter((u) => u.id !== staff.id);
     writeUsers(users);
     return entry;
   }
@@ -981,10 +1040,14 @@ export async function archiveStaff(
  */
 export async function getArchivedStaff(id: string): Promise<ArchivedStaff | null> {
   if (shouldUseMocks()) {
-    return readArchivedUsers().find(u => u.id === id) ?? null;
+    return readArchivedUsers().find((u) => u.id === id) ?? null;
   }
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from('users_archive').select('*').eq('id', id).maybeSingle();
+  const { data, error } = await supabase
+    .from('users_archive')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
   if (error) throw error;
   return (data ?? null) as ArchivedStaff | null;
 }
@@ -995,7 +1058,7 @@ export async function getArchivedStaff(id: string): Promise<ArchivedStaff | null
  */
 export async function removeArchivedStaff(id: string): Promise<void> {
   if (shouldUseMocks()) {
-    const list = readArchivedUsers().filter(u => u.id !== id);
+    const list = readArchivedUsers().filter((u) => u.id !== id);
     writeArchivedUsers(list);
     return;
   }
@@ -1011,15 +1074,21 @@ export async function removeArchivedStaff(id: string): Promise<void> {
 export async function listMaintenance(): Promise<MaintenanceAlert[]> {
   if (shouldUseMocks()) return [...MOCK_MAINTENANCE];
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from('maintenance_alerts').select('*').order('next_filter_change', { ascending: true });
+  const { data, error } = await supabase
+    .from('maintenance_alerts')
+    .select('*')
+    .order('next_filter_change', { ascending: true });
   if (error) throw error;
   return (data ?? []) as MaintenanceAlert[];
 }
 
-export async function updateMaintenanceStatus(id: string, status: MaintenanceProgramStatus): Promise<void> {
+export async function updateMaintenanceStatus(
+  id: string,
+  status: MaintenanceProgramStatus,
+): Promise<void> {
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
-    const r = bundle.records.find(x => x.id === id);
+    const r = bundle.records.find((x) => x.id === id);
     if (r) {
       r.status = status;
       r.updated_at = new Date().toISOString();
@@ -1047,6 +1116,117 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
 }
 
 // ============================================================================
+// CATALOGUE PDF (flipbook landing page)
+//
+// En mode mock : `data-store/catalogue.pdf` + `data-store/catalogue_pdf.json`.
+// En mode Supabase : table `eaumalik.catalogue_pdf` (id=singleton, payload bytea,
+// filename, size, uploaded_at, uploaded_by). On n'utilise PAS Supabase Storage
+// car le bucket public n'est pas (encore) provisionné sur le déploiement
+// self-hosted.
+// ============================================================================
+
+export interface CataloguePdfRecord {
+  filename: string;
+  mime: string;
+  size: number;
+  uploadedAt: string;
+  uploadedBy?: string | null;
+}
+
+/** Lit les métadonnées du PDF catalogue courant (ou null). */
+export async function getCataloguePdf(): Promise<CataloguePdfRecord | null> {
+  if (shouldUseMocks()) {
+    const { readCataloguePdfMeta, readCataloguePdfBuffer } = await import('@/data/cataloguePdf');
+    const meta = readCataloguePdfMeta();
+    const buf = readCataloguePdfBuffer();
+    if (!meta || !buf) return null;
+    return meta;
+  }
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('catalogue_pdf')
+    .select('*')
+    .eq('id', 'singleton')
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    filename: data.filename,
+    mime: data.mime ?? 'application/pdf',
+    size: Number(data.size ?? 0),
+    uploadedAt: data.uploaded_at,
+    uploadedBy: data.uploaded_by ?? null,
+  };
+}
+
+/** Lit le buffer binaire du PDF catalogue courant (ou null). */
+export async function getCataloguePdfBuffer(): Promise<Buffer | null> {
+  if (shouldUseMocks()) {
+    const { readCataloguePdfBuffer } = await import('@/data/cataloguePdf');
+    return readCataloguePdfBuffer();
+  }
+  const supabase = await getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('catalogue_pdf')
+    .select('payload')
+    .eq('id', 'singleton')
+    .maybeSingle();
+  if (error || !data || !data.payload) return null;
+  // Supabase retourne bytea en base64 (text) ou Buffer selon driver.
+  if (Buffer.isBuffer(data.payload)) return data.payload;
+  if (typeof data.payload === 'string') return Buffer.from(data.payload, 'base64');
+  return null;
+}
+
+/**
+ * Écrit le PDF catalogue (remplace l'éventuel précédent).
+ * Valide la cohérence (header %PDF) avant d'écrire.
+ */
+export async function saveCataloguePdf(
+  buf: Buffer,
+  meta: Omit<CataloguePdfRecord, 'uploadedAt'>,
+  uploadedBy?: string | null,
+): Promise<CataloguePdfRecord> {
+  const { isLikelyPdf, writeCataloguePdf } = await import('@/data/cataloguePdf');
+  if (!isLikelyPdf(buf)) {
+    throw new Error('Le fichier fourni ne semble pas être un PDF valide.');
+  }
+
+  const record: CataloguePdfRecord = {
+    ...meta,
+    uploadedAt: new Date().toISOString(),
+    uploadedBy: uploadedBy ?? null,
+  };
+
+  if (shouldUseMocks()) {
+    writeCataloguePdf(buf, record);
+    return record;
+  }
+  const supabase = await getSupabaseAdmin();
+  const { error } = await supabase.from('catalogue_pdf').upsert({
+    id: 'singleton',
+    payload: buf.toString('base64'),
+    filename: record.filename,
+    mime: record.mime,
+    size: record.size,
+    uploaded_at: record.uploadedAt,
+    uploaded_by: record.uploadedBy,
+  });
+  if (error) throw error;
+  return record;
+}
+
+/** Supprime le PDF catalogue (reset au fallback public). */
+export async function deleteCataloguePdfRecord(): Promise<void> {
+  if (shouldUseMocks()) {
+    const { deleteCataloguePdf } = await import('@/data/cataloguePdf');
+    deleteCataloguePdf();
+    return;
+  }
+  const supabase = await getSupabaseAdmin();
+  await supabase.from('catalogue_pdf').delete().eq('id', 'singleton');
+}
+
+// ============================================================================
 // NEWS / ACTUALITÉS / PROMOTIONS
 // Schema-tolerant : si les nouvelles colonnes (price/product_ids/...) sont
 // absentes (ancien set de données), on les remplit avec des défauts neutres.
@@ -1062,12 +1242,16 @@ function normalizeNews(row: RawNews): News {
   const product_ids = Array.isArray(row.product_ids) ? row.product_ids : [];
   const target_user_ids = Array.isArray(row.target_user_ids) ? row.target_user_ids : [];
   const target_all = row.target_all !== false;
-  const price = typeof row.price === 'number' ? row.price : (row.price == null ? null : Number(row.price));
-  const original_price = typeof row.original_price === 'number' ? row.original_price : (row.original_price == null ? null : Number(row.original_price));
+  const price =
+    typeof row.price === 'number' ? row.price : row.price == null ? null : Number(row.price);
+  const original_price =
+    typeof row.original_price === 'number'
+      ? row.original_price
+      : row.original_price == null
+        ? null
+        : Number(row.original_price);
   const is_promotion =
-    row.is_promotion === true ||
-    (typeof price === 'number' && price > 0) ||
-    product_ids.length > 0;
+    row.is_promotion === true || (typeof price === 'number' && price > 0) || product_ids.length > 0;
   const is_archived = row.is_archived === true;
   const archived_at = row.archived_at ?? null;
   const archived_reason = row.archived_reason ?? null;
@@ -1077,7 +1261,8 @@ function normalizeNews(row: RawNews): News {
     content: row.content,
     image_url: row.image_url ?? null,
     price: typeof price === 'number' && !Number.isNaN(price) ? price : null,
-    original_price: typeof original_price === 'number' && !Number.isNaN(original_price) ? original_price : null,
+    original_price:
+      typeof original_price === 'number' && !Number.isNaN(original_price) ? original_price : null,
     product_ids,
     target_all,
     target_user_ids,
@@ -1104,28 +1289,29 @@ export async function listNews(options?: {
     const rows = readNews() as RawNews[];
     let filtered: RawNews[] = rows;
     if (options?.promotionOnly) {
-      filtered = filtered.filter(r =>
-        r.is_promotion === true ||
-        (typeof r.price === 'number' && r.price > 0) ||
-        (Array.isArray(r.product_ids) && r.product_ids.length > 0)
+      filtered = filtered.filter(
+        (r) =>
+          r.is_promotion === true ||
+          (typeof r.price === 'number' && r.price > 0) ||
+          (Array.isArray(r.product_ids) && r.product_ids.length > 0),
       );
     }
     if (options?.forUserId) {
       const uid = options.forUserId;
-      filtered = filtered.filter(r => {
+      filtered = filtered.filter((r) => {
         const tAll = r.target_all !== false;
         const tIds = Array.isArray(r.target_user_ids) ? r.target_user_ids : [];
         return tAll || tIds.includes(uid);
       });
     }
     if (!options?.includeExpired) {
-      filtered = filtered.filter(r => !r.valid_until || r.valid_until > nowIso);
+      filtered = filtered.filter((r) => !r.valid_until || r.valid_until > nowIso);
     }
     // Filtrage archive : par défaut, on cache les archivées (visiteur / client).
     if (options?.archivedOnly) {
-      filtered = filtered.filter(r => r.is_archived === true);
+      filtered = filtered.filter((r) => r.is_archived === true);
     } else if (!options?.includeArchived) {
-      filtered = filtered.filter(r => r.is_archived !== true);
+      filtered = filtered.filter((r) => r.is_archived !== true);
     }
     const sorted = filtered.sort((a, b) => b.created_at.localeCompare(a.created_at));
     return sorted.map(normalizeNews);
@@ -1145,13 +1331,13 @@ export async function listNews(options?: {
   if (error) throw error;
   const normalized = ((data ?? []) as RawNews[]).map(normalizeNews);
   if (options?.includeExpired) return normalized;
-  return normalized.filter(n => !n.valid_until || n.valid_until > nowIso);
+  return normalized.filter((n) => !n.valid_until || n.valid_until > nowIso);
 }
 
 /** Promotions actuellement visibles par un visiteur anonyme (carrousel landing). */
 export async function listActivePromotions(limit = 12): Promise<News[]> {
   const all = await listNews({ promotionOnly: true });
-  return all.filter(item => item.target_all).slice(0, limit);
+  return all.filter((item) => item.target_all).slice(0, limit);
 }
 
 /**
@@ -1190,10 +1376,13 @@ export async function createNews(input: Omit<News, 'id' | 'created_at'>): Promis
 }
 
 /** Met à jour une actualité / promotion existante (patch partiel). */
-export async function updateNews(id: string, patch: Partial<Omit<News, 'id' | 'created_at'>>): Promise<News> {
+export async function updateNews(
+  id: string,
+  patch: Partial<Omit<News, 'id' | 'created_at'>>,
+): Promise<News> {
   if (shouldUseMocks()) {
     const rows = readNews() as RawNews[];
-    const idx = rows.findIndex(r => r.id === id);
+    const idx = rows.findIndex((r) => r.id === id);
     if (idx === -1) throw new Error('Actualité introuvable.');
     const updated: RawNews = { ...rows[idx], ...patch, id };
     rows[idx] = updated;
@@ -1217,7 +1406,7 @@ export async function archiveNews(id: string, reason: string | null = null): Pro
   const archived_at = new Date().toISOString();
   if (shouldUseMocks()) {
     const rows = readNews() as RawNews[];
-    const idx = rows.findIndex(r => r.id === id);
+    const idx = rows.findIndex((r) => r.id === id);
     if (idx === -1) throw new Error('Actualité introuvable.');
     const updated: RawNews = {
       ...rows[idx],
@@ -1248,7 +1437,7 @@ export async function archiveNews(id: string, reason: string | null = null): Pro
 export async function unarchiveNews(id: string): Promise<News> {
   if (shouldUseMocks()) {
     const rows = readNews() as RawNews[];
-    const idx = rows.findIndex(r => r.id === id);
+    const idx = rows.findIndex((r) => r.id === id);
     if (idx === -1) throw new Error('Actualité introuvable.');
     const updated: RawNews = {
       ...rows[idx],
@@ -1277,7 +1466,7 @@ export async function unarchiveNews(id: string): Promise<News> {
 export async function deleteNews(id: string): Promise<void> {
   if (shouldUseMocks()) {
     const rows = readNews() as RawNews[];
-    writeNews(rows.filter(r => r.id !== id));
+    writeNews(rows.filter((r) => r.id !== id));
     return;
   }
 
@@ -1313,36 +1502,57 @@ interface MaintenanceRecordFilters {
   orderId?: string;
 }
 
-function hydrateRecordInterventions(records: MaintenanceRecord[], interventions: MaintenanceIntervention[]) {
+function hydrateRecordInterventions(
+  records: MaintenanceRecord[],
+  interventions: MaintenanceIntervention[],
+) {
   const byRecord = new Map<string, MaintenanceIntervention[]>();
-  interventions.forEach(it => {
+  interventions.forEach((it) => {
     const arr = byRecord.get(it.record_id) ?? [];
     arr.push(it);
     byRecord.set(it.record_id, arr);
   });
-  records.forEach(r => {
-    r.interventions = (byRecord.get(r.id) ?? []).sort((a, b) => b.performed_at.localeCompare(a.performed_at));
+  records.forEach((r) => {
+    r.interventions = (byRecord.get(r.id) ?? []).sort((a, b) =>
+      b.performed_at.localeCompare(a.performed_at),
+    );
   });
 }
 
 /** Liste les fiches de maintenance avec filtres optionnels. */
-export async function listMaintenanceRecords(filters: MaintenanceRecordFilters = {}): Promise<MaintenanceRecord[]> {
+export async function listMaintenanceRecords(
+  filters: MaintenanceRecordFilters = {},
+): Promise<MaintenanceRecord[]> {
   // Élimine les fiches qui pointent vers des pièces de rechange.
-  try { await pruneMaintenanceRecordsForConsumables(); } catch { /* silencieux */ }
+  try {
+    await pruneMaintenanceRecordsForConsumables();
+  } catch {
+    /* silencieux */
+  }
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
     let records = [...bundle.records];
-    const deliveredOrderIds = new Set(readOrders().filter(order => order.status === 'livree').map(order => order.id));
-    records = records.filter(record => !!record.order_id && deliveredOrderIds.has(record.order_id));
-    if (filters.status) records = records.filter(r => r.status === filters.status);
-    if (filters.orderId) records = records.filter(r => r.order_id === filters.orderId);
-    if (filters.dueBefore) records = records.filter(r => r.next_service_date && r.next_service_date <= filters.dueBefore!);
+    const deliveredOrderIds = new Set(
+      readOrders()
+        .filter((order) => order.status === 'livree')
+        .map((order) => order.id),
+    );
+    records = records.filter(
+      (record) => !!record.order_id && deliveredOrderIds.has(record.order_id),
+    );
+    if (filters.status) records = records.filter((r) => r.status === filters.status);
+    if (filters.orderId) records = records.filter((r) => r.order_id === filters.orderId);
+    if (filters.dueBefore)
+      records = records.filter(
+        (r) => r.next_service_date && r.next_service_date <= filters.dueBefore!,
+      );
     if (filters.search) {
       const q = filters.search.toLowerCase();
-      records = records.filter(r =>
-        r.client_name.toLowerCase().includes(q) ||
-        r.product_name.toLowerCase().includes(q) ||
-        (r.client_city ?? '').toLowerCase().includes(q)
+      records = records.filter(
+        (r) =>
+          r.client_name.toLowerCase().includes(q) ||
+          r.product_name.toLowerCase().includes(q) ||
+          (r.client_city ?? '').toLowerCase().includes(q),
       );
     }
     records.sort((a, b) => (b.next_service_date || '').localeCompare(a.next_service_date || ''));
@@ -1381,22 +1591,29 @@ export async function listMaintenanceRecords(filters: MaintenanceRecordFilters =
  */
 export async function listMaintenanceRecordsForUser(
   userId: string,
-  filters: MaintenanceRecordFilters = {}
+  filters: MaintenanceRecordFilters = {},
 ): Promise<MaintenanceRecord[]> {
   if (!userId) return [];
   // Élimine les fiches qui pointent vers des pièces de rechange (règle
   // business : consommables ne génèrent pas de maintenance). Idempotent.
-  try { await pruneMaintenanceRecordsForConsumables(); } catch { /* silencieux */ }
+  try {
+    await pruneMaintenanceRecordsForConsumables();
+  } catch {
+    /* silencieux */
+  }
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
-    const myOrders = readOrders().filter(o => o.user_id === userId);
-    const myDeliveredIds = new Set(myOrders.filter(o => o.status === 'livree').map(o => o.id));
-    let records = bundle.records.filter(r =>
-      (r.user_id === userId) || (r.order_id && myDeliveredIds.has(r.order_id))
+    const myOrders = readOrders().filter((o) => o.user_id === userId);
+    const myDeliveredIds = new Set(myOrders.filter((o) => o.status === 'livree').map((o) => o.id));
+    let records = bundle.records.filter(
+      (r) => r.user_id === userId || (r.order_id && myDeliveredIds.has(r.order_id)),
     );
-    if (filters.status) records = records.filter(r => r.status === filters.status);
-    if (filters.orderId) records = records.filter(r => r.order_id === filters.orderId);
-    if (filters.dueBefore) records = records.filter(r => r.next_service_date && r.next_service_date <= filters.dueBefore!);
+    if (filters.status) records = records.filter((r) => r.status === filters.status);
+    if (filters.orderId) records = records.filter((r) => r.order_id === filters.orderId);
+    if (filters.dueBefore)
+      records = records.filter(
+        (r) => r.next_service_date && r.next_service_date <= filters.dueBefore!,
+      );
     records.sort((a, b) => (b.next_service_date || '').localeCompare(a.next_service_date || ''));
     hydrateRecordInterventions(records, bundle.interventions);
     return records;
@@ -1436,9 +1653,12 @@ export async function listMaintenanceRecordsForUser(
     }
   }
   let records = merged;
-  if (filters.status) records = records.filter(r => r.status === filters.status);
-  if (filters.orderId) records = records.filter(r => r.order_id === filters.orderId);
-  if (filters.dueBefore) records = records.filter(r => r.next_service_date && r.next_service_date <= filters.dueBefore!);
+  if (filters.status) records = records.filter((r) => r.status === filters.status);
+  if (filters.orderId) records = records.filter((r) => r.order_id === filters.orderId);
+  if (filters.dueBefore)
+    records = records.filter(
+      (r) => r.next_service_date && r.next_service_date <= filters.dueBefore!,
+    );
   records.sort((a, b) => (b.next_service_date || '').localeCompare(a.next_service_date || ''));
   return records;
 }
@@ -1447,7 +1667,7 @@ export async function listMaintenanceRecordsForUser(
 export async function getMaintenanceRecord(id: string): Promise<MaintenanceRecord | null> {
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
-    const found = bundle.records.find(r => r.id === id) ?? null;
+    const found = bundle.records.find((r) => r.id === id) ?? null;
     if (found) hydrateRecordInterventions([found], bundle.interventions);
     return found;
   }
@@ -1474,16 +1694,16 @@ export async function pruneMaintenanceRecordsForConsumables(): Promise<number> {
   if (shouldUseMocks()) {
     const products = readProducts();
     const consommableIds = new Set(
-      products.filter((p: any) => p.category === 'consommables').map((p: any) => p.id)
+      products.filter((p: any) => p.category === 'consommables').map((p: any) => p.id),
     );
     if (consommableIds.size === 0) return 0;
     const bundle = readMaintenance();
     const before = bundle.records.length;
-    const kept = bundle.records.filter(r => !r.product_id || !consommableIds.has(r.product_id));
-    const keptIds = new Set(kept.map(r => r.id));
+    const kept = bundle.records.filter((r) => !r.product_id || !consommableIds.has(r.product_id));
+    const keptIds = new Set(kept.map((r) => r.id));
     if (kept.length === before) return 0;
     bundle.records = kept;
-    bundle.interventions = bundle.interventions.filter(i => keptIds.has(i.record_id));
+    bundle.interventions = bundle.interventions.filter((i) => keptIds.has(i.record_id));
     writeMaintenance(bundle);
     return before - kept.length;
   }
@@ -1492,7 +1712,12 @@ export async function pruneMaintenanceRecordsForConsumables(): Promise<number> {
   const { data, error } = await supabase
     .from('maintenance_records')
     .delete()
-    .in('product_id', (await supabase.from('products').select('id').eq('category', 'consommables')).data?.map((p: { id: string }) => p.id) ?? [])
+    .in(
+      'product_id',
+      (await supabase.from('products').select('id').eq('category', 'consommables')).data?.map(
+        (p: { id: string }) => p.id,
+      ) ?? [],
+    )
     .select('id');
   if (error) throw error;
   return (data ?? []).length;
@@ -1522,18 +1747,21 @@ export async function ensureMaintenanceForOrder(order: Order): Promise<Maintenan
     for (const item of items) {
       // Lookup catégorie produit (défaut 'purificateurs' si produit inconnu
       // pour rester permissif en dev mock).
-      const product = products.find(p => p.id === item.product_id);
+      const product = products.find((p) => p.id === item.product_id);
       const category = (product?.category as string | undefined) ?? 'purificateurs';
       if (category === 'consommables') continue;
 
-      const exists = bundle.records.find(r => r.order_id === order.id && r.product_id === item.product_id);
+      const exists = bundle.records.find(
+        (r) => r.order_id === order.id && r.product_id === item.product_id,
+      );
       if (exists) {
         createdOrExisting.push(exists);
         continue;
       }
-      const lifespan = product?.filter_lifespan_months && product.filter_lifespan_months > 0
-        ? product.filter_lifespan_months
-        : 6;
+      const lifespan =
+        product?.filter_lifespan_months && product.filter_lifespan_months > 0
+          ? product.filter_lifespan_months
+          : 6;
       const record: MaintenanceRecord = {
         id: `mr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         client_name: order.client_name,
@@ -1547,13 +1775,14 @@ export async function ensureMaintenanceForOrder(order: Order): Promise<Maintenan
         install_date: isoDateOnly(order.delivered_at || order.updated_at || now),
         next_service_date: addMonths(
           isoDateOnly(order.delivered_at || order.updated_at || now),
-          lifespan
+          lifespan,
         ),
         service_interval_months: lifespan,
         status: 'actif',
         notes: `Programme de maintenance créé suite à la livraison de la commande ${order.order_number}.`,
         filter_types:
-          item.product_name.toLowerCase().includes('ro') || item.product_name.toLowerCase().includes('osmose')
+          item.product_name.toLowerCase().includes('ro') ||
+          item.product_name.toLowerCase().includes('osmose')
             ? ['Sediment', 'Carbon', 'RO Membrane', 'Post-Carbon']
             : ['Sediment', 'Carbon', 'Mineral'],
         last_service_date: isoDateOnly(order.delivered_at || order.updated_at || now),
@@ -1598,11 +1827,11 @@ export async function ensureMaintenanceForOrder(order: Order): Promise<Maintenan
 /** Met à jour le statut d'une fiche de maintenance (programme). */
 export async function updateMaintenanceRecordStatus(
   id: string,
-  status: MaintenanceProgramStatus
+  status: MaintenanceProgramStatus,
 ): Promise<void> {
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
-    const r = bundle.records.find(x => x.id === id);
+    const r = bundle.records.find((x) => x.id === id);
     if (r) {
       r.status = status;
       r.updated_at = new Date().toISOString();
@@ -1647,16 +1876,17 @@ export async function addMaintenanceIntervention(input: {
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
     bundle.interventions.push(intervention);
-    const record = bundle.records.find(r => r.id === input.record_id);
+    const record = bundle.records.find((r) => r.id === input.record_id);
     if (record) {
       record.last_service_date = isoDateOnly(intervention.performed_at);
       if (intervention.next_service_date) record.next_service_date = intervention.next_service_date;
       record.total_cost = (record.total_cost ?? 0) + (intervention.cost ?? 0);
       if (intervention.outcome === 'completed') {
         record.intervention_count = (record.intervention_count ?? 0) + 1;
-        record.status = record.next_service_date && record.next_service_date < isoDateOnly(now)
-          ? 'a_renouveler'
-          : 'actif';
+        record.status =
+          record.next_service_date && record.next_service_date < isoDateOnly(now)
+            ? 'a_renouveler'
+            : 'actif';
       } else if (intervention.outcome === 'failed') {
         record.status = 'a_renouveler';
       }
@@ -1668,7 +1898,11 @@ export async function addMaintenanceIntervention(input: {
 
   // Ajout intervention maintenance (admin) → service role (policy admin all).
   const supabase = await getSupabaseAdmin();
-  const { data, error } = await supabase.from('maintenance_interventions').insert(intervention).select().single();
+  const { data, error } = await supabase
+    .from('maintenance_interventions')
+    .insert(intervention)
+    .select()
+    .single();
   if (error) throw error;
   return data as MaintenanceIntervention;
 }
@@ -1677,13 +1911,20 @@ export async function addMaintenanceIntervention(input: {
 export async function updateMaintenanceNotes(id: string, notes: string): Promise<void> {
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
-    const r = bundle.records.find(x => x.id === id);
-    if (r) { r.notes = notes; r.updated_at = new Date().toISOString(); writeMaintenance(bundle); }
+    const r = bundle.records.find((x) => x.id === id);
+    if (r) {
+      r.notes = notes;
+      r.updated_at = new Date().toISOString();
+      writeMaintenance(bundle);
+    }
     return;
   }
   // Notes maintenance (admin) → service role.
   const supabase = await getSupabaseAdmin();
-  await supabase.from('maintenance_records').update({ notes, updated_at: new Date().toISOString() }).eq('id', id);
+  await supabase
+    .from('maintenance_records')
+    .update({ notes, updated_at: new Date().toISOString() })
+    .eq('id', id);
 }
 
 // ============================================================================
@@ -1711,7 +1952,10 @@ export async function readUsersRaw(): Promise<any[]> {
 }
 
 export async function writeUsersRaw(users: any[]): Promise<void> {
-  if (shouldUseMocks()) { writeUsers(users); return; }
+  if (shouldUseMocks()) {
+    writeUsers(users);
+    return;
+  }
   throw new Error('writeUsersRaw: écriture JSON FS interdite en prod (utilisez Supabase Auth).');
 }
 
@@ -1723,8 +1967,13 @@ export async function readPasswordResetsRaw(): Promise<any[]> {
 }
 
 export async function writePasswordResetsRaw(resets: any[]): Promise<void> {
-  if (shouldUseMocks()) { writePasswordResets(resets); return; }
-  throw new Error('writePasswordResetsRaw: écriture JSON FS interdite en prod (utilisez Supabase Auth).');
+  if (shouldUseMocks()) {
+    writePasswordResets(resets);
+    return;
+  }
+  throw new Error(
+    'writePasswordResetsRaw: écriture JSON FS interdite en prod (utilisez Supabase Auth).',
+  );
 }
 
 export async function readArchivedUsersRaw(): Promise<any[]> {
@@ -1742,8 +1991,16 @@ export async function readArchivedUsersRaw(): Promise<any[]> {
 // (CRUD, inventaire, transferts) viendra avec `/admin/locations`.
 // ============================================================================
 
-import type { Location, LocationType, ProductLocationStockEntry, TransferRequestRow } from '@/types';
-import { readLocationsRaw as _readLocationsMock, writeLocationsRaw as _writeLocationsMock } from './localDb';
+import type {
+  Location,
+  LocationType,
+  ProductLocationStockEntry,
+  TransferRequestRow,
+} from '@/types';
+import {
+  readLocationsRaw as _readLocationsMock,
+  writeLocationsRaw as _writeLocationsMock,
+} from './localDb';
 
 /** Liste les localités. Filtre optionnel par type + statut actif/archivé. */
 export async function listLocations(filters?: {
@@ -1765,7 +2022,11 @@ export async function listLocations(filters?: {
   }
 
   const supabase = await getSupabaseAdmin();
-  let query = supabase.from('locations').select('*').order('type', { ascending: true }).order('name', { ascending: true });
+  let query = supabase
+    .from('locations')
+    .select('*')
+    .order('type', { ascending: true })
+    .order('name', { ascending: true });
   if (!includeArchived) query = query.eq('is_archived', false);
   if (onlyActive) query = query.eq('is_active', true);
   if (wantsType) query = query.eq('type', wantsType);
@@ -1866,7 +2127,10 @@ export async function createLocation(input: LocationInput): Promise<Location> {
   return normalizeSupabaseLocation(data);
 }
 
-export async function updateLocation(id: string, partial: Partial<LocationInput>): Promise<Location> {
+export async function updateLocation(
+  id: string,
+  partial: Partial<LocationInput>,
+): Promise<Location> {
   if (shouldUseMocks()) {
     const all = _readLocationsMock();
     const idx = all.findIndex((l) => l.id === id);
@@ -1895,14 +2159,19 @@ export async function updateLocation(id: string, partial: Partial<LocationInput>
   if (partial.capacity_area_m2 !== undefined) patch.capacity_area_m2 = partial.capacity_area_m2;
   if (partial.is_active !== undefined) patch.is_active = partial.is_active;
   if (partial.notes !== undefined) patch.notes = partial.notes;
-  const { data, error } = await supabase.from('locations').update(patch).eq('id', id).select('*').single();
+  const { data, error } = await supabase
+    .from('locations')
+    .update(patch)
+    .eq('id', id)
+    .select('*')
+    .single();
   if (error) throw error;
   return normalizeSupabaseLocation(data);
 }
 
 export async function archiveLocation(id: string): Promise<Location> {
-  return updateLocation(id, { /* no field changes, just flip archived */ } as any)
-    .then(async (loc) => {
+  return updateLocation(id, {/* no field changes, just flip archived */} as any).then(
+    async (loc) => {
       if (shouldUseMocks()) {
         const all = _readLocationsMock();
         const idx = all.findIndex((l) => l.id === id);
@@ -1913,11 +2182,15 @@ export async function archiveLocation(id: string): Promise<Location> {
       }
       const supabase = await getSupabaseAdmin();
       const { data, error } = await supabase
-        .from('locations').update({ is_archived: true, updated_at: new Date().toISOString() })
-        .eq('id', id).select('*').single();
+        .from('locations')
+        .update({ is_archived: true, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select('*')
+        .single();
       if (error) throw error;
       return normalizeSupabaseLocation(data);
-    });
+    },
+  );
 }
 
 export async function restoreLocation(id: string): Promise<Location> {
@@ -1932,8 +2205,11 @@ export async function restoreLocation(id: string): Promise<Location> {
   }
   const supabase = await getSupabaseAdmin();
   const { data, error } = await supabase
-    .from('locations').update({ is_archived: false, updated_at: new Date().toISOString() })
-    .eq('id', id).select('*').single();
+    .from('locations')
+    .update({ is_archived: false, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single();
   if (error) throw error;
   return normalizeSupabaseLocation(data);
 }
@@ -1985,10 +2261,20 @@ export async function listProductLocationStock(filters?: {
       : undefined,
     location: row.location_code
       ? {
-          id: row.location_id, code: row.location_code, name: row.location_name,
-          type: row.location_type, address: null, city: null, phone: null,
-          capacity_units: 0, capacity_area_m2: 0, is_active: true, is_archived: false,
-          notes: null, created_at: '', updated_at: '',
+          id: row.location_id,
+          code: row.location_code,
+          name: row.location_name,
+          type: row.location_type,
+          address: null,
+          city: null,
+          phone: null,
+          capacity_units: 0,
+          capacity_area_m2: 0,
+          is_active: true,
+          is_archived: false,
+          notes: null,
+          created_at: '',
+          updated_at: '',
         }
       : undefined,
   }));
@@ -2006,8 +2292,12 @@ function listProductLocationStockMock(filters?: {
     const fs = require('fs');
     const file = path.join(process.cwd(), 'data-store', 'product_location_stock.json');
     if (!fs.existsSync(file)) return [];
-    const raw: Array<{ product_id: string; location_id: string; quantity: number; updated_at: string }> =
-      JSON.parse(fs.readFileSync(file, 'utf-8'));
+    const raw: Array<{
+      product_id: string;
+      location_id: string;
+      quantity: number;
+      updated_at: string;
+    }> = JSON.parse(fs.readFileSync(file, 'utf-8'));
     const locations = _readLocationsMock();
     const products = readProducts();
     return raw
@@ -2042,20 +2332,38 @@ export async function upsertProductLocationStock(
     const path = require('path');
     const fs = require('fs');
     const file = path.join(process.cwd(), 'data-store', 'product_location_stock.json');
-    let arr: Array<{ product_id: string; location_id: string; quantity: number; updated_at: string }> = [];
+    let arr: Array<{
+      product_id: string;
+      location_id: string;
+      quantity: number;
+      updated_at: string;
+    }> = [];
     if (fs.existsSync(file)) arr = JSON.parse(fs.readFileSync(file, 'utf-8'));
     const idx = arr.findIndex((r) => r.product_id === productId && r.location_id === locationId);
     if (idx >= 0) arr[idx].quantity = quantity;
-    else arr.push({ product_id: productId, location_id: locationId, quantity, updated_at: new Date().toISOString() });
+    else
+      arr.push({
+        product_id: productId,
+        location_id: locationId,
+        quantity,
+        updated_at: new Date().toISOString(),
+      });
     arr[idx >= 0 ? idx : arr.length - 1].updated_at = new Date().toISOString();
     fs.writeFileSync(file, JSON.stringify(arr, null, 2));
     return;
   }
   const supabase = await getSupabaseAdmin();
-  const { error } = await supabase.from('product_location_stock').upsert(
-    { product_id: productId, location_id: locationId, quantity, updated_at: new Date().toISOString() },
-    { onConflict: 'product_id,location_id' },
-  );
+  const { error } = await supabase
+    .from('product_location_stock')
+    .upsert(
+      {
+        product_id: productId,
+        location_id: locationId,
+        quantity,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'product_id,location_id' },
+    );
   if (error) throw error;
 }
 
@@ -2075,10 +2383,16 @@ export async function listTransferRequests(filters?: {
     return listTransferRequestsMock(filters);
   }
   const supabase = await getSupabaseAdmin();
-  let query = supabase.from('transfer_request_details').select('*').order('created_at', { ascending: false });
+  let query = supabase
+    .from('transfer_request_details')
+    .select('*')
+    .order('created_at', { ascending: false });
   if (filters?.status) query = query.eq('status', filters.status);
   if (filters?.productId) query = query.eq('product_id', filters.productId);
-  if (filters?.locationId) query = query.or(`source_location_id.eq.${filters.locationId},destination_location_id.eq.${filters.locationId}`);
+  if (filters?.locationId)
+    query = query.or(
+      `source_location_id.eq.${filters.locationId},destination_location_id.eq.${filters.locationId}`,
+    );
   if (filters?.requesterId) query = query.eq('requester_id', filters.requesterId);
   const { data, error } = await query;
   if (error) throw error;
@@ -2100,7 +2414,12 @@ function listTransferRequestsMock(filters?: {
     return rows
       .filter((r) => (filters?.status ? r.status === filters.status : true))
       .filter((r) => (filters?.productId ? r.product_id === filters.productId : true))
-      .filter((r) => (filters?.locationId ? r.source_location_id === filters.locationId || r.destination_location_id === filters.locationId : true))
+      .filter((r) =>
+        filters?.locationId
+          ? r.source_location_id === filters.locationId ||
+            r.destination_location_id === filters.locationId
+          : true,
+      )
       .filter((r) => (filters?.requesterId ? r.requester_id === filters.requesterId : true));
   } catch {
     return [];
@@ -2167,7 +2486,11 @@ export async function createTransferRequest(input: {
 
 export async function updateTransferRequestStatus(
   requestId: string,
-  patch: { status: TransferRequestRow['status']; validator_id?: string; validator_comment?: string },
+  patch: {
+    status: TransferRequestRow['status'];
+    validator_id?: string;
+    validator_comment?: string;
+  },
 ): Promise<TransferRequestRow> {
   const now = new Date().toISOString();
   if (shouldUseMocks()) {
@@ -2180,7 +2503,8 @@ export async function updateTransferRequestStatus(
     arr[idx] = {
       ...arr[idx],
       ...patch,
-      validated_at: patch.status === 'approved' || patch.status === 'rejected' ? now : arr[idx].validated_at,
+      validated_at:
+        patch.status === 'approved' || patch.status === 'rejected' ? now : arr[idx].validated_at,
       updated_at: now,
     };
     fs.writeFileSync(file, JSON.stringify(arr, null, 2));
@@ -2192,7 +2516,12 @@ export async function updateTransferRequestStatus(
   if (patch.validator_id) update.validator_id = patch.validator_id;
   if (patch.validator_comment !== undefined) update.validator_comment = patch.validator_comment;
   if (patch.status === 'approved' || patch.status === 'rejected') update.validated_at = now;
-  const { data, error } = await supabase.from('transfer_requests').update(update).eq('id', requestId).select('*').single();
+  const { data, error } = await supabase
+    .from('transfer_requests')
+    .update(update)
+    .eq('id', requestId)
+    .select('*')
+    .single();
   if (error) throw error;
   return data as TransferRequestRow;
 }
@@ -2212,7 +2541,8 @@ export async function executeTransferRequest(requestId: string): Promise<{
 }> {
   const tr = await listTransferRequests({}).then((rows) => rows.find((r) => r.id === requestId));
   if (!tr) return { ok: false, error: 'Demande introuvable.' };
-  if (tr.status !== 'approved') return { ok: false, error: `Demande non approuvée (status=${tr.status}).` };
+  if (tr.status !== 'approved')
+    return { ok: false, error: `Demande non approuvée (status=${tr.status}).` };
 
   if (shouldUseMocks()) {
     const entries = await listProductLocationStock({ productId: tr.product_id });
@@ -2266,11 +2596,18 @@ export async function executeTransferRequest(requestId: string): Promise<{
     }
 
     await updateTransferRequestStatus(requestId, { status: 'executed' });
-    return { ok: true, new_source_qty: newSourceQty, new_dest_qty: newDestQty, new_global_stock: newGlobal };
+    return {
+      ok: true,
+      new_source_qty: newSourceQty,
+      new_dest_qty: newDestQty,
+      new_global_stock: newGlobal,
+    };
   }
 
   const supabase = await getSupabaseAdmin();
-  const { data, error } = await supabase.rpc('execute_transfer_request', { p_request_id: requestId });
+  const { data, error } = await supabase.rpc('execute_transfer_request', {
+    p_request_id: requestId,
+  });
   if (error) return { ok: false, error: error.message };
   // La RPC retourne un SETOF (ok, error, new_source_qty, new_dest_qty, new_global_stock).
   const row = Array.isArray(data) ? data[0] : data;
@@ -2314,7 +2651,10 @@ export function getVisibleLocationsForUser(
     return allLocations.filter((l) => !l.is_archived);
   }
   if ((LOGISTICS_ROLES as readonly string[]).includes(role)) {
-    const wantedType = LOGISTICS_ROLE_TO_LOCATION_TYPE[role as 'depot_manager' | 'store_manager' | 'presentoir_manager'];
+    const wantedType =
+      LOGISTICS_ROLE_TO_LOCATION_TYPE[
+        role as 'depot_manager' | 'store_manager' | 'presentoir_manager'
+      ];
     const managed = (user.managed_location_ids ?? []).map(String);
     return allLocations.filter(
       (l) => !l.is_archived && l.type === wantedType && managed.includes(l.id),
@@ -2324,15 +2664,15 @@ export function getVisibleLocationsForUser(
 }
 
 /** Détermine si un user peut modifier une localité (créer/supprimer/archiver). */
-export function canManageLocation(
-  user: LocationVisibilityUser,
-  location: Location,
-): boolean {
+export function canManageLocation(user: LocationVisibilityUser, location: Location): boolean {
   const role = user.role;
   if (['admin', 'administrator'].includes(role)) return true;
   // Les sous-rôles logistiques peuvent gérer leurs localités affectées (UI future).
   if ((LOGISTICS_ROLES as readonly string[]).includes(role)) {
-    const wantedType = LOGISTICS_ROLE_TO_LOCATION_TYPE[role as 'depot_manager' | 'store_manager' | 'presentoir_manager'];
+    const wantedType =
+      LOGISTICS_ROLE_TO_LOCATION_TYPE[
+        role as 'depot_manager' | 'store_manager' | 'presentoir_manager'
+      ];
     const managed = (user.managed_location_ids ?? []).map(String);
     return location.type === wantedType && managed.includes(location.id);
   }
@@ -2348,7 +2688,10 @@ export async function readOrdersRaw(): Promise<any[]> {
 }
 
 export async function writeOrdersRaw(orders: any[]): Promise<void> {
-  if (shouldUseMocks()) { writeOrders(orders); return; }
+  if (shouldUseMocks()) {
+    writeOrders(orders);
+    return;
+  }
   throw new Error('writeOrdersRaw: écriture JSON FS interdite en prod.');
 }
 
@@ -2361,7 +2704,10 @@ export async function readMessagesRaw(): Promise<any[]> {
 }
 
 export async function writeMessagesRaw(messages: any[]): Promise<void> {
-  if (shouldUseMocks()) { writeMessages(messages); return; }
+  if (shouldUseMocks()) {
+    writeMessages(messages);
+    return;
+  }
   throw new Error('writeMessagesRaw: écriture JSON FS interdite en prod.');
 }
 
@@ -2374,7 +2720,10 @@ export async function readNewsRaw(): Promise<any[]> {
 }
 
 export async function writeNewsRaw(news: any[]): Promise<void> {
-  if (shouldUseMocks()) { writeNews(news); return; }
+  if (shouldUseMocks()) {
+    writeNews(news);
+    return;
+  }
   throw new Error('writeNewsRaw: écriture JSON FS interdite en prod.');
 }
 

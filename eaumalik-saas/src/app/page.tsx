@@ -9,6 +9,7 @@ import HeroSection from '@/components/landing/HeroSection';
 export const dynamic = 'force-dynamic';
 
 import FiltrationSection from '@/components/landing/FiltrationSection';
+import CatalogueFlipbookSection from '@/components/landing/CatalogueFlipbookSection';
 import BoutiquePromotions from '@/components/boutique/BoutiquePromotions';
 import ProductsPreview from '@/components/landing/ProductsPreview';
 import IndustrialSection from '@/components/landing/IndustrialSection';
@@ -31,21 +32,17 @@ export default async function HomePage() {
   //  - all : tous les produits actifs, dont on dérive les produits phares ;
   //  - promotions : carrousel public.
   // Une seule lecture catalogue suffit, au lieu de deux requêtes identiques.
-  const [all, promotions] = await Promise.all([
-    listProducts(),
-    listActivePromotions(12),
-  ]);
-  const featured = all.filter(product => product.is_featured);
+  const [all, promotions] = await Promise.all([listProducts(), listActivePromotions(12)]);
+  const featured = all.filter((product) => product.is_featured);
   const previewProducts = (featured.length > 0 ? featured : all.slice(0, 6))
     .slice(0, 6)
     .map(toPublicProduct);
-  const publicPromotions = promotions.map(promotion =>
-    withPublicMediaUrl('news', promotion)
-  );
+  const publicPromotions = promotions.map((promotion) => withPublicMediaUrl('news', promotion));
   return (
     <>
       <HeroSection />
       <FiltrationSection />
+      <CatalogueFlipbookSection />
       <BoutiquePromotions promotions={publicPromotions} showNews={false} />
       <ProductsPreview products={previewProducts} />
       <IndustrialSection />
