@@ -201,7 +201,7 @@ export default function StocksDashboard({ products, history }: Props) {
         <div>
           <h2 className="font-display font-extrabold text-xl">Gestion des Stocks</h2>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Vue d'ensemble des niveaux de stock, mouvements récents et alertes.
+            Vue d&rsquo;ensemble des niveaux de stock, mouvements récents et alertes.
           </p>
         </div>
         <Link href="/admin/catalogue" className="btn-outline btn-sm">
