@@ -1,16 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  Warehouse, TrendingUp, TrendingDown, AlertTriangle, Package, Plus, Minus,
-  Boxes, ArrowUpRight, ArrowDownRight, ExternalLink, Activity,
+  Warehouse, TrendingUp, TrendingDown, AlertTriangle, Package,
+  Boxes, ArrowUpRight, ArrowDownRight, ExternalLink, Activity, PackagePlus,
 } from 'lucide-react';
 import { Chart, registerables } from 'chart.js';
 import type { Product, ProductRestock, ProductCategory } from '@/types';
 import { CATEGORY_LABELS } from '@/types';
-import { useToast } from '@/components/shared/ToastProvider';
-import { adjustProductStockAction } from '@/app/actions/productActions';
+import RestockDialog from '@/components/admin/RestockDialog';
 
 Chart.register(...registerables);
 
@@ -33,9 +32,10 @@ const CATEGORY_DEPOSITS: Record<ProductCategory, { code: string; city: string }>
 };
 
 export default function StocksDashboard({ products, history }: Props) {
-  const toast = useToast();
   const chartRef = useRef<HTMLCanvasElement | null>(null);
   const chartInstance = useRef<Chart | null>(null);
+  // Article dont on déclenche un mouvement de stock.
+  const [restockTarget, setRestockTarget] = useState<Product | null>(null);
 
   // ---------- KPIs ----------
   const kpis = useMemo(() => {
@@ -174,25 +174,12 @@ export default function StocksDashboard({ products, history }: Props) {
     };
   }, [history]);
 
-  // ---------- Ajustement rapide (boutons +/−) ----------
-  const adjust = async (id: string, delta: number, name: string) => {
-    const quantity = Math.abs(delta);
-    const today = new Date().toISOString().slice(0, 10);
-    const res = await adjustProductStockAction(id, {
-      direction: delta > 0 ? 1 : -1,
-      quantity,
-      restock_date: today,
-      reason: delta > 0 ? 'restock' : 'direct_sale',
-      note: null,
-    });
-    if (!res.success) {
-      toast(res.error || 'Erreur ajustement', 'error');
-      return;
-    }
-    const newStock = res.product?.stock ?? 0;
-    toast(`${name} : ${delta > 0 ? '+' : ''}${delta} → ${newStock}`, newStock === 0 ? 'error' : 'info');
-    if (typeof window !== 'undefined') window.location.reload();
-  };
+  // ---------- Mouvement de stock ----------
+  // Ouvre la modale RestockDialog pour l'article ciblé. Après confirmation
+  // et écriture serveur, on recharge la page (les `products` et `history`
+  // du dashboard sont SSR-fetched) pour rafraîchir les KPIs et le tableau.
+  const openMovement = (p: Product) => setRestockTarget(p);
+  const closeMovement = () => setRestockTarget(null);
 
   return (
     <div className="space-y-6" style={{ transform: 'none' }}>
@@ -364,8 +351,8 @@ export default function StocksDashboard({ products, history }: Props) {
                     <th style={{ width: 80 }}>Stock</th>
                     <th style={{ width: 90 }}>Seuil</th>
                     <th style={{ width: 160 }}>Niveau</th>
-                    <th style={{ width: 220 }}>Ajust. rapide</th>
-                    <th style={{ width: 90 }}></th>
+                    <th style={{ width: 230 }}>Mouvement de stock</th>
+                    <th style={{ width: 110 }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -397,34 +384,19 @@ export default function StocksDashboard({ products, history }: Props) {
                           </div>
                         </td>
                         <td>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => adjust(p.id, -1, p.name)}
-                              className="btn-outline btn-sm"
-                              title="Retirer 1 (vente directe)"
-                            >
-                              <Minus size={12} />
-                            </button>
-                            <button
-                              onClick={() => adjust(p.id, +1, p.name)}
-                              className="btn-primary btn-sm"
-                              title="Ajouter 1 (approvisionnement)"
-                            >
-                              <Plus size={12} />
-                            </button>
-                            <button
-                              onClick={() => adjust(p.id, +5, p.name)}
-                              className="btn-outline btn-sm"
-                              title="Ajouter 5"
-                            >
-                              +5
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openMovement(p)}
+                            className="btn-primary btn-sm w-full justify-center"
+                            title={`Enregistrer un mouvement de stock pour « ${p.name} »`}
+                          >
+                            <PackagePlus size={14} /> Mouvement de stock
+                          </button>
                         </td>
                         <td>
                           <Link
                             href="/admin/catalogue"
-                            className="btn-primary btn-sm w-full justify-center"
+                            className="btn-outline btn-sm w-full justify-center"
                             title="Voir / modifier dans le catalogue"
                           >
                             <ExternalLink size={12} /> Catalogue
@@ -477,6 +449,18 @@ export default function StocksDashboard({ products, history }: Props) {
           </div>
         </div>
       )}
+
+      {/* Modale Mouvement de stock — même composant que celui du catalogue */}
+      <RestockDialog
+        open={restockTarget !== null}
+        product={restockTarget}
+        onClose={closeMovement}
+        onRestocked={() => {
+          // Le dashboard est SSR-fetched : on recharge pour rafraîchir KPIs,
+          // graphique, alertes et le stock de chaque article.
+          if (typeof window !== 'undefined') window.location.reload();
+        }}
+      />
     </div>
   );
 }
