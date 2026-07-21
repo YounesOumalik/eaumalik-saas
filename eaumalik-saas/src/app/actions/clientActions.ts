@@ -19,7 +19,9 @@ import {
   readNewsRaw,
   writeNewsRaw,
   readProductsRaw,
+  listMaintenanceRecordsForUser,
 } from '@/data/repositories';
+import type { MaintenanceRecord } from '@/types';
 
 import { isMockMode } from '@/lib/api-guard';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
@@ -180,6 +182,9 @@ export async function getClientDashboardData() {
       userOrders,
       userMessages,
       news: newsRows,
+      // Fiches de maintenance du client (mêmes données que l'admin voit, mais
+      // filtrées par user_id).
+      maintenanceRecords: await listMaintenanceRecordsForUser(user.id),
     };
   }
 
@@ -246,6 +251,7 @@ export async function getClientDashboardData() {
     userOrders: ordersRes.data ?? [],
     userMessages: (messagesRes.data ?? []).map(normalizeMessage),
     news,
+    maintenanceRecords: await listMaintenanceRecordsForUser(user.id),
   };
 }
 

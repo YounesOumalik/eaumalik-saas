@@ -20,13 +20,21 @@ import {
   EyeOff,
   PanelLeftClose,
   PanelLeftOpen,
+  CheckCircle2,
+  Wrench,
+  CalendarClock,
+  AlertTriangle,
+  CircleDot,
+  Circle,
+  RefreshCw,
   type LucideIcon,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDateTime, daysUntil } from '@/lib/utils';
 import { changeOwnPasswordAction, sendClientMessageAction, updateUserProfileAction } from '@/app/actions/clientActions';
 import { useToast } from '@/components/shared/ToastProvider';
 import SearchableCitySelect from '@/components/shared/SearchableCitySelect';
 import { OrderTimeline } from '@/components/admin/OrderTracker';
+import type { MaintenanceRecord, MaintenanceIntervention, InterventionType, InterventionOutcome } from '@/types';
 
 interface Props {
   initialData: {
@@ -46,6 +54,8 @@ interface Props {
     userOrders: any[];
     userMessages: any[];
     news: any[];
+    /** Fiches de maintenance liees aux commandes livrees du client. */
+    maintenanceRecords: MaintenanceRecord[];
   };
 }
 
@@ -148,6 +158,30 @@ export default function ClientDashboard({ initialData }: Props) {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Polling léger : récupère les nouveaux messages (notamment les réponses admin)
+  // toutes les 15 s. On n'écrase que si le serveur renvoie plus de messages
+  // que l'état local (pour ne pas perdre ce que le client vient de taper).
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch('/api/messages/mine', { cache: 'no-store' });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (Array.isArray(data.messages) && data.messages.length >= messages.length) {
+          setMessages(data.messages);
+        }
+      } catch {
+        /* silencieux */
+      }
+    };
+    const id = window.setInterval(tick, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [messages.length]);
+
   const referralLink = typeof window !== 'undefined'
     ? `${window.location.origin}/login?ref=${initialData.user.referral_code}`
     : `https://eaumalik.com/login?ref=${initialData.user.referral_code}`;
@@ -182,10 +216,15 @@ export default function ClientDashboard({ initialData }: Props) {
   );
 
   // Commande en PREMIER : ouvre le suivi des commandes du client.
+  // L'onglet Maintenance s'affiche dès qu'une commande a été livrée OU qu'une
+  // fiche de maintenance existe deja pour ce client (cas ou l'admin en cree
+  // une a la main avant que la commande passe en statut 'livree').
+  const hasMaintenanceAccess = initialData.userOrders.some((order: any) => order.status === 'livree')
+    || initialData.maintenanceRecords.length > 0;
   const navItems: NavItem[] = [
     { id: 'orders', label: 'Commande', icon: ShoppingBag },
     { id: 'parrainage', label: 'Parrainage & Cashback', icon: Gift },
-    ...(initialData.userOrders.some((order: any) => order.status === 'livree')
+    ...(hasMaintenanceAccess
       ? [{ id: 'maintenance', label: 'Maintenance Filtres', icon: ShieldAlert }]
       : []),
     { id: 'chat', label: 'Discuter avec le vendeur', icon: MessageCircle },
@@ -397,69 +436,9 @@ export default function ClientDashboard({ initialData }: Props) {
         )}
 
         {/* MAINTENANCE */}
-        {activeTab === 'maintenance' && (() => {
-          const deliveredOrder = initialData.userOrders.find(o => o.status === 'livree');
-
-          return (
-            <div className="glass-card p-6" style={{ transform: 'none' }}>
-              <h3 className="font-display font-bold text-lg mb-4 flex items-center gap-2">
-                <ShieldAlert size={18} className="text-sky-400" /> Suivi de la Maintenance
-              </h3>
-              <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-                Retrouvez le calendrier de maintenance et de changement des filtres de vos appareils installés.
-              </p>
-
-              {deliveredOrder ? (() => {
-                const installDate = new Date(deliveredOrder.updated_at || deliveredOrder.created_at);
-                const sedDate = new Date(installDate);
-                sedDate.setMonth(installDate.getMonth() + 6);
-                const memDate = new Date(installDate);
-                memDate.setMonth(installDate.getMonth() + 12);
-
-                const formatDateFR = (d: Date) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-                const formatMonthFR = (d: Date) => d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-
-                return (
-                  <div className="border border-[color:var(--border)] rounded-2xl p-5 bg-[color:var(--bg-surface)]">
-                    <div className="flex flex-wrap items-start justify-between gap-4 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
-                      <div>
-                        <h4 className="font-bold text-base">{deliveredOrder.items?.[0]?.product_name || "Purificateur d'Eau Pro"}</h4>
-                        <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Installé le : {formatDateFR(installDate)}</div>
-                      </div>
-                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-soft text-success">
-                        Filtres à jour
-                      </span>
-                    </div>
-                    <div className="grid sm:grid-cols-2 gap-6 mt-4 text-sm">
-                      <div>
-                        <div className="font-semibold mb-2">Historique / Prochain changement</div>
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                            <span>Filtre à sédiments (Changement prévu : {formatDateFR(sedDate)})</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                            <span>Membrane d&apos;osmose (Changement prévu : {formatDateFR(memDate)})</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex flex-col justify-center items-start sm:items-end">
-                        <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Prochaine révision (1 an)</div>
-                        <div className="text-lg font-bold text-sky-400 capitalize">{formatMonthFR(memDate)}</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })() : (
-                <div className="text-center py-12 text-xs" style={{ color: 'var(--text-muted)' }}>
-                  <ShieldAlert size={36} className="mx-auto mb-3 opacity-50" />
-                  La maintenance sera disponible après la livraison confirmée de votre appareil.
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {activeTab === 'maintenance' && (
+          <ClientMaintenanceTab initialRecords={initialData.maintenanceRecords} />
+        )}
 
         {/* CHAT MESSAGES */}
         {activeTab === 'chat' && (
@@ -853,5 +832,273 @@ function PasswordInput({
         </button>
       </div>
     </div>
+  );
+}
+
+// ============================================================================
+// Onglet Maintenance côté client : affiche les fiches maintenance_records
+// réellement créées par l'admin (ou auto lors d'une livraison), avec :
+//   - statut du programme (actif / à renouveler / suspendu / résilié)
+//   - prochaine intervention prévue + alerte J-X
+//   - historique complet des interventions technicien
+//   - détail des filtres changés / pièces utilisées / coût
+// ============================================================================
+
+const CLIENT_MAINTENANCE_STATUS_LABELS: Record<MaintenanceRecord['status'], string> = {
+  actif: 'Actif',
+  a_renouveler: 'À renouveler',
+  suspendu: 'Suspendu',
+  resilie: 'Résilié',
+};
+
+const CLIENT_MAINTENANCE_STATUS_STYLE: Record<MaintenanceRecord['status'], { bg: string; fg: string }> = {
+  actif: { bg: 'bg-success-soft', fg: 'text-success' },
+  a_renouveler: { bg: 'bg-warning-soft', fg: 'text-warning' },
+  suspendu: { bg: 'bg-bg-surface', fg: 'text-text-muted' },
+  resilie: { bg: 'bg-danger-soft', fg: 'text-danger' },
+};
+
+const CLIENT_INTERVENTION_LABELS: Record<InterventionType, string> = {
+  filter_change: 'Changement de filtre',
+  inspection: 'Inspection',
+  repair: 'Réparation',
+  replacement: 'Remplacement',
+  cleaning: 'Nettoyage',
+  diagnostic: 'Diagnostic',
+  other: 'Autre intervention',
+};
+
+const CLIENT_OUTCOME_LABELS: Record<InterventionOutcome, string> = {
+  completed: 'Terminée',
+  pending: 'En attente',
+  failed: 'Échec',
+};
+
+function ClientMaintenanceTab({ initialRecords }: { initialRecords: MaintenanceRecord[] }) {
+  const [records, setRecords] = useState<MaintenanceRecord[]>(initialRecords);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/maintenance/mine', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setRecords(data.records ?? []);
+      }
+    } catch {
+      /* silencieux : on garde l'état précédent */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  if (records.length === 0) {
+    return (
+      <div className="glass-card p-8 text-center" style={{ transform: 'none' }}>
+        <ShieldAlert size={36} className="mx-auto mb-3 opacity-50" style={{ color: 'var(--text-muted)' }} />
+        <h3 className="font-display font-bold text-lg mb-2">Suivi de la Maintenance</h3>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          La maintenance sera disponible après la livraison confirmée de votre appareil.
+        </p>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={loading}
+          className="btn-outline mt-4 inline-flex items-center gap-2 text-xs disabled:opacity-50"
+        >
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Actualiser
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" style={{ transform: 'none' }}>
+      <div className="glass-card p-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h3 className="font-display font-bold text-lg mb-2 flex items-center gap-2">
+            <ShieldAlert size={18} className="text-sky-400" /> Suivi de la Maintenance
+          </h3>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            Retrouvez le calendrier de maintenance, le détail des interventions et l&apos;historique des changements de filtres pour chaque appareil installé.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={loading}
+          className="btn-outline inline-flex items-center gap-2 text-xs disabled:opacity-50"
+          title="Recharger les interventions"
+        >
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> {loading ? 'Actualisation...' : 'Actualiser'}
+        </button>
+      </div>
+
+      {records.map(record => (
+        <ClientMaintenanceCard key={record.id} record={record} />
+      ))}
+    </div>
+  );
+}
+
+function ClientMaintenanceCard({ record }: { record: MaintenanceRecord }) {
+  const statusStyle = CLIENT_MAINTENANCE_STATUS_STYLE[record.status];
+  const statusLabel = CLIENT_MAINTENANCE_STATUS_LABELS[record.status];
+  const dueIn = record.next_service_date ? daysUntil(record.next_service_date) : null;
+  const dueBadge = (() => {
+    if (dueIn === null || record.status === 'resilie') return null;
+    if (dueIn < 0) {
+      return { text: `En retard de ${Math.abs(dueIn)} j`, color: 'text-danger', bg: 'bg-danger-soft', icon: AlertTriangle };
+    }
+    if (dueIn <= 30) {
+      return { text: `Dans ${dueIn} j`, color: 'text-warning', bg: 'bg-warning-soft', icon: CalendarClock };
+    }
+    return { text: `Dans ${dueIn} j`, color: 'text-success', bg: 'bg-success-soft', icon: CheckCircle2 };
+  })();
+
+  return (
+    <article className="glass-card p-6" style={{ transform: 'none' }}>
+      {/* Header */}
+      <header className="flex flex-wrap items-start justify-between gap-3 pb-4 mb-4" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div>
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <Wrench size={16} className="text-sky-400" />
+            <h4 className="font-display font-bold text-base">{record.product_name}</h4>
+          </div>
+          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Installé le {formatDate(record.install_date)}
+            {record.order_id && (
+              <span className="ml-2 font-mono">· Réf. {record.order_id.slice(0, 12)}</span>
+            )}
+          </div>
+          {record.filter_types.length > 0 && (
+            <div className="text-[11px] mt-2 flex flex-wrap gap-1.5" style={{ color: 'var(--text-muted)' }}>
+              <span>Filtres suivis :</span>
+              {record.filter_types.map(f => (
+                <span key={f} className="px-2 py-0.5 rounded-full bg-bg-surface border border-[color:var(--border)] text-[10px]">
+                  {f}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusStyle.bg} ${statusStyle.fg}`}>
+            {statusLabel}
+          </span>
+          {dueBadge && (
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${dueBadge.bg} ${dueBadge.color}`}>
+              <dueBadge.icon size={12} /> {dueBadge.text}
+            </span>
+          )}
+        </div>
+      </header>
+
+      {/* Prochaine intervention */}
+      {record.next_service_date && record.status !== 'resilie' && (
+        <div className="grid sm:grid-cols-3 gap-4 mb-5 text-sm">
+          <div className="rounded-xl border border-[color:var(--border)] bg-bg-surface p-3">
+            <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
+              Prochaine intervention
+            </div>
+            <div className="font-display font-bold text-base">{formatDate(record.next_service_date)}</div>
+          </div>
+          <div className="rounded-xl border border-[color:var(--border)] bg-bg-surface p-3">
+            <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
+              Dernier passage
+            </div>
+            <div className="font-display font-bold text-base">
+              {record.last_service_date ? formatDate(record.last_service_date) : '—'}
+            </div>
+          </div>
+          <div className="rounded-xl border border-[color:var(--border)] bg-bg-surface p-3">
+            <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
+              Interventions réalisées
+            </div>
+            <div className="font-display font-bold text-base">
+              {record.intervention_count ?? (record.interventions?.length ?? 0)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notes */}
+      {record.notes && (
+        <div className="mb-5">
+          <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+            Notes de l&apos;équipe technique
+          </div>
+          <p className="text-sm rounded-xl p-3 bg-bg-surface border border-[color:var(--border)] whitespace-pre-wrap">
+            {record.notes}
+          </p>
+        </div>
+      )}
+
+      {/* Historique interventions */}
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>
+          Historique des interventions ({record.interventions?.length ?? 0})
+        </div>
+        {(!record.interventions || record.interventions.length === 0) ? (
+          <div className="text-center py-6 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <CircleDot size={20} className="mx-auto mb-2 opacity-50" />
+            Aucune intervention enregistrée pour le moment.
+          </div>
+        ) : (
+          <ol className="relative border-l-2 border-[color:var(--border)] ml-2 space-y-4">
+            {record.interventions.map((it) => (
+              <ClientInterventionItem key={it.id} intervention={it} />
+            ))}
+          </ol>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function ClientInterventionItem({ intervention }: { intervention: MaintenanceIntervention }) {
+  const outcomeStyle: Record<InterventionOutcome, { bg: string; fg: string }> = {
+    completed: { bg: 'bg-success-soft', fg: 'text-success' },
+    pending: { bg: 'bg-warning-soft', fg: 'text-warning' },
+    failed: { bg: 'bg-danger-soft', fg: 'text-danger' },
+  };
+  return (
+    <li className="ml-4 relative pl-4">
+      <span
+        className="absolute -left-[11px] top-1.5 w-5 h-5 rounded-full flex items-center justify-center"
+        style={{ background: 'var(--bg-card)', border: '2px solid var(--primary)' }}
+      >
+        <Wrench size={10} className="text-primary-light" />
+      </span>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+        <div className="font-semibold text-sm">{CLIENT_INTERVENTION_LABELS[intervention.intervention_type] ?? intervention.intervention_type}</div>
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${outcomeStyle[intervention.outcome].bg} ${outcomeStyle[intervention.outcome].fg}`}>
+            {CLIENT_OUTCOME_LABELS[intervention.outcome]}
+          </span>
+          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            {formatDateTime(intervention.performed_at)}
+          </span>
+        </div>
+      </div>
+      <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+        {intervention.description}
+      </p>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+        {intervention.technician_name && (
+          <span>👤 {intervention.technician_name}</span>
+        )}
+        {intervention.parts_used && intervention.parts_used.length > 0 && (
+          <span>🔧 Pièces : {intervention.parts_used.join(', ')}</span>
+        )}
+        {intervention.cost > 0 && (
+          <span className="font-semibold">💰 {formatCurrency(intervention.cost)}</span>
+        )}
+        {intervention.next_service_date && (
+          <span>⏭️ Prochain : {formatDate(intervention.next_service_date)}</span>
+        )}
+      </div>
+    </li>
   );
 }

@@ -982,6 +982,73 @@ export async function listMaintenanceRecords(filters: MaintenanceRecordFilters =
   return (data ?? []) as MaintenanceRecord[];
 }
 
+/**
+ * Liste les fiches de maintenance visibles par un CLIENT authentifié.
+ * Filtre strict par user_id OU par appartenance à une de ses commandes.
+ * Côté mock : filtre par user_id puis croise avec les commandes livrées du client.
+ * Côté Supabase : utilise le user_id de la session (RLS friendly).
+ */
+export async function listMaintenanceRecordsForUser(
+  userId: string,
+  filters: MaintenanceRecordFilters = {}
+): Promise<MaintenanceRecord[]> {
+  if (!userId) return [];
+  if (shouldUseMocks()) {
+    const bundle = readMaintenance();
+    const myOrders = readOrders().filter(o => o.user_id === userId);
+    const myDeliveredIds = new Set(myOrders.filter(o => o.status === 'livree').map(o => o.id));
+    let records = bundle.records.filter(r =>
+      (r.user_id === userId) || (r.order_id && myDeliveredIds.has(r.order_id))
+    );
+    if (filters.status) records = records.filter(r => r.status === filters.status);
+    if (filters.orderId) records = records.filter(r => r.order_id === filters.orderId);
+    if (filters.dueBefore) records = records.filter(r => r.next_service_date && r.next_service_date <= filters.dueBefore!);
+    records.sort((a, b) => (b.next_service_date || '').localeCompare(a.next_service_date || ''));
+    hydrateRecordInterventions(records, bundle.interventions);
+    return records;
+  }
+  const supabase = await getSupabaseAdmin();
+  // Récupère d'abord les commandes du client (livrées ou non) pour récupérer
+  // leurs fiches maintenance via order_id, puis on filtre côté mémoire.
+  const { data: myOrders, error: ordersErr } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('user_id', userId);
+  if (ordersErr) throw ordersErr;
+  const myOrderIds = (myOrders ?? []).map((o: { id: string }) => o.id);
+  // Récupère les fiches : soit par user_id, soit par order_id dans mes commandes.
+  // PostgREST ne supporte pas un OR sur deux colonnes différentes proprement
+  // quand l'une attend un IN ; on fait donc deux requêtes parallèles.
+  const [byUser, byOrder] = await Promise.all([
+    supabase
+      .from('maintenance_records')
+      .select('*, interventions:maintenance_interventions(*)')
+      .eq('user_id', userId),
+    myOrderIds.length > 0
+      ? supabase
+          .from('maintenance_records')
+          .select('*, interventions:maintenance_interventions(*)')
+          .in('order_id', myOrderIds)
+      : Promise.resolve({ data: [] as any[], error: null }),
+  ]);
+  if (byUser.error) throw byUser.error;
+  if (byOrder.error) throw byOrder.error;
+  const seen = new Set<string>();
+  const merged: MaintenanceRecord[] = [];
+  for (const r of [...(byUser.data ?? []), ...(byOrder.data ?? [])]) {
+    if (!seen.has(r.id)) {
+      seen.add(r.id);
+      merged.push(r as MaintenanceRecord);
+    }
+  }
+  let records = merged;
+  if (filters.status) records = records.filter(r => r.status === filters.status);
+  if (filters.orderId) records = records.filter(r => r.order_id === filters.orderId);
+  if (filters.dueBefore) records = records.filter(r => r.next_service_date && r.next_service_date <= filters.dueBefore!);
+  records.sort((a, b) => (b.next_service_date || '').localeCompare(a.next_service_date || ''));
+  return records;
+}
+
 /** Récupère une fiche par ID. */
 export async function getMaintenanceRecord(id: string): Promise<MaintenanceRecord | null> {
   if (shouldUseMocks()) {
