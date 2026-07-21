@@ -32,6 +32,60 @@ export interface Product {
   updated_at: string;
 }
 
+/**
+ * Motif d'un mouvement de stock (approvisionnement, sortie, correction).
+ *
+ * - `restock`     : réassort fournisseur (entrée, delta > 0)
+ * - `return`      : retour client / reprise (entrée, delta > 0)
+ * - `direct_sale` : vente directe hors commande (sortie, delta < 0)
+ * - `correction`  : correction d'inventaire (signe libre, note obligatoire)
+ * - `loss`        : casse, vol, péremption (sortie, delta < 0)
+ * - `other`       : autre motif (signe libre, note obligatoire)
+ */
+export type StockMovementReason =
+  | 'restock'
+  | 'return'
+  | 'direct_sale'
+  | 'correction'
+  | 'loss'
+  | 'other';
+
+export const STOCK_MOVEMENT_REASON_LABELS: Record<StockMovementReason, string> = {
+  restock:     'Approvisionnement (réassort)',
+  return:      'Retour client',
+  direct_sale: 'Vente directe',
+  correction:  'Correction d\'inventaire',
+  loss:        'Perte / casse / vol',
+  other:       'Autre',
+};
+
+/**
+ * Événement d'approvisionnement de stock pour un produit.
+ * Enregistré à chaque mouvement via le bouton "Mouvement de stock" du catalogue
+ * admin. Permet de tracer dans le temps les variations de stock (entrées,
+ * sorties, corrections) avec leur motif.
+ *
+ * `quantity` = variation signée appliquée au stock :
+ *  - > 0  pour une entrée (réassort, retour client)
+ *  - < 0  pour une sortie (vente directe, perte)
+ *  - != 0 pour une correction (note obligatoire)
+ */
+export interface ProductRestock {
+  id: string;
+  product_id: string;
+  /** Variation de stock appliquée (signée : +N entrée, -N sortie). */
+  quantity: number;
+  /** Date effective du mouvement (saisie par l'admin). */
+  restock_date: string; // YYYY-MM-DD
+  /** Motif du mouvement (cf. StockMovementReason). */
+  reason: StockMovementReason;
+  /** Note libre (fournisseur, référence de lot, commentaire, etc.). */
+  note: string | null;
+  /** Auteur de l'opération (email ou nom libre). */
+  created_by: string | null;
+  created_at: string; // ISO timestamp
+}
+
 export type OrderStatus =
   | 'en_attente'
   | 'traitee'
