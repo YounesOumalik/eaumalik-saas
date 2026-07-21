@@ -61,9 +61,15 @@ interface ProductFormDialogProps {
   onSaved: (p: Product) => void;
   /** Réservé au super admin : affichage + édition du prix d'achat en gros. */
   canEditWholesalePrice: boolean;
+  /**
+   * Demande d'ouverture de la modale « Mouvement de stock » depuis le champ
+   * Stock de la fiche édition. Le parent remplace alors la modale produit par
+   * la modale mouvement. En création (product === null) ce n'est jamais appelé.
+   */
+  onOpenMovement?: (product: Product) => void;
 }
 
-function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePrice }: ProductFormDialogProps) {
+function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePrice, onOpenMovement }: ProductFormDialogProps) {
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [imageUrl, setImageUrl] = useState<string>('');
@@ -233,17 +239,50 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
             </div>
             <div>
               <label className="form-label">Stock *</label>
-              <input
-                type="number"
-                min={0}
-                className="form-input"
-                placeholder="0"
-                {...register('stock')}
-              />
-              {errors.stock && <p className="text-xs text-danger mt-1">{errors.stock.message}</p>}
-              <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                Stock initial. Pour ajouter ou retirer du stock plus tard, utilise le bouton « Mouvement de stock ».
-              </p>
+              {product ? (
+                <>
+                  <input
+                    type="number"
+                    min={0}
+                    className="form-input opacity-70 cursor-not-allowed"
+                    placeholder="0"
+                    disabled
+                    readOnly
+                    aria-readonly="true"
+                    title="Le stock se modifie uniquement via « Mouvement de stock »."
+                    {...register('stock')}
+                  />
+                  <input type="hidden" {...register('stock')} />
+                  <p className="text-[10px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                    Stock actuel (lecture seule). Toute variation passe par
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onOpenMovement) onOpenMovement(product);
+                      }}
+                      className="mx-1 underline font-semibold"
+                      style={{ color: 'var(--primary-light)' }}
+                    >
+                      Mouvement de stock
+                    </button>
+                    (entrée, sortie, correction, perte…).
+                  </p>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="number"
+                    min={0}
+                    className="form-input"
+                    placeholder="0"
+                    {...register('stock')}
+                  />
+                  {errors.stock && <p className="text-xs text-danger mt-1">{errors.stock.message}</p>}
+                  <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                    Stock initial à la création du produit. Toute variation ultérieure passera par le bouton « Mouvement de stock ».
+                  </p>
+                </>
+              )}
             </div>
             <div>
               <label className="form-label">Seuil d&apos;alerte stock</label>
@@ -1455,6 +1494,13 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
         onClose={() => setDialogOpen(false)}
         onSaved={onSaved}
         canEditWholesalePrice={isSuperAdmin}
+        onOpenMovement={(p) => {
+          // Ferme la fiche édition, ouvre la modale mouvement de stock à sa place.
+          setDialogOpen(false);
+          setEditing(null);
+          setRestocking(p);
+          setRestockOpen(true);
+        }}
       />
 
       {/* Modale approvisionnement (incrément de stock + journalisation) */}
