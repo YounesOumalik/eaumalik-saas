@@ -70,8 +70,13 @@ COPY . .
 # Build Next.js avec cache de compilation BuildKit. La référence explicite à
 # CACHE_BUST garantit qu'un nouveau déploiement régénère les pages ISR même
 # lorsque le code source n'a pas changé.
+#
+# 2026-07-21: on supprime .next/cache AVANT le build pour garantir qu'aucun
+# chunk webpack stale (ex: pdfjs-dist en version incorrecte) ne persiste entre
+# les déploiements. Le cache de compilation .next/cache sera régénéré frais.
 RUN --mount=type=cache,target=/app/.next/cache \
     echo "$CACHE_BUST" > /tmp/eaumalik-cache-bust && \
+    rm -rf .next/cache && \
     npm run build
 
 # ----------------------------------------------------------------------------
