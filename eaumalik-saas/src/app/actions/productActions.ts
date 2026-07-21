@@ -296,6 +296,9 @@ const MovementInputSchema = z.object({
   restock_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date au format YYYY-MM-DD requise.'),
   reason: z.enum(['restock', 'return', 'direct_sale', 'correction', 'loss', 'other']),
   note: z.string().max(500).optional().nullable(),
+  /** Localité impactée (migration 0014). Optionnel : si absent, maj directe
+   *  de products.stock (legacy). */
+  locality_id: z.string().uuid('Identifiant de localité invalide.').optional().nullable(),
 });
 
 export async function adjustProductStockAction(
@@ -347,10 +350,13 @@ export async function adjustProductStockAction(
       reason: parsed.data.reason,
       note: parsed.data.note ?? null,
       created_by: createdBy,
+      locality_id: parsed.data.locality_id ?? null,
     });
 
     revalidatePath('/boutique');
     revalidatePath('/admin/catalogue');
+    revalidatePath('/admin/locations');
+    revalidatePath('/admin/stocks');
     return { success: true as const, product: result.product, event: result.event };
   } catch (err: any) {
     return { success: false as const, error: err?.message ?? 'Erreur mouvement de stock.' };
