@@ -1,0 +1,25 @@
+# Fichiers à ignorer pour Prettier
+.next/
+node_modules/
+out/
+build/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Fichiers générés (mock data-store)
+data-store/
+*.min.js
+*.min.css
+
+# SQL (formaté manuellement)
+supabase/migrations/*.sql
+supabase/schema*.sql
+supabase/views-public-bridge.sql
+
+# Lockfiles
+package-lock.json
+
+# Markdown qui contient du SQL brut (pour éviter de reformatter les blocs)
+README.md
