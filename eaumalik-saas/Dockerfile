@@ -46,7 +46,10 @@ ENV NODE_ENV=production
 # Docker réutilise le layer caché de la dernière image
 # et les éventuelles mises à jour de .env.prod sont
 # silencieusement ignorées.
-ARG CACHE_BUST=1
+# 2026-07-21: bumpé à 2 pour forcer un rebuild propre après avoir détecté
+# qu'un bundle pdfjs-dist stale (4.10.38) restait dans le cache webpack de
+# BuildKit, mismatch avec le worker (4.7.76).
+ARG CACHE_BUST=2
 
 # Next.js inline `process.env.NEXT_PUBLIC_*` dans le bundle client au build.
 # On injecte uniquement ces valeurs publiques par ARG/ENV. Les fichiers
