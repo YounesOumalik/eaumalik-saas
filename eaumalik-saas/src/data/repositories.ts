@@ -4,7 +4,7 @@ import 'server-only';
 import type {
   Product, Order, OrderItem, User, MaintenanceAlert, CompanyProfile, News,
   MaintenanceRecord, MaintenanceIntervention, InterventionType, MaintenanceProgramStatus,
-  ProductRestock,
+  ProductRestock, StockMovementReason,
 } from '@/types';
 import {
   MOCK_PRODUCTS, MOCK_USERS, MOCK_ORDERS, MOCK_ORDER_ITEMS,
@@ -267,40 +267,75 @@ export async function updateProductStock(productId: string, delta: number): Prom
 }
 
 /**
- * Enregistre un approvisionnement (réassort) pour un produit :
- *  - ajoute `quantity` au stock existant (incrément, jamais décrément) ;
- *  - journalise l'événement dans `restock_history` (quantité, date, auteur, note).
+ * Enregistre un MOUVEMENT de stock pour un produit :
+ *  - applique `delta` (signé : +N entrée, -N sortie) au stock existant ;
+ *  - journalise l'événement dans `product_restock_history` (delta, date, motif,
+ *    auteur, note) ;
+ *  - met à jour automatiquement `is_out_of_stock` si le stock tombe à 0.
  *
  * Retourne le produit mis à jour + l'événement créé. Le `restock_date` est la
- * date effective d'approvisionnement saisie par l'admin (YYYY-MM-DD), distincte
- * du `created_at` qui est l'instant serveur de l'enregistrement.
+ * date effective du mouvement saisie par l'admin (YYYY-MM-DD), distincte du
+ * `created_at` qui est l'instant serveur de l'enregistrement.
  *
- * En cas de stock NULL en base, on part de 0. Si la quantité ajoutée est
- * négative ou nulle, l'appelant reçoit une erreur (un "approvisionnement"
- * négatif n'a pas de sens — utiliser `updateProductStock` pour décrémenter).
+ * Pour un motif `restock`, `return` ou `direct_sale`, la direction est imposée :
+ * `restock`/`return` → +N ; `direct_sale`/`loss` → -N. Pour `correction`/`other`,
+ * le signe est libre mais `note` est obligatoire (toute correction doit être
+ * tracée textuellement).
  */
-export async function restockProduct(
+export async function adjustProductStock(
   productId: string,
   input: {
-    quantity: number;
+    delta: number;
     restock_date: string; // YYYY-MM-DD
+    reason: StockMovementReason;
     note?: string | null;
     created_by?: string | null;
   },
 ): Promise<{ product: Product; event: ProductRestock }> {
-  if (!Number.isFinite(input.quantity) || input.quantity <= 0) {
-    throw new Error('Quantité d\'approvisionnement invalide (doit être > 0).');
+  if (!Number.isFinite(input.delta) || !Number.isInteger(input.delta) || input.delta === 0) {
+    throw new Error('Quantité invalide : entier non-zéro attendu.');
+  }
+  if (Math.abs(input.delta) > 100_000) {
+    throw new Error('Quantité trop importante (max ±100 000).');
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.restock_date)) {
     throw new Error('Date d\'approvisionnement invalide (format YYYY-MM-DD attendu).');
   }
 
+  const note = input.note?.trim() ? input.note.trim().slice(0, 500) : null;
+
+  // Validation par motif : on force la direction pour les motifs contraints et
+  // on exige une note pour les motifs ambigus (correction, autre).
+  switch (input.reason) {
+    case 'restock':
+    case 'return':
+      if (input.delta <= 0) {
+        throw new Error('Une entrée de stock (réassort / retour) doit avoir une quantité > 0.');
+      }
+      break;
+    case 'direct_sale':
+    case 'loss':
+      if (input.delta >= 0) {
+        throw new Error('Une sortie de stock (vente / perte) doit avoir une quantité < 0.');
+      }
+      break;
+    case 'correction':
+    case 'other':
+      if (!note) {
+        throw new Error('Une note est obligatoire pour ce motif (justification requise).');
+      }
+      break;
+    default:
+      throw new Error('Motif invalide.');
+  }
+
   const event: ProductRestock = {
-    id: `rs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `mv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     product_id: productId,
-    quantity: Math.trunc(input.quantity),
+    quantity: input.delta,
     restock_date: input.restock_date,
-    note: input.note?.trim() ? input.note.trim().slice(0, 500) : null,
+    reason: input.reason,
+    note,
     created_by: input.created_by ?? null,
     created_at: new Date().toISOString(),
   };
@@ -310,9 +345,12 @@ export async function restockProduct(
     const idx = list.findIndex(p => p.id === productId);
     if (idx === -1) throw new Error('Produit introuvable.');
     const previousStock = list[idx].stock ?? 0;
+    const newStock = Math.max(0, previousStock + event.quantity);
     list[idx] = {
       ...list[idx],
-      stock: previousStock + event.quantity,
+      stock: newStock,
+      // Auto-flag : on coche is_out_of_stock si on tombe à 0 suite à une sortie.
+      is_out_of_stock: newStock === 0 ? true : (newStock > 0 ? false : list[idx].is_out_of_stock),
       updated_at: event.created_at,
     };
     writeProducts(list);
@@ -323,12 +361,10 @@ export async function restockProduct(
     return { product: list[idx], event };
   }
 
-  // Mode Supabase : on incrémente le stock de manière atomique via une expression
-  // SQL, puis on insère l'événement de réassort. Service role pour contourner la RLS.
+  // Mode Supabase : on lit le stock, on calcule la nouvelle valeur, on UPDATE,
+  // puis on INSERT l'événement. Service role pour contourner la RLS.
   const supabase = await getSupabaseAdmin();
 
-  // 1) Lecture du stock courant (pour calculer le nouveau stock à retourner
-  //    et vérifier l'existence du produit en une seule requête).
   const { data: row, error: readErr } = await supabase
     .from('products')
     .select('id, stock')
@@ -336,22 +372,20 @@ export async function restockProduct(
     .single();
   if (readErr || !row) throw new Error('Produit introuvable.');
 
-  // 2) Mise à jour du stock : `GREATEST(stock + ?, 0)` pour rester safe côté serveur.
-  //    PostgREST n'accepte pas les expressions arithmétiques dans le body `.update()`,
-  //    donc on relit le stock, on calcule localement, puis on envoie la valeur absolue.
-  //    Pour éviter une race condition, on pourrait passer par une RPC ; on garde
-  //    une stratégie simple ici (admin only, faible concurrence).
   const previousStock = (row.stock ?? 0) as number;
-  const newStock = previousStock + event.quantity;
+  const newStock = Math.max(0, previousStock + event.quantity);
   const { data: updated, error: updErr } = await supabase
     .from('products')
-    .update({ stock: newStock, updated_at: event.created_at })
+    .update({
+      stock: newStock,
+      is_out_of_stock: newStock === 0 ? true : (newStock > 0 ? false : undefined),
+      updated_at: event.created_at,
+    })
     .eq('id', productId)
     .select()
     .single();
   if (updErr || !updated) throw updErr ?? new Error('Échec de mise à jour du stock.');
 
-  // 3) Insertion de l'événement dans l'historique.
   const { error: histErr } = await supabase
     .from('product_restock_history')
     .insert({
@@ -359,6 +393,7 @@ export async function restockProduct(
       product_id: event.product_id,
       quantity: event.quantity,
       restock_date: event.restock_date,
+      reason: event.reason,
       note: event.note,
       created_by: event.created_by,
       created_at: event.created_at,
@@ -373,7 +408,7 @@ export async function restockProduct(
 }
 
 /**
- * Liste l'historique des approvisionnements pour un produit donné,
+ * Liste l'historique des mouvements de stock pour un produit donné,
  * du plus récent au plus ancien.
  */
 export async function listRestockHistory(productId: string): Promise<ProductRestock[]> {

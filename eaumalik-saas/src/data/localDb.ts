@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { Product, Order, User, MaintenanceAlert, MaintenanceRecord, MaintenanceIntervention } from '@/types';
+import type { Product, Order, User, MaintenanceAlert, MaintenanceRecord, MaintenanceIntervention, ProductRestock } from '@/types';
 import { MOCK_PRODUCTS } from './mock';
 
 const DB_DIR = path.join(process.cwd(), 'data-store');
@@ -19,6 +19,7 @@ const MESSAGES_FILE = path.join(DB_DIR, 'messages.json');
 const NEWS_FILE = path.join(DB_DIR, 'news.json');
 const MAINTENANCE_FILE = path.join(DB_DIR, 'maintenance.json');
 const PASSWORD_RESETS_FILE = path.join(DB_DIR, 'password_resets.json');
+const RESTOCK_HISTORY_FILE = path.join(DB_DIR, 'restock_history.json');
 
 // Initialize with mock data if files don't exist
 if (!fs.existsSync(PRODUCTS_FILE)) {
@@ -72,6 +73,9 @@ if (!fs.existsSync(NEWS_FILE)) {
   ];
   fs.writeFileSync(NEWS_FILE, JSON.stringify(defaultNews, null, 2));
 }
+if (!fs.existsSync(RESTOCK_HISTORY_FILE)) {
+  fs.writeFileSync(RESTOCK_HISTORY_FILE, JSON.stringify([], null, 2));
+}
 
 // ---------------------------------------------------------
 // Products
@@ -87,6 +91,27 @@ export function readProducts(): Product[] {
 
 export function writeProducts(products: Product[]) {
   fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2));
+}
+
+// ---------------------------------------------------------
+// Restock history (historique des approvisionnements)
+// ---------------------------------------------------------
+// Chaque entrée représente un approvisionnement unitaire (une date, une
+// quantité, un auteur). Permet de tracer dans le temps les réassorts
+// faits via le bouton "Approvisionnement" du catalogue admin.
+export function readRestockHistory(): ProductRestock[] {
+  try {
+    const data = fs.readFileSync(RESTOCK_HISTORY_FILE, 'utf-8');
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as ProductRestock[];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function writeRestockHistory(history: ProductRestock[]) {
+  fs.writeFileSync(RESTOCK_HISTORY_FILE, JSON.stringify(history, null, 2));
 }
 
 // ---------------------------------------------------------

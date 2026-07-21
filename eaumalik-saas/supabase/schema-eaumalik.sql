@@ -161,6 +161,21 @@ CREATE TABLE IF NOT EXISTS eaumalik.carts (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS eaumalik.product_restock_history (
+  id           TEXT PRIMARY KEY,
+  product_id   UUID NOT NULL REFERENCES eaumalik.products(id) ON DELETE CASCADE,
+  -- Variation de stock signée : > 0 entrée, < 0 sortie, != 0 correction.
+  quantity     INTEGER NOT NULL CHECK (quantity <> 0),
+  restock_date DATE NOT NULL,
+  -- Motif du mouvement (cf. StockMovementReason côté TS) :
+  -- restock, return, direct_sale, correction, loss, other.
+  reason       TEXT NOT NULL DEFAULT 'restock'
+                 CHECK (reason IN ('restock','return','direct_sale','correction','loss','other')),
+  note         TEXT,
+  created_by   TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Index
 CREATE INDEX IF NOT EXISTS idx_orders_status      ON eaumalik.orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_user        ON eaumalik.orders(user_id);
@@ -170,6 +185,10 @@ CREATE INDEX IF NOT EXISTS idx_products_category  ON eaumalik.products(category)
 CREATE INDEX IF NOT EXISTS idx_products_stock     ON eaumalik.products(stock);
 CREATE INDEX IF NOT EXISTS idx_messages_sender_ts ON eaumalik.messages(sender_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_news_created       ON eaumalik.news(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_product_restock_product_id
+  ON eaumalik.product_restock_history (product_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_product_restock_date
+  ON eaumalik.product_restock_history (restock_date DESC);
 
 -- ============================================================================
 -- Helpers de rôle (lit depuis eaumalik.users)

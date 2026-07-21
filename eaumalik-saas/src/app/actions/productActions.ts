@@ -8,6 +8,7 @@ import {
   updateProduct,
   deleteProduct,
   listProducts,
+  adjustProductStock,
 } from '@/data/repositories';
 import { getOptionalUser } from '@/lib/supabase/server';
 import { getDevUserFromCookie } from '@/lib/auth/devSession';
@@ -270,5 +271,88 @@ export async function reorderProductsAction(
     return { success: true as const, results };
   } catch (err: any) {
     return { success: false as const, error: err.message ?? 'Erreur réordonnancement.' };
+  }
+}
+
+/**
+ * Enregistre un MOUVEMENT de stock pour un produit (entrée, sortie,
+ * correction) avec motif et note. Action réservée aux administrateurs.
+ *
+ * Le formulaire côté UI envoie TOUJOURS une quantité POSITIVE + un signe
+ * (entrée / sortie) + un motif. Le service calcule le delta signé en
+ * fonction du motif (`restock`/`return` → +N, `direct_sale`/`loss` → -N)
+ * ou du signe libre (`correction`/`other`, avec note obligatoire).
+ *
+ * Validation :
+ *  - delta entier non-zéro (|delta| ≤ 100 000)
+ *  - restock_date au format YYYY-MM-DD
+ *  - reason ∈ {restock, return, direct_sale, correction, loss, other}
+ *  - reason ∈ {correction, other} ⇒ note obligatoire
+ */
+const MovementInputSchema = z.object({
+  /** Signe du mouvement côté UI : +1 = entrée, -1 = sortie. Combiné à |quantity|. */
+  direction: z.number().int().min(-1).max(1),
+  quantity: z.number().int().positive('Quantité doit être > 0').max(100_000),
+  restock_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date au format YYYY-MM-DD requise.'),
+  reason: z.enum(['restock', 'return', 'direct_sale', 'correction', 'loss', 'other']),
+  note: z.string().max(500).optional().nullable(),
+});
+
+export async function adjustProductStockAction(
+  productId: string,
+  raw: unknown,
+) {
+  const id = String(productId ?? '').slice(0, 80);
+  if (!id) return { success: false as const, error: 'Produit invalide.' };
+
+  const parsed = MovementInputSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Validation échouée.' };
+  }
+  const auth = await ensureAdminOrMock();
+  if (!auth.ok) return { success: false as const, error: auth.error! };
+
+  try {
+    // Auteur effectif : on tente de récupérer le mail admin (Supabase ou cookie dev).
+    let createdBy: string | null = null;
+    const dev = await getDevUserFromCookie();
+    if (dev) createdBy = dev.email ?? null;
+    else {
+      const u = await getOptionalUser();
+      createdBy = u?.email ?? null;
+    }
+
+    // Calcul du delta signé : pour les motifs contraints on utilise le signe
+    // du motif, pour les motifs ambigus on prend `direction` (entrée/sortie).
+    let delta: number;
+    const abs = Math.trunc(parsed.data.quantity);
+    switch (parsed.data.reason) {
+      case 'restock':
+      case 'return':
+        delta = abs;
+        break;
+      case 'direct_sale':
+      case 'loss':
+        delta = -abs;
+        break;
+      case 'correction':
+      case 'other':
+        delta = parsed.data.direction > 0 ? abs : -abs;
+        break;
+    }
+
+    const result = await adjustProductStock(id, {
+      delta,
+      restock_date: parsed.data.restock_date,
+      reason: parsed.data.reason,
+      note: parsed.data.note ?? null,
+      created_by: createdBy,
+    });
+
+    revalidatePath('/boutique');
+    revalidatePath('/admin/catalogue');
+    return { success: true as const, product: result.product, event: result.event };
+  } catch (err: any) {
+    return { success: false as const, error: err?.message ?? 'Erreur mouvement de stock.' };
   }
 }
