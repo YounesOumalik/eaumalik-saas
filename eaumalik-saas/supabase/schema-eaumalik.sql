@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS eaumalik.users (
   address TEXT,
   city TEXT DEFAULT 'Casablanca',
   google_id TEXT UNIQUE,
-  role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('client','admin','administrator','sales','technician','stock_manager','admin_assistant')),
+  role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('client','admin','administrator','sales','technician','stock_manager','admin_assistant','depot_manager','store_manager','presentoir_manager')),
+  managed_location_ids UUID[] NOT NULL DEFAULT '{}',
   permissions JSONB DEFAULT '{}'::jsonb,
   referral_code TEXT UNIQUE,
   referred_by TEXT,
@@ -170,10 +171,62 @@ CREATE TABLE IF NOT EXISTS eaumalik.product_restock_history (
   -- Motif du mouvement (cf. StockMovementReason côté TS) :
   -- restock, return, direct_sale, correction, loss, other.
   reason       TEXT NOT NULL DEFAULT 'restock'
-                 CHECK (reason IN ('restock','return','direct_sale','correction','loss','other')),
+                 CHECK (reason IN ('restock','return','direct_sale','correction','loss','other','transfer')),
+  source_location_id      UUID,
+  destination_location_id UUID,
+  transfer_group_id       UUID,
   note         TEXT,
   created_by   TEXT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Module Logistique (cf. migrations 0014/0015) — déclarations bootstrap
+-- uniquement. La définition complète (FK CASCADE, contraintes, triggers,
+-- seed, RPC) est dans les fichiers de migration.
+CREATE TABLE IF NOT EXISTS eaumalik.locations (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code              TEXT NOT NULL UNIQUE,
+  name              TEXT NOT NULL,
+  type              TEXT NOT NULL CHECK (type IN ('depot','magasin','presentoir')),
+  address           TEXT,
+  city              TEXT,
+  phone             TEXT,
+  capacity_units    INTEGER NOT NULL DEFAULT 0 CHECK (capacity_units >= 0),
+  capacity_area_m2  NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (capacity_area_m2 >= 0),
+  is_active         BOOLEAN NOT NULL DEFAULT true,
+  is_archived       BOOLEAN NOT NULL DEFAULT false,
+  notes             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS eaumalik.product_location_stock (
+  product_id   UUID NOT NULL REFERENCES eaumalik.products(id) ON DELETE CASCADE,
+  location_id  UUID NOT NULL REFERENCES eaumalik.locations(id) ON DELETE RESTRICT,
+  quantity     INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (product_id, location_id)
+);
+
+CREATE TABLE IF NOT EXISTS eaumalik.transfer_requests (
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id              UUID NOT NULL REFERENCES eaumalik.products(id) ON DELETE CASCADE,
+  source_location_id      UUID NOT NULL REFERENCES eaumalik.locations(id) ON DELETE RESTRICT,
+  destination_location_id UUID NOT NULL REFERENCES eaumalik.locations(id) ON DELETE RESTRICT,
+  quantity                INTEGER NOT NULL CHECK (quantity > 0),
+  request_type            TEXT NOT NULL DEFAULT 'outbound'
+                            CHECK (request_type IN ('outbound','inbound')),
+  requester_id            UUID NOT NULL REFERENCES eaumalik.users(id) ON DELETE RESTRICT,
+  reason                  TEXT,
+  status                  TEXT NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending','approved','rejected','executed','cancelled')),
+  validator_id            UUID REFERENCES eaumalik.users(id) ON DELETE SET NULL,
+  validated_at            TIMESTAMPTZ,
+  validator_comment       TEXT,
+  executed_at             TIMESTAMPTZ,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (source_location_id <> destination_location_id)
 );
 
 -- Index
