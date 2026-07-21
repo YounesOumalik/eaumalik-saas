@@ -173,6 +173,8 @@ export async function getClientDashboardData() {
         address: user.address ?? '',
         referral_code: user.referral_code ?? '',
         cashback_balance: user.cashback_balance ?? 0,
+        // Mode mock : pas de Google OAuth, on expose explicitement false.
+        isGoogleUser: false,
       },
       referredUsers,
       userOrders,
@@ -185,7 +187,12 @@ export async function getClientDashboardData() {
   // les divergences de RLS/vues publiques, puis chaque requête reste bornée
   // strictement à son identifiant.
   const service = createSupabaseServiceRoleClient();
-  const [ordersRes, newsRes, messagesRes, referralsRes] = await Promise.all([
+  const [profileRes, ordersRes, newsRes, messagesRes, referralsRes] = await Promise.all([
+    service
+      .from('users')
+      .select('google_id')
+      .eq('id', user.id)
+      .single(),
     service
       .from('orders')
       .select('*, items:order_items(*)')
@@ -208,6 +215,7 @@ export async function getClientDashboardData() {
       .order('created_at', { ascending: false }),
   ]);
 
+  const userWithProvider = (profileRes.data ?? { google_id: null }) as { google_id: string | null };
   const nowIso = new Date().toISOString();
   const news = (newsRes.data ?? []).filter((item: any) =>
     item.is_archived !== true && (!item.valid_until || item.valid_until > nowIso)
@@ -229,6 +237,10 @@ export async function getClientDashboardData() {
       address: user.address ?? '',
       referral_code: user.referral_code ?? '',
       cashback_balance: user.cashback_balance ?? 0,
+      // Compte Google OAuth-only : pas de mot de passe local a changer.
+      // Le trigger handle_new_user (migration 0009) renseigne google_id
+      // depuis raw_user_meta_data->>'google_id'.
+      isGoogleUser: Boolean(userWithProvider.google_id),
     },
     referredUsers,
     userOrders: ordersRes.data ?? [],
@@ -767,6 +779,20 @@ export async function changeOwnPasswordAction(raw: unknown) {
   }
   const auth = await getOptionalUser();
   if (!auth) return { success: false as const, error: 'Non authentifié.' };
+
+  // Garde-fou : un compte Google OAuth n'a pas de mot de passe local a modifier.
+  // On refuse cote serveur pour empecher tout bypass via curl/devtools.
+  if (!isMockMode()) {
+    const supabaseProbe = createSupabaseServerClient();
+    const { data: probe } = await supabaseProbe
+      .from('users')
+      .select('google_id')
+      .eq('id', auth.id)
+      .single();
+    if (probe?.google_id) {
+      return { success: false as const, error: 'Compte Google : mot de passe géré par Google.' };
+    }
+  }
 
   try {
     if (isMockMode()) {

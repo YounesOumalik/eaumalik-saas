@@ -30,7 +30,18 @@ import { OrderTimeline } from '@/components/admin/OrderTracker';
 
 interface Props {
   initialData: {
-    user: { id: string; email: string; full_name: string; phone?: string; city?: string; address?: string; referral_code: string; cashback_balance: number };
+    user: {
+      id: string;
+      email: string;
+      full_name: string;
+      phone?: string;
+      city?: string;
+      address?: string;
+      referral_code: string;
+      cashback_balance: number;
+      /** Vrai si le compte est connecte via Google OAuth (aucun mot de passe local). */
+      isGoogleUser: boolean;
+    };
     referredUsers: any[];
     userOrders: any[];
     userMessages: any[];
@@ -756,12 +767,13 @@ export default function ClientDashboard({ initialData }: Props) {
               </button>
             </form>
 
-            <div className="border-t border-[color:var(--border)] mt-8 pt-6">
-              <h4 className="font-display font-bold text-base mb-1">Modifier mon mot de passe</h4>
-              <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-                Votre mot de passe reste confidentiel et n’est jamais visible par l’administration.
-              </p>
-              <form onSubmit={handleChangePassword} className="space-y-4">
+            {!initialData.user.isGoogleUser && (
+              <div className="border-t border-[color:var(--border)] mt-8 pt-6">
+                <h4 className="font-display font-bold text-base mb-1">Modifier mon mot de passe</h4>
+                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                  Votre mot de passe reste confidentiel et n’est jamais visible par l’administration.
+                </p>
+                <form onSubmit={handleChangePassword} className="space-y-4">
                 <PasswordInput
                   label="Mot de passe actuel"
                   value={currentPassword}
@@ -795,8 +807,9 @@ export default function ClientDashboard({ initialData }: Props) {
                 <button type="submit" disabled={changingPassword} className="btn-outline w-full justify-center py-2.5 text-sm disabled:opacity-50">
                   {changingPassword ? 'Modification...' : 'Modifier le mot de passe'}
                 </button>
-              </form>
-            </div>
+                </form>
+              </div>
+            )}
           </div>
         )}
       </div>
