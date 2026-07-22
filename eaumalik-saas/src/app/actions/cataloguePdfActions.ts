@@ -18,22 +18,14 @@
 
 import 'server-only';
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
 import { saveCataloguePdf, deleteCataloguePdfRecord, getCataloguePdf } from '@/data/repositories';
 import { requireAdmin } from '@/lib/supabase/server';
 import { isMockMode } from '@/lib/api-guard';
 import {
-  CATALOGUE_PDF_FILENAME_REGEX,
   CATALOGUE_PDF_MAX_SIZE,
   isLikelyPdf,
   sanitizeFilename,
 } from '@/data/cataloguePdf';
-
-const FilenameSchema = z
-  .string()
-  .min(1, 'Nom de fichier manquant.')
-  .max(200, 'Nom de fichier trop long.')
-  .regex(CATALOGUE_PDF_FILENAME_REGEX, 'Nom de fichier invalide.');
 
 async function gate() {
   if (isMockMode()) {
@@ -124,7 +116,3 @@ export async function getCataloguePdfAction() {
     return { success: false as const, error: err?.message ?? 'Erreur inconnue.' };
   }
 }
-
-// Re-export pour les composants client qui n'ont pas besoin d'importer
-// le validator de nom de fichier directement.
-export { FilenameSchema, CATALOGUE_PDF_MAX_SIZE };

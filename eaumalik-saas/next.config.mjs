@@ -89,6 +89,10 @@ const nextConfig = {
       "upgrade-insecure-requests",
     ].join('; ');
 
+    // Le catalogue est volontairement affiché dans un iframe de la page admin.
+    // Il reste impossible à intégrer depuis un domaine tiers.
+    const cataloguePdfCsp = "default-src 'self'; frame-ancestors 'self'; object-src 'none'";
+
     return [
       {
         source: '/:path*',
@@ -100,6 +104,13 @@ const nextConfig = {
           isProd ? { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' } : null,
           { key: 'Content-Security-Policy', value: csp },
         ].filter(Boolean),
+      },
+      {
+        source: '/api/catalogue/pdf',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Security-Policy', value: cataloguePdfCsp },
+        ],
       },
     ];
   },

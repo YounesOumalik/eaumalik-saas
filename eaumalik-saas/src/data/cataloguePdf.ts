@@ -18,6 +18,7 @@
 import 'server-only';
 import fs from 'fs';
 import path from 'path';
+import { CATALOGUE_PDF_MAX_SIZE } from '@/config/cataloguePdf';
 
 const DB_DIR = path.join(process.cwd(), 'data-store');
 
@@ -45,8 +46,6 @@ const PDF_FILE = path.join(DB_DIR, 'catalogue.pdf');
 // + rendu pdfjs) pour un gain de qualité marginal. Le PDF d'origine (3.3 Mo)
 // passe à 1.2 Mo après une compression /screen ghostscript — on encourage
 // l'admin à optimiser le PDF avant upload.
-const MAX_SIZE_BYTES = 8 * 1024 * 1024;
-
 /** Regex stricte pour le nom de fichier : lettres/chiffres/tirets/underscore/espaces/points. */
 const FILENAME_REGEX = /^[a-zA-Z0-9 _.\-()À-ÿ]{1,200}$/;
 
@@ -109,5 +108,5 @@ export function deleteCataloguePdf(): void {
   }
 }
 
-export const CATALOGUE_PDF_MAX_SIZE = MAX_SIZE_BYTES;
+export { CATALOGUE_PDF_MAX_SIZE };
 export const CATALOGUE_PDF_FILENAME_REGEX = FILENAME_REGEX;

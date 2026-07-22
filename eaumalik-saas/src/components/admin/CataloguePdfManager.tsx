@@ -38,8 +38,8 @@ import {
   uploadCataloguePdfAction,
   deleteCataloguePdfAction,
   getCataloguePdfAction,
-  CATALOGUE_PDF_MAX_SIZE,
 } from '@/app/actions/cataloguePdfActions';
+import { CATALOGUE_PDF_MAX_SIZE } from '@/config/cataloguePdf';
 
 type CataloguePdfState = {
   filename: string;
@@ -356,7 +356,7 @@ export default function CataloguePdfManager() {
           ) : (
             <iframe
               key={`fallback-${previewNonce}`}
-              src="/catalogue/Catalogue_EauMalik.pdf"
+              src={`/api/catalogue/pdf?v=${previewNonce}`}
               title="Aperçu du catalogue PDF de fallback"
               className="w-full h-72"
             />
