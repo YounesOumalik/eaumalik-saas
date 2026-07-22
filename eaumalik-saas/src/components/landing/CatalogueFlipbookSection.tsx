@@ -64,7 +64,9 @@ export default function CatalogueFlipbookSection() {
         // Import dynamique pour éviter de tirer pdfjs dans le bundle SSR
         // (Next.js compile les 'use client' quand même côté serveur pour
         // l'hydratation — un import top-level ferait grossir le bundle).
-        const pdfjsLib: any = await import('pdfjs-dist');
+        // Le build legacy évite les imports Node optionnels de la build générique
+        // et reste compatible avec le worker ESM servi depuis /public.
+        const pdfjsLib: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
         // Le worker est servi depuis /pdfjs/pdf.worker.min.mjs (copié via
         // le Dockerfile dans public/pdfjs/). On désactive le fallback CDN
         // pour rester 100% self-hosted.

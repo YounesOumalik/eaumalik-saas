@@ -20,7 +20,7 @@
  *   - Toast de feedback succès/erreur.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Upload,
   Trash2,
@@ -31,6 +31,7 @@ import {
   AlertCircle,
   Loader2,
   CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
 import { useToast } from '@/components/shared/ToastProvider';
 import {
@@ -68,6 +69,16 @@ function formatDate(iso: string): string {
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error('Le service PDF ne répond pas.')),
+      milliseconds,
+    );
+    promise.then(resolve, reject).finally(() => window.clearTimeout(timer));
+  });
+}
+
 export default function CataloguePdfManager() {
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -75,31 +86,38 @@ export default function CataloguePdfManager() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   // Petit "nonce" pour forcer le navigateur à recharger l'iframe d'aperçu
   // quand l'admin upload un nouveau PDF (sinon le cache HTTP du navigateur
   // continue de servir l'ancien PDF dans l'iframe).
   const [previewNonce, setPreviewNonce] = useState<number>(Date.now());
 
-  // Chargement initial des métadonnées du PDF courant.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const res = await getCataloguePdfAction();
-      if (cancelled) return;
-      if (res.success) {
-        setRecord(res.record);
+  const loadRecord = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      // Une configuration Supabase indisponible ne doit jamais bloquer toute
+      // la page admin : on abandonne après 10 s et on laisse le fallback PDF.
+      const result = await withTimeout(getCataloguePdfAction(), 10_000);
+      if (result.success) {
+        setRecord(result.record);
         setPreviewNonce(Date.now());
       } else {
-        toast(res.error || 'Erreur de chargement.', 'error');
+        throw new Error(result.error || 'Erreur de chargement.');
       }
+    } catch (err: any) {
+      setLoadError(err?.message || 'Impossible de charger les métadonnées du PDF.');
+      toast('Le catalogue PDF utilise le fallback. Vous pouvez réessayer.', 'error');
+    } finally {
       setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
+    }
   }, [toast]);
+
+  // Chargement initial des métadonnées du PDF courant.
+  useEffect(() => {
+    void loadRecord();
+  }, [loadRecord]);
 
   async function uploadFile(file: File) {
     if (!file) return;
@@ -189,6 +207,19 @@ export default function CataloguePdfManager() {
 
   return (
     <section className="glass-card p-6 space-y-4" aria-labelledby="catalogue-pdf-heading">
+      {loadError ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <span>{loadError} Le PDF de fallback reste disponible.</span>
+          <button
+            type="button"
+            onClick={() => void loadRecord()}
+            disabled={loading}
+            className="btn-outline text-xs flex items-center gap-1.5 shrink-0"
+          >
+            <RefreshCw size={13} className={loading ? 'animate-spin' : undefined} /> Réessayer
+          </button>
+        </div>
+      ) : null}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 mb-1">

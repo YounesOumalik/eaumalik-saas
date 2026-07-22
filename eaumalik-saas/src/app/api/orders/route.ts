@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseServiceRoleClient, createSupabaseServerClient, AuthError } from '@/lib/supabase/server';
 import { badRequest, forbidden, safeErrorResponse, unauthorized } from '@/lib/api-guard';
-import { readOrdersRaw, writeOrdersRaw, readUsersRaw, writeUsersRaw } from '@/data/repositories';
+import {
+  getProductsForOrder,
+  readOrdersRaw,
+  writeOrdersRaw,
+  readUsersRaw,
+  writeUsersRaw,
+} from '@/data/repositories';
 import { Order } from '@/types';
 import { getDevUserFromCookie, setDevSessionCookie } from '@/lib/auth/devSession';
 import { hashPassword } from '@/lib/auth/password';
@@ -11,8 +17,6 @@ export const dynamic = 'force-dynamic';
 
 const OrderItemSchema = z.object({
   product_id: z.string().min(1).max(80),
-  product_name: z.string().min(1).max(200),
-  unit_price: z.number().nonnegative().max(1_000_000),
   quantity: z.number().int().positive().max(1000),
 });
 
@@ -24,6 +28,13 @@ const CreateOrderSchema = z.object({
   notes: z.string().max(500).optional(),
   items: z.array(OrderItemSchema).min(1).max(50),
 });
+
+type CanonicalOrderItem = {
+  product_id: string;
+  product_name: string;
+  unit_price: number;
+  quantity: number;
+};
 
 /** Génère un numéro de commande robuste basé sur crypto.randomUUID. */
 function generateOrderNumber(): string {
@@ -99,7 +110,31 @@ export async function POST(req: NextRequest) {
     return badRequest('Validation échouée.', parsed.error.flatten());
   }
   const input = parsed.data;
+  if (new Set(input.items.map((item) => item.product_id)).size !== input.items.length) {
+    return badRequest('Un même produit ne peut apparaître qu’une seule fois dans la commande.');
+  }
 
+  // Le navigateur ne fournit que les identifiants et les quantités. Le nom,
+  // le prix et la disponibilité sont toujours relus depuis la source serveur.
+  let canonicalItems: CanonicalOrderItem[];
+  try {
+    const products = await getProductsForOrder(input.items.map((item) => item.product_id));
+    const productMap = new Map(products.map((product) => [product.id, product]));
+    canonicalItems = input.items.map((item) => {
+      const product = productMap.get(item.product_id);
+      if (!product || product.is_archived) throw new Error('Produit indisponible.');
+      if (product.price_on_request) throw new Error(`Le produit « ${product.name} » nécessite un devis.`);
+      if (product.stock < item.quantity) throw new Error(`Stock insuffisant pour « ${product.name} ».`);
+      return {
+        product_id: product.id,
+        product_name: product.name,
+        unit_price: Number(product.price),
+        quantity: item.quantity,
+      };
+    });
+  } catch (error: any) {
+    return badRequest(error?.message || 'Produits indisponibles.');
+  }
   // Compte optionnel : checkout invité qui crée son compte en même temps.
   const account = (body as { account?: { email?: string; password?: string; full_name?: string } })?.account;
 
@@ -116,7 +151,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const subtotal = input.items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+    const subtotal = canonicalItems.reduce((s, i) => s + i.unit_price * i.quantity, 0);
     const delivery = subtotal >= 2000 ? 0 : 50;
     const total = subtotal + delivery;
 
@@ -126,17 +161,38 @@ export async function POST(req: NextRequest) {
       !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 
     if (useMocks) {
-      return await createOrderMock({ input, subtotal, delivery, total, callerId, account });
+      return await createOrderMock({
+        input,
+        items: canonicalItems,
+        subtotal,
+        delivery,
+        total,
+        callerId,
+        account,
+      });
     }
 
-    // Les vues public.orders/public.order_items utilisent un trigger de sécurité
-    // qui vérifie auth.uid(). La clé service n'embarque pas l'identité du client
-    // dans ce contexte et provoque donc « accès refusé (orders insert) » pour
-    // toute commande liée à un compte. On conserve la session du client pour
-    // que le trigger puisse vérifier user_id = auth.uid().
-    const supabase = callerId
-      ? createSupabaseServerClient()
-      : createSupabaseServiceRoleClient();
+    // Les écritures de commande passent toujours par le backend de confiance.
+    // Après application de la migration 0017, ce RPC verrouille le stock et
+    // crée la commande et ses lignes dans une seule transaction.
+    const supabase = createSupabaseServiceRoleClient();
+    const { data: transactionOrder, error: transactionError } = await supabase.rpc(
+      'create_checkout_order',
+      {
+        p_user_id: callerId,
+        p_client_name: input.client_name,
+        p_client_phone: input.client_phone,
+        p_client_city: input.client_city,
+        p_client_address: input.client_address,
+        p_notes: input.notes ?? null,
+        p_items: canonicalItems.map(({ product_id, quantity }) => ({ product_id, quantity })),
+      },
+    );
+    if (!transactionError && transactionOrder) {
+      return NextResponse.json(transactionOrder, { status: 201 });
+    }
+    if (transactionError) throw transactionError;
+
     const order_number = generateOrderNumber();
     const { data: order, error } = await supabase
       .from('orders')
@@ -156,7 +212,7 @@ export async function POST(req: NextRequest) {
       .single();
     if (error || !order) throw error ?? new Error('Création impossible.');
 
-    const itemsPayload = input.items.map(i => ({
+    const itemsPayload = canonicalItems.map(i => ({
       order_id: order.id,
       product_id: i.product_id,
       product_name: i.product_name,
@@ -184,6 +240,7 @@ export async function POST(req: NextRequest) {
  */
 async function createOrderMock({
   input,
+  items,
   subtotal,
   delivery,
   total,
@@ -191,6 +248,7 @@ async function createOrderMock({
   account,
 }: {
   input: z.infer<typeof CreateOrderSchema>;
+  items: CanonicalOrderItem[];
   subtotal: number;
   delivery: number;
   total: number;
@@ -241,7 +299,7 @@ async function createOrderMock({
   }
 
   const orderId = `o-${Date.now()}`;
-  const itemsPayload = input.items.map((i, idx) => ({
+  const itemsPayload = items.map((i, idx) => ({
     id: `${orderId}-item-${idx}`,
     order_id: orderId,
     product_id: i.product_id,

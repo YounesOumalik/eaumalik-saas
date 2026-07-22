@@ -19,6 +19,8 @@ import {
   readNewsRaw,
   writeNewsRaw,
   readProductsRaw,
+  readCartsRaw,
+  writeCartsRaw,
   listMaintenanceRecordsForUser,
   claimOrphanOrdersForUser,
 } from '@/data/repositories';
@@ -67,6 +69,15 @@ const MessageSchema = z.preprocess(
     text: z.string().trim().min(1).max(1000),
   })
 );
+
+const CartItemSchema = z.object({
+  product_id: z.string().min(1).max(80),
+  name: z.string().min(1).max(200),
+  price: z.number().nonnegative().max(1_000_000),
+  quantity: z.number().int().positive().max(1000),
+  image_url: z.string().max(2_000_000).nullable().optional(),
+});
+const CartSchema = z.array(CartItemSchema).max(100);
 
 // ============================================================================
 // Helpers
@@ -712,14 +723,41 @@ export async function getAvailableClientsForNewsAction() {
 // Panier
 // ============================================================================
 export async function saveUserCartAction(items: unknown) {
-  await requireUser();
-  // Le panier reste local — on garde l'API pour future synchro.
+  const user = await requireUser();
+  const parsed = CartSchema.safeParse(items);
+  if (!parsed.success) return { success: false as const, error: 'Panier invalide.' };
+
+  if (isMockMode()) {
+    const carts = await readCartsRaw();
+    carts[user.id] = parsed.data;
+    await writeCartsRaw(carts);
+  } else {
+    const supabase = createSupabaseServiceRoleClient();
+    const { error } = await supabase.from('carts').upsert({
+      user_id: user.id,
+      items: parsed.data,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) return { success: false as const, error: 'Sauvegarde du panier impossible.' };
+  }
   return { success: true as const };
 }
 
 export async function getUserCartAction() {
-  await requireUser();
-  return { success: true as const, items: [] as unknown[] };
+  const user = await requireUser();
+  if (isMockMode()) {
+    const carts = await readCartsRaw();
+    return { success: true as const, items: carts[user.id] ?? [] };
+  }
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from('carts')
+    .select('items')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (error) return { success: false as const, error: 'Lecture du panier impossible.' };
+  const parsed = CartSchema.safeParse(data?.items ?? []);
+  return { success: true as const, items: parsed.success ? parsed.data : [] };
 }
 
 // ============================================================================

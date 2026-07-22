@@ -20,6 +20,8 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { getCataloguePdfBuffer, getCataloguePdf } from '@/data/repositories';
 
 // On garde la route dynamique : pas de pré-rendu côté build (le binaire
@@ -27,6 +29,20 @@ import { getCataloguePdfBuffer, getCataloguePdf } from '@/data/repositories';
 export const dynamic = 'force-dynamic';
 
 const CACHE_HEADERS = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
+const STORAGE_TIMEOUT_MS = 8_000;
+
+async function readUploadedPdfSafely() {
+  try {
+    return await Promise.race([
+      getCataloguePdfBuffer(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), STORAGE_TIMEOUT_MS)),
+    ]);
+  } catch {
+    // Le PDF public doit continuer à fonctionner même si Supabase/Storage est
+    // momentanément indisponible ou si la configuration serveur est incomplète.
+    return null;
+  }
+}
 
 /**
  * Parse un en-tête Range: bytes=X-Y en [start, end] (inclusifs).
@@ -66,15 +82,21 @@ function parseRange(
 
 export async function GET(req: NextRequest) {
   // 1) Essai lecture PDF uploadé par l'admin.
-  const buf = await getCataloguePdfBuffer();
+  const buf = await readUploadedPdfSafely();
   if (buf && buf.length > 0) {
-    const meta = await getCataloguePdf();
+    let meta = null;
+    try {
+      meta = await getCataloguePdf();
+    } catch {
+      // Le binaire reste servable même si la lecture des métadonnées échoue.
+    }
     const total = buf.length;
     const range = parseRange(req.headers.get('range'), total);
 
     const headers = new Headers();
     headers.set('Content-Type', meta?.mime || 'application/pdf');
-    headers.set('Content-Disposition', `inline; filename="${meta?.filename || 'catalogue.pdf'}"`);
+    const filename = (meta?.filename || 'catalogue.pdf').replace(/[\r\n"\\]/g, '_');
+    headers.set('Content-Disposition', `inline; filename="${filename}"`);
     headers.set('Cache-Control', CACHE_HEADERS);
     headers.set('X-Catalogue-Source', 'admin-upload');
     // Support des Range requests (pdfjs charge en chunks progressifs).
@@ -90,20 +112,35 @@ export async function GET(req: NextRequest) {
     return new NextResponse(new Uint8Array(buf), { status: 200, headers });
   }
 
-  // 2) Fallback : fichier statique embarqué dans `public/` au build Docker.
-  // On évite un fs.readFileSync ici pour rester compatible avec
-  // `output: 'standalone'` : Next.js ne bundlera pas le fallback dans
-  // l'image standalone, mais le binaire reste servi via l'URL statique.
-  // L'URL absolue est construite via getAppOrigin() (cf. fix O-03 origin)
-  // pour respecter l'hôte public (eaumalik.com) derrière le reverse-proxy,
-  // plutôt que de tomber sur http://0.0.0.0:3100 ou localhost.
-  const { getAppOrigin } = await import('@/lib/app-origin');
-  const fallbackUrl = new URL('/catalogue/Catalogue_EauMalik.pdf', getAppOrigin());
-  return NextResponse.redirect(fallbackUrl, {
-    status: 302,
-    headers: {
+  // 2) Fallback : lecture directe depuis public/. Le service direct est
+  // important en standalone : le process tourne dans un dossier différent
+  // et une redirection vers un fichier absent dans l'artefact provoquerait un
+  // 404 au lieu d'afficher le catalogue livré avec l'application.
+  try {
+    const fallback = await readFile(
+      path.join(process.cwd(), 'public', 'catalogue', 'Catalogue_EauMalik.pdf'),
+    );
+    const total = fallback.length;
+    const range = parseRange(req.headers.get('range'), total);
+    const headers = new Headers({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="Catalogue_EauMalik.pdf"',
       'Cache-Control': CACHE_HEADERS,
       'X-Catalogue-Source': 'public-fallback',
-    },
-  });
+      'Accept-Ranges': 'bytes',
+    });
+    if (range) {
+      const slice = fallback.subarray(range.start, range.end + 1);
+      headers.set('Content-Range', `bytes ${range.start}-${range.end}/${total}`);
+      headers.set('Content-Length', String(slice.length));
+      return new NextResponse(new Uint8Array(slice), { status: 206, headers });
+    }
+    headers.set('Content-Length', String(total));
+    return new NextResponse(new Uint8Array(fallback), { status: 200, headers });
+  } catch {
+    return NextResponse.json(
+      { error: 'Catalogue PDF indisponible.', code: 'catalogue_pdf_missing' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
 }

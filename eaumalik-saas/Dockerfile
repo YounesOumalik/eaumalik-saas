@@ -23,16 +23,13 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat
 
 # Copie ciblée pour profiter du cache Docker sur package*.json
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 
 # BuildKit cache mount : ~/.npm persiste entre builds
 #
-# On utilise `npm install` plutôt que `npm ci` car le repo ne contient
-# pas `package-lock.json` (volontairement gitignoré — cf. .gitignore).
-# `npm install` est plus lent que `npm ci` mais résout les dépendances
-# à partir de package.json uniquement. Le cache BuildKit ~/.npm garde
-# les paquets téléchargés entre builds.
-RUN npm install --no-audit --no-fund --prefer-offline
+# Le lockfile de l'application est versionné afin que le build production
+# utilise exactement les mêmes versions que les tests locaux et la CI.
+RUN npm ci --no-audit --no-fund --prefer-offline
 
 # ----------------------------------------------------------------------------
 FROM node:20-alpine AS builder

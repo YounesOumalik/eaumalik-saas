@@ -117,8 +117,6 @@ export default function CartPage() {
           ...(account ? { account } : {}),
           items: items.map(i => ({
             product_id: i.product_id,
-            product_name: i.name,
-            unit_price: i.price,
             quantity: i.quantity,
           })),
         }),

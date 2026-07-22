@@ -43,6 +43,8 @@ import {
   writeMaintenance,
   readPasswordResets,
   writePasswordResets,
+  readCarts,
+  writeCarts,
 } from '@/data/localDb';
 import { sanitizePostgREST } from '@/lib/api-guard';
 import type { PublicMediaKind } from '@/lib/public-media';
@@ -139,6 +141,38 @@ export async function listProducts(filters?: {
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Product[];
+}
+
+/**
+ * Projection minimale utilisée par le checkout.
+ * Elle évite de transférer les images Base64 et garantit que le prix et le
+ * stock sont relus côté serveur avant toute création de commande.
+ */
+export async function getProductsForOrder(productIds: string[]): Promise<
+  Array<Pick<Product, 'id' | 'name' | 'price' | 'stock' | 'price_on_request' | 'is_archived'>>
+> {
+  const ids = Array.from(new Set(productIds));
+  if (ids.length === 0) return [];
+  if (shouldUseMocks()) {
+    return readProducts()
+      .filter((product) => ids.includes(product.id))
+      .map(({ id, name, price, stock, price_on_request, is_archived }) => ({
+        id,
+        name,
+        price,
+        stock,
+        price_on_request,
+        is_archived,
+      }));
+  }
+
+  const supabase = await getPublicSupabase();
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, name, price, stock, price_on_request, is_archived')
+    .in('id', ids);
+  if (error) throw error;
+  return (data ?? []) as Array<Pick<Product, 'id' | 'name' | 'price' | 'stock' | 'price_on_request' | 'is_archived'>>;
 }
 
 /**
@@ -2733,4 +2767,17 @@ export async function readProductsRaw(): Promise<any[]> {
   const { data, error } = await supabase.from('products').select('*');
   if (error) throw error;
   return data ?? [];
+}
+
+export async function readCartsRaw(): Promise<Record<string, any[]>> {
+  if (shouldUseMocks()) return readCarts();
+  throw new Error('readCartsRaw: lecture JSON FS interdite en prod.');
+}
+
+export async function writeCartsRaw(carts: Record<string, any[]>): Promise<void> {
+  if (shouldUseMocks()) {
+    writeCarts(carts);
+    return;
+  }
+  throw new Error('writeCartsRaw: écriture JSON FS interdite en prod.');
 }

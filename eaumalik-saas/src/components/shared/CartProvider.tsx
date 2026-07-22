@@ -25,6 +25,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [serverCartLoaded, setServerCartLoaded] = useState(false);
   const { session, user } = useSupabaseAuth();
 
   // Hydrate from localStorage
@@ -38,11 +39,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // Fetch cart from server on login (côté Supabase à activer en phase 2 d'auth).
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setServerCartLoaded(true);
+      return;
+    }
+    setServerCartLoaded(false);
     const fetchServerCart = async () => {
-      const res = await getUserCartAction();
-      if (res.success && Array.isArray(res.items) && res.items.length > 0) {
-        setItems(res.items as CartItem[]);
+      try {
+        const res = await getUserCartAction();
+        if (res.success && Array.isArray(res.items)) {
+          setItems(res.items as CartItem[]);
+        }
+      } finally {
+        setServerCartLoaded(true);
       }
     };
     void fetchServerCart();
@@ -52,10 +61,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    if (user) {
+    if (user && serverCartLoaded) {
       void saveUserCartAction(items);
     }
-  }, [items, hydrated, user]);
+  }, [items, hydrated, serverCartLoaded, user]);
 
   const add = useCallback((item: CartItem) => {
     setItems(prev => {
