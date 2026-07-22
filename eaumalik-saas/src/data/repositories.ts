@@ -1119,12 +1119,14 @@ export async function listMaintenance(): Promise<MaintenanceAlert[]> {
 export async function updateMaintenanceStatus(
   id: string,
   status: MaintenanceProgramStatus,
+  statusReason?: string | null,
 ): Promise<void> {
   if (shouldUseMocks()) {
     const bundle = readMaintenance();
     const r = bundle.records.find((x) => x.id === id);
     if (r) {
       r.status = status;
+      if (statusReason !== undefined) r.status_reason = statusReason;
       r.updated_at = new Date().toISOString();
       writeMaintenance(bundle);
     }
@@ -1132,10 +1134,13 @@ export async function updateMaintenanceStatus(
   }
   // Update statut fiche maintenance (admin via MaintenanceTable) → service role.
   const supabase = await getSupabaseAdmin();
-  await supabase
+  const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
+  if (statusReason !== undefined) update.status_reason = statusReason;
+  const { error } = await supabase
     .from('maintenance_records')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update(update)
     .eq('id', id);
+  if (error) throw error;
 }
 
 // ============================================================================
@@ -1862,22 +1867,9 @@ export async function ensureMaintenanceForOrder(order: Order): Promise<Maintenan
 export async function updateMaintenanceRecordStatus(
   id: string,
   status: MaintenanceProgramStatus,
+  statusReason?: string | null,
 ): Promise<void> {
-  if (shouldUseMocks()) {
-    const bundle = readMaintenance();
-    const r = bundle.records.find((x) => x.id === id);
-    if (r) {
-      r.status = status;
-      r.updated_at = new Date().toISOString();
-      writeMaintenance(bundle);
-    }
-    return;
-  }
-  const supabase = await getSupabaseAdmin();
-  await supabase
-    .from('maintenance_records')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('id', id);
+  await updateMaintenanceStatus(id, status, statusReason);
 }
 
 /** Ajoute une intervention à une fiche. Met à jour les compteurs en cascade. */

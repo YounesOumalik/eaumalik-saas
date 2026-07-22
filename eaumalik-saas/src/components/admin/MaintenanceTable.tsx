@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import {
-  Wrench, Eye, Plus, Filter, CalendarClock, AlertTriangle, CheckCircle2,
-  Package, Truck, RefreshCw, Search,
+  Wrench, Eye, Plus, CalendarClock, AlertTriangle, CheckCircle2,
+  Package, RefreshCw, Search, PauseCircle, PlayCircle, Ban,
 } from 'lucide-react';
 import type {
   MaintenanceRecord, MaintenanceIntervention, InterventionType, InterventionOutcome,
@@ -45,14 +44,31 @@ const FILTER_OPTIONS: Array<{ key: 'all' | MaintenanceRecord['status']; label: s
   { key: 'resilie', label: 'Résiliés' },
 ];
 
+const STATUS_REASON_OPTIONS = {
+  suspendu: [
+    'Demande temporaire du client',
+    'Intervention temporairement impossible',
+    'Retard de paiement',
+    'Pièce indisponible',
+    'Autre motif',
+  ],
+  resilie: [
+    'Demande définitive du client',
+    'Appareil remplacé',
+    'Contrat terminé',
+    'Impayé',
+    'Autre motif',
+  ],
+} as const;
+
 export default function MaintenanceTable({ initialRecords }: { initialRecords: MaintenanceRecord[] }) {
   const [records, setRecords] = useState<MaintenanceRecord[]>(initialRecords);
   const [filter, setFilter] = useState<'all' | MaintenanceRecord['status']>('all');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<MaintenanceRecord | null>(null);
+  const [openIntervention, setOpenIntervention] = useState(false);
   const [loading, setLoading] = useState(false);
   const toast = useToast();
-  const router = useRouter();
 
   const [permissions, setPermissions] = useState<any>(null);
   const [role, setRole] = useState<string>('');
@@ -189,9 +205,27 @@ export default function MaintenanceTable({ initialRecords }: { initialRecords: M
                   <td><span className={`badge badge-${r.status}`}>{STATUS_LABELS[r.status]}</span></td>
                   <td>
                     <div className="flex gap-1.5">
-                      <button onClick={() => setDetail(r)} className="btn-outline btn-sm" title="Détails & historique"><Eye size={12} /></button>
+                      <button
+                        onClick={() => {
+                          setOpenIntervention(false);
+                          setDetail(r);
+                        }}
+                        className="btn-outline btn-sm"
+                        title="Détails & historique"
+                      >
+                        <Eye size={12} />
+                      </button>
                       {canManage && (
-                        <button onClick={() => router.push(`/admin/maintenance?record=${r.id}`)} className="btn-primary btn-sm" title="Gérer"><Wrench size={12} /></button>
+                        <button
+                          onClick={() => {
+                            setOpenIntervention(true);
+                            setDetail(r);
+                          }}
+                          className="btn-primary btn-sm"
+                          title="Saisir une intervention"
+                        >
+                          <Wrench size={12} />
+                        </button>
                       )}
                     </div>
                   </td>
@@ -207,7 +241,11 @@ export default function MaintenanceTable({ initialRecords }: { initialRecords: M
         <MaintenanceDetailModal
           record={detail}
           canManage={canManage}
-          onClose={() => setDetail(null)}
+          initialShowAdd={openIntervention}
+          onClose={() => {
+            setDetail(null);
+            setOpenIntervention(false);
+          }}
           onChanged={(updated) => {
             setRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
             setDetail(updated);
@@ -220,17 +258,21 @@ export default function MaintenanceTable({ initialRecords }: { initialRecords: M
 
 function MaintenanceDetailModal({
   record, canManage, onClose, onChanged,
+  initialShowAdd,
 }: {
   record: MaintenanceRecord;
   canManage: boolean;
+  initialShowAdd?: boolean;
   onClose: () => void;
   onChanged: (r: MaintenanceRecord) => void;
 }) {
   const toast = useToast();
   const [notes, setNotes] = useState(record.notes ?? '');
   const [status, setStatus] = useState<MaintenanceRecord['status']>(record.status);
-  const [showAdd, setShowAdd] = useState(false);
+  const [showAdd, setShowAdd] = useState(initialShowAdd ?? false);
   const [saving, setSaving] = useState(false);
+  const [statusAction, setStatusAction] = useState<'suspendu' | 'resilie' | null>(null);
+  const [statusReason, setStatusReason] = useState('');
 
   // Formulaire d'intervention
   const [itType, setItType] = useState<InterventionType>('filter_change');
@@ -255,6 +297,38 @@ function MaintenanceDetailModal({
       } else {
         toast('Échec de la mise à jour', 'error');
       }
+    } catch {
+      toast('Erreur réseau', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const requestStatusChange = (nextStatus: 'suspendu' | 'resilie') => {
+    setStatusAction(nextStatus);
+    setStatusReason(STATUS_REASON_OPTIONS[nextStatus][0]);
+  };
+
+  const changeStatus = async (nextStatus: MaintenanceRecord['status'], reason: string | null) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/maintenance/${record.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus, status_reason: reason }),
+      });
+      if (!res.ok) {
+        toast('Échec du changement de statut', 'error');
+        return;
+      }
+      const updated = { ...record, status: nextStatus, status_reason: reason };
+      setStatus(nextStatus);
+      setStatusAction(null);
+      onChanged(updated);
+      toast(
+        nextStatus === 'actif' ? 'Maintenance réactivée' : 'Statut de maintenance mis à jour',
+        'success',
+      );
     } catch {
       toast('Erreur réseau', 'error');
     } finally {
@@ -330,6 +404,81 @@ function MaintenanceDetailModal({
         <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{record.client_name} · {record.client_city}</span>
         <span className={`badge badge-${record.status}`}>{STATUS_LABELS[record.status]}</span>
       </div>
+
+      {record.status_reason ? (
+        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <span className="font-semibold">Motif du statut :</span> {record.status_reason}
+        </div>
+      ) : null}
+
+      {canManage && (
+        <div className="mb-5 rounded-xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {(record.status === 'actif' || record.status === 'a_renouveler') && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => requestStatusChange('suspendu')}
+                  className="btn-outline btn-sm inline-flex items-center gap-1.5"
+                >
+                  <PauseCircle size={13} /> Suspendre la maintenance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => requestStatusChange('resilie')}
+                  className="btn-outline btn-sm inline-flex items-center gap-1.5"
+                  style={{ color: '#f87171' }}
+                >
+                  <Ban size={13} /> Résilier la maintenance
+                </button>
+              </>
+            )}
+            {(record.status === 'suspendu' || record.status === 'resilie') && (
+              <button
+                type="button"
+                onClick={() => void changeStatus('actif', null)}
+                disabled={saving}
+                className="btn-primary btn-sm inline-flex items-center gap-1.5"
+              >
+                <PlayCircle size={13} /> Réactiver la maintenance
+              </button>
+            )}
+          </div>
+
+          {statusAction && (
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-end gap-2">
+              <div className="flex-1">
+                <label className="form-label">Motif {statusAction === 'suspendu' ? 'de suspension' : 'de résiliation'}</label>
+                <select
+                  value={statusReason}
+                  onChange={e => setStatusReason(e.target.value)}
+                  className="form-input"
+                >
+                  {STATUS_REASON_OPTIONS[statusAction].map(reason => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => void changeStatus(statusAction, statusReason)}
+                disabled={saving || !statusReason}
+                className="btn-primary btn-sm inline-flex items-center gap-1.5"
+              >
+                <CheckCircle2 size={13} /> Confirmer
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusAction(null)}
+                disabled={saving}
+                className="btn-outline btn-sm"
+              >
+                Annuler
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* En-tête infos */}
       <div className="grid sm:grid-cols-3 gap-3 mb-5">

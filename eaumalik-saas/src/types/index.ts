@@ -327,6 +327,8 @@ export interface MaintenanceRecord {
   next_service_date: string | null;
   service_interval_months: number;
   status: MaintenanceProgramStatus;
+  /** Motif de suspension ou de résiliation, s'il existe. */
+  status_reason?: string | null;
   notes: string | null;
   filter_types: string[];
   last_service_date: string | null;
@@ -432,4 +434,3 @@ export interface News {
 
 /** Élément exposé publiquement (landing, carrousel, espace client). */
 export type PublicNews = News;
-

@@ -29,6 +29,7 @@ const interventionSchema = z.object({
 
 const patchSchema = z.object({
   status: z.enum(['actif', 'a_renouveler', 'suspendu', 'resilie']).optional(),
+  status_reason: z.string().trim().min(1).max(200).nullable().optional(),
   notes: z.string().max(4000).optional(),
   intervention: interventionSchema.optional(),
 });
@@ -47,7 +48,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!parsed.success) return badRequest('Payload invalide.', parsed.error.flatten());
     try {
       if (parsed.data.status) {
-        await updateMaintenanceStatus(id, parsed.data.status as MaintenanceProgramStatus);
+        await updateMaintenanceStatus(
+          id,
+          parsed.data.status as MaintenanceProgramStatus,
+          parsed.data.status_reason,
+        );
       }
       if (parsed.data.notes !== undefined) {
         await updateMaintenanceNotes(id, parsed.data.notes);
@@ -72,18 +77,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
-  let callerRole: 'admin' | 'client';
+  let callerRole = 'client';
   try {
     const supabase = createSupabaseServerClient();
     const { data: userRes, error: userErr } = await supabase.auth.getUser();
     if (userErr || !userRes.user) return unauthorized();
     const admin = createSupabaseServiceRoleClient();
     const { data: profile } = await admin.from('users').select('role').eq('id', userRes.user.id).single();
-    callerRole = (profile?.role as 'admin' | 'client') ?? 'client';
+    callerRole = profile?.role ?? 'client';
   } catch (e) {
     return safeErrorResponse(e);
   }
-  if (callerRole !== 'admin') return forbidden('Droits administrateur requis.');
+  if (callerRole !== 'admin' && callerRole !== 'administrator') {
+    return forbidden('Droits administrateur requis.');
+  }
 
   const id = String(params.id).slice(0, 80);
   let body: unknown;
@@ -93,7 +100,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   try {
     if (parsed.data.status) {
-      await updateMaintenanceStatus(id, parsed.data.status as MaintenanceProgramStatus);
+      await updateMaintenanceStatus(
+        id,
+        parsed.data.status as MaintenanceProgramStatus,
+        parsed.data.status_reason,
+      );
     }
     if (parsed.data.notes !== undefined) {
       await updateMaintenanceNotes(id, parsed.data.notes);
