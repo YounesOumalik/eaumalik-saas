@@ -1045,15 +1045,17 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                             >
                               <RotateCcw size={12} />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => askPurge(p)}
-                              className="btn-sm btn-danger inline-flex items-center justify-center"
-                              title="Supprimer définitivement"
-                              aria-label={`Supprimer ${p.name}`}
-                            >
-                              <Trash2 size={12} />
-                            </button>
+                            {isSuperAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => askPurge(p)}
+                                className="btn-sm btn-danger inline-flex items-center justify-center"
+                                title="Supprimer définitivement (superadmin)"
+                                aria-label={`Supprimer définitivement ${p.name}`}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -1156,15 +1158,17 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
                         >
                           <RotateCcw size={12} /> Restaurer
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => askPurge(p)}
-                          className="btn-sm btn-danger inline-flex items-center justify-center"
-                          aria-label={`Supprimer ${p.name}`}
-                          title="Supprimer définitivement"
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                        {isSuperAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => askPurge(p)}
+                            className="btn-sm btn-danger inline-flex items-center justify-center"
+                            aria-label={`Supprimer définitivement ${p.name}`}
+                            title="Supprimer définitivement (superadmin)"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
                       </>
                     )}
                   </div>

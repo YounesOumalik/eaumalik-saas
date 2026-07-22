@@ -318,7 +318,8 @@ function MaintenanceDetailModal({
         body: JSON.stringify({ status: nextStatus, status_reason: reason }),
       });
       if (!res.ok) {
-        toast('Échec du changement de statut', 'error');
+        const payload = await res.json().catch(() => null) as { error?: string } | null;
+        toast(payload?.error || 'Impossible de modifier le statut de la maintenance.', 'error');
         return;
       }
       const updated = { ...record, status: nextStatus, status_reason: reason };

@@ -63,6 +63,31 @@ async function ensureAdminOrMock(): Promise<{ ok: boolean; error?: string; role?
   return { ok: true, role: user.role };
 }
 
+/** Vérifie le rôle superadmin strict (`admin`) pour les actions irréversibles. */
+async function ensureSuperAdminOrMock(): Promise<{ ok: boolean; error?: string }> {
+  const useMocks =
+    process.env.NEXT_PUBLIC_USE_MOCKS === 'true' ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+
+  if (useMocks) {
+    const dev = await getDevUserFromCookie();
+    // Sans session dev, le mode mock représente le superadmin de démonstration.
+    if (dev && dev.role !== 'admin') {
+      return { ok: false, error: 'Suppression définitive réservée au superadministrateur.' };
+    }
+    return { ok: true };
+  }
+
+  const user = await getOptionalUser();
+  const realRole = user?.real_role ?? user?.role;
+  if (!user) return { ok: false, error: 'Authentification requise.' };
+  if (realRole !== 'admin') {
+    return { ok: false, error: 'Suppression définitive réservée au superadministrateur.' };
+  }
+  return { ok: true };
+}
+
 /** Recupere le role effectif de l'appelant (mode mock : via cookie dev-login). */
 async function getCallerRole(): Promise<'admin' | 'client' | null> {
   const dev = await getDevUserFromCookie();
@@ -199,7 +224,7 @@ export async function restoreProductAction(id: string) {
 
 /** Suppression definitive d'un produit archive. Action irreversible. */
 export async function purgeProductAction(id: string) {
-  const auth = await ensureAdminOrMock();
+  const auth = await ensureSuperAdminOrMock();
   if (!auth.ok) return { success: false as const, error: auth.error! };
 
   try {

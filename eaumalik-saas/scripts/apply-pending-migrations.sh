@@ -240,7 +240,17 @@ done
 # ----- Recharger le schema cache PostgREST -----
 banner "Reload du schema cache PostgREST…"
 db_psql -c "NOTIFY pgrst, 'reload schema';" 2>&1 || warn "PostgREST non joignable (peut-être dans un autre container)"
-ok "PostgREST rechargé"
+
+# Le NOTIFY est la voie normale. Sur certaines installations Supabase,
+# PostgREST peut conserver son cache après une migration malgré le NOTIFY
+# (notamment si le listener a été redémarré entre-temps). Le redémarrage
+# ciblé garantit que les nouvelles colonnes sont immédiatement exposées.
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'rest-prod'; then
+  docker restart rest-prod >/dev/null
+  ok "PostgREST rechargé (rest-prod redémarré)"
+else
+  warn "Container rest-prod introuvable : NOTIFY envoyé uniquement"
+fi
 
 # ----- Résumé -----
 banner "Résumé"
