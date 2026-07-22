@@ -50,6 +50,7 @@ export async function submitPublicInquiryAction(raw: unknown) {
   const row = {
     sender_id: null,
     sender_name: name,
+    sender_kind: 'public',
     recipient_id: null,
     text: details,
   };
@@ -73,5 +74,7 @@ export async function submitPublicInquiryAction(raw: unknown) {
   if (error) return { success: false as const, error: 'Envoi échoué.' };
 
   revalidatePath('/');
+  revalidatePath('/crm/clients');
+  revalidatePath('/crm/messages');
   return { success: true as const };
 }

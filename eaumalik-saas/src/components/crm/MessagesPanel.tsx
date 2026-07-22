@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, User, Mail, MessageSquare } from 'lucide-react';
+import { Send, User, Mail, MessageSquare, Globe2 } from 'lucide-react';
 import { sendAdminReplyAction } from '@/app/actions/clientActions';
 
 export interface ClientMessageItem {
   clientId: string;
   clientName: string;
   clientEmail: string;
+  isPublic?: boolean;
   lastMessage: string;
   timestamp: string;
   messages: any[];
@@ -103,7 +104,14 @@ export default function MessagesPanel({
                   }`}
                 >
                   <div className="flex justify-between items-center w-full">
-                    <span className="font-bold text-sm truncate">{c.clientName}</span>
+                    <span className="min-w-0 flex items-center gap-1.5">
+                      {c.isPublic ? (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                          Public
+                        </span>
+                      ) : null}
+                      <span className="font-bold text-sm truncate">{c.clientName}</span>
+                    </span>
                     <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
                       {new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
@@ -124,12 +132,20 @@ export default function MessagesPanel({
             {/* Header */}
             <div className="p-4 border-b border-[color:var(--border)] bg-[color:var(--bg-card)] flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-primary-soft flex items-center justify-center text-primary-light">
-                <User size={18} />
+                {selectedClient.isPublic ? <Globe2 size={18} /> : <User size={18} />}
               </div>
               <div>
-                <div className="font-bold text-sm">{selectedClient.clientName}</div>
+                <div className="font-bold text-sm flex items-center gap-2">
+                  {selectedClient.clientName}
+                  {selectedClient.isPublic ? (
+                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                      Public
+                    </span>
+                  ) : null}
+                </div>
                 <div className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                  <Mail size={10} /> {selectedClient.clientEmail}
+                  {selectedClient.isPublic ? <Globe2 size={10} /> : <Mail size={10} />}{' '}
+                  {selectedClient.clientEmail}
                 </div>
               </div>
             </div>
@@ -148,7 +164,7 @@ export default function MessagesPanel({
                       <div className="font-bold text-[9px] mb-1 opacity-70">
                         {isAdminMsg ? 'Vous (Admin)' : selectedClient.clientName}
                       </div>
-                      <div>{m.text}</div>
+                      <div className="whitespace-pre-wrap">{m.text}</div>
                       <div className="text-[9px] text-right mt-1 opacity-60">
                         {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
@@ -160,27 +176,33 @@ export default function MessagesPanel({
             </div>
 
             {/* Reply Form */}
-            <form onSubmit={handleSendReply} className="p-3 border-t border-[color:var(--border)] flex gap-2">
-              <input
-                type="text"
-                className="form-input flex-1"
-                placeholder={`Répondre à ${selectedClient.clientName}...`}
-                value={replyText}
-                onChange={e => setReplyText(e.target.value)}
-              />
-              <button
-                type="submit"
-                disabled={!replyText.trim() || sending}
-                className="btn-primary p-2.5 rounded-xl flex items-center justify-center flex-shrink-0 disabled:opacity-50"
-              >
-                <Send size={16} />
-              </button>
-            </form>
+            {selectedClient.isPublic ? (
+              <div className="p-3 border-t border-[color:var(--border)] text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+                Visiteur non inscrit — répondez-lui avec les coordonnées indiquées dans son message.
+              </div>
+            ) : (
+              <form onSubmit={handleSendReply} className="p-3 border-t border-[color:var(--border)] flex gap-2">
+                <input
+                  type="text"
+                  className="form-input flex-1"
+                  placeholder={`Répondre à ${selectedClient.clientName}...`}
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  disabled={!replyText.trim() || sending}
+                  className="btn-primary p-2.5 rounded-xl flex items-center justify-center flex-shrink-0 disabled:opacity-50"
+                >
+                  <Send size={16} />
+                </button>
+              </form>
+            )}
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8" style={{ color: 'var(--text-muted)' }}>
             <MessageSquare size={48} className="mb-3 opacity-30" />
-            <p>Sélectionnez un client dans la liste pour lire et répondre à ses messages.</p>
+            <p>Sélectionnez un client ou un visiteur public pour lire son message.</p>
           </div>
         )}
       </div>

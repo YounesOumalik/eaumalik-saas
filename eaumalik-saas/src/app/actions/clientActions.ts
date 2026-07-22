@@ -7,6 +7,7 @@ import {
   createSupabaseServerClient,
   createSupabaseServiceRoleClient,
   requireAdmin,
+  requirePermission,
   requireUser,
   getOptionalUser,
 } from '@/lib/supabase/server';
@@ -25,6 +26,7 @@ import {
   claimOrphanOrdersForUser,
 } from '@/data/repositories';
 import type { MaintenanceRecord } from '@/types';
+import { groupMessagesForCrm, normalizeMessage } from '@/lib/crmMessages';
 
 import { isMockMode } from '@/lib/api-guard';
 
@@ -110,18 +112,6 @@ async function getCurrentUser() {
     cashback_balance: number | null;
     role: 'admin' | 'client';
   } | null;
-}
-
-function normalizeMessage(row: any) {
-  const sourceSenderId = row.senderId ?? row.sender_id ?? null;
-  const senderId = sourceSenderId === null ? 'admin-id' : sourceSenderId;
-  return {
-    ...row,
-    senderId,
-    senderName: row.senderName ?? row.sender_name ?? (senderId === 'admin-id' ? 'Administrateur EAUMALIK' : 'Client'),
-    recipientId: row.recipientId ?? row.recipient_id ?? null,
-    timestamp: row.timestamp ?? row.created_at ?? new Date().toISOString(),
-  };
 }
 
 // ============================================================================
@@ -277,6 +267,7 @@ export async function sendClientMessageAction(raw: unknown) {
       id: `msg-${Date.now()}`,
       senderId: user.id,
       senderName: user.full_name,
+      senderKind: 'client',
       recipientId: 'admin-id',
       text: parsed.data.text,
       timestamp: new Date().toISOString(),
@@ -293,6 +284,7 @@ export async function sendClientMessageAction(raw: unknown) {
     .insert({
       sender_id: user.id,
       sender_name: user.full_name,
+      sender_kind: 'client',
       recipient_id: null, // null = broadcast admin
       text: parsed.data.text,
     })
@@ -307,7 +299,7 @@ export async function sendClientMessageAction(raw: unknown) {
 // Admin — liste / réponse messages
 // ============================================================================
 export async function getAdminMessagesList() {
-  await requireAdmin();
+  await requirePermission('can_follow_prospects');
   let rows: any[] = [];
   let users: any[] = [];
 
@@ -324,38 +316,16 @@ export async function getAdminMessagesList() {
     users = usersRes.data ?? [];
   }
 
-  // Groupement par client.
-  const clientsMap = new Map<string, any>();
-  const usersById = new Map(users.map((u: any) => [u.id, u]));
-  for (const raw of rows) {
-    const m = normalizeMessage(raw);
-    const clientId = m.senderId === 'admin-id' ? m.recipientId : m.senderId;
-    if (!clientId || clientId === 'admin-id') continue;
-    const profile = usersById.get(clientId);
-    if (!clientsMap.has(clientId)) {
-      clientsMap.set(clientId, {
-        clientId,
-        clientName: profile?.full_name ?? m.senderName ?? 'Client',
-        clientEmail: profile?.email ?? '',
-        lastMessage: m.text,
-        timestamp: m.timestamp,
-        messages: [],
-      });
-    }
-    const conversation = clientsMap.get(clientId)!;
-    conversation.lastMessage = m.text;
-    conversation.timestamp = m.timestamp;
-    conversation.messages.push(m);
-  }
-  const clients = Array.from(clientsMap.values())
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  return { success: true as const, clients };
+  return { success: true as const, clients: groupMessagesForCrm(rows, users) };
 }
 
 export async function sendAdminReplyAction(clientId: string, raw: unknown) {
   const parsed = MessageSchema.safeParse(raw);
   if (!parsed.success) return { success: false as const, error: 'Message invalide.' };
-  await requireAdmin();
+  await requirePermission('can_follow_prospects');
+  if (clientId.startsWith('public:')) {
+    return { success: false as const, error: 'Ce visiteur public ne possède pas de compte client.' };
+  }
 
   if (isMockMode()) {
     const rows = await readMessagesRaw();
@@ -363,6 +333,7 @@ export async function sendAdminReplyAction(clientId: string, raw: unknown) {
       id: `msg-${Date.now()}`,
       senderId: 'admin-id',
       senderName: 'Administrateur EAUMALIK',
+      senderKind: 'admin',
       recipientId: clientId,
       text: parsed.data.text,
       timestamp: new Date().toISOString(),
@@ -379,6 +350,7 @@ export async function sendAdminReplyAction(clientId: string, raw: unknown) {
     .insert({
       sender_id: null, // null = admin
       sender_name: 'Administrateur EAUMALIK',
+      sender_kind: 'admin',
       recipient_id: clientId,
       text: parsed.data.text,
     })

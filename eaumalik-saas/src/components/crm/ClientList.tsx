@@ -94,7 +94,7 @@ export default function ClientList({
           aria-label="Ouvrir la messagerie clients"
         >
           <MessageSquare size={16} />
-          <span>Messages Clients</span>
+          <span>Messages Clients &amp; Public</span>
           {initialMessages.length > 0 && (
             <span
               className="px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white"
@@ -411,7 +411,7 @@ function MessagesModal({
         <div className="flex items-center justify-between p-4 border-b border-[color:var(--border)]">
           <div className="flex items-center gap-2">
             <MessageSquare size={18} className="text-primary-light" />
-            <h2 className="font-display font-extrabold text-base">Messages Clients</h2>
+            <h2 className="font-display font-extrabold text-base">Messages Clients &amp; Public</h2>
             {initialMessages.length > 0 && (
               <span
                 className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white"

@@ -10,7 +10,7 @@ import MessagesPanel, { type ClientMessageItem } from './MessagesPanel';
 export default function CrmMessages({ initialClients }: { initialClients: ClientMessageItem[] }) {
   return (
     <>
-      <h2 className="font-display font-extrabold text-xl mb-6">Messages des Clients</h2>
+      <h2 className="font-display font-extrabold text-xl mb-6">Messages Clients &amp; Public</h2>
       <MessagesPanel initialMessages={initialClients} />
     </>
   );

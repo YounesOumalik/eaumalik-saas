@@ -11,12 +11,8 @@ import ClientList from '@/components/crm/ClientList';
  * dès qu'il cliquait sur l'onglet "Clients" dans le CRM (alors que l'UI
  * montrait bien l'onglet grâce aux permissions).
  *
- * On charge également la liste des conversations de messagerie (bouton
- * « Messages Clients » en haut de la page). Si l'utilisateur courant n'est
- * pas admin, `getAdminMessagesList` lèvera une erreur ; on retombe alors
- * gracieusement sur un tableau vide, ce qui masque simplement le badge de
- * notifications tout en laissant l'UI intacte pour le personnel autorisé à
- * voir les fiches mais pas la boîte de réception.
+ * On charge également la liste des conversations clients et des demandes
+ * publiques. La même permission CRM protège la page et la messagerie.
  */
 export default async function CrmClientsPage() {
   try {
@@ -29,7 +25,6 @@ export default async function CrmClientsPage() {
     listClientsForStaff(),
     listOrdersForStaff(),
     listMaintenance(),
-    // Encapsulé : `getAdminMessagesList` exige un rôle admin.
     getAdminMessagesList().catch(() => ({ success: false as const, clients: [] as any[] })),
   ]);
 
