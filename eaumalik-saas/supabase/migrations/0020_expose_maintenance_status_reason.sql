@@ -17,7 +17,6 @@ SELECT
   next_service_date,
   service_interval_months,
   status,
-  status_reason,
   notes,
   filter_types,
   last_service_date,
@@ -25,7 +24,10 @@ SELECT
   total_cost,
   intervention_count,
   created_at,
-  updated_at
+  updated_at,
+  -- Les colonnes existantes doivent garder leur ordre dans CREATE OR REPLACE VIEW.
+  -- Le nouveau champ est donc ajouté à la fin.
+  status_reason
 FROM eaumalik.maintenance_records;
 
 COMMENT ON VIEW public.maintenance_records IS
