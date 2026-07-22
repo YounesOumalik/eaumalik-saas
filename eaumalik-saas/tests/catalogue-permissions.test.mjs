@@ -19,3 +19,16 @@ test('le message d’erreur API du changement de statut est affiché', async () 
   assert.match(component, /res\.json\(\)\.catch\(\(\) => null\)/);
   assert.match(component, /Impossible de modifier le statut de la maintenance/);
 });
+
+test('le catalogue admin ne sérialise pas les images Base64 dans le rendu', async () => {
+  const page = await readFile(new URL('../src/app/admin/catalogue/page.tsx', import.meta.url), 'utf8');
+  const component = await readFile(new URL('../src/components/admin/CatalogueManager.tsx', import.meta.url), 'utf8');
+  const actions = await readFile(new URL('../src/app/actions/productActions.ts', import.meta.url), 'utf8');
+
+  assert.match(page, /products\.map\(toAdminProduct\)/);
+  assert.match(page, /initialProducts=\{catalogueProducts\}/);
+  assert.match(page, /import \{ toAdminProduct \} from '@\/lib\/public-media'/);
+  assert.match(component, /!product \|\| imageChanged/);
+  assert.match(component, /withPublicMediaUrl\('product', p\)/);
+  assert.match(actions, /image_url_local: imageUrlLocal/);
+});

@@ -15,6 +15,7 @@ import {
 import type { Product, ProductCategory, StockMovementReason } from '@/types';
 import { CATEGORY_LABELS, STOCK_MOVEMENT_REASON_LABELS } from '@/types';
 import { formatCurrency } from '@/lib/utils';
+import { withPublicMediaUrl } from '@/lib/public-media';
 import { useToast } from '@/components/shared/ToastProvider';
 import Dialog from '@/components/ui/Dialog';
 import { getCurrentUserPermissionsAction } from '@/app/actions/authActions';
@@ -73,6 +74,7 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [imageUrl, setImageUrl] = useState<string>('');
+  const [imageChanged, setImageChanged] = useState(false);
 
   const { register, handleSubmit, reset, control, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(FormSchema),
@@ -115,6 +117,7 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
         });
         setImageUrl('');
       }
+      setImageChanged(false);
     }
   }, [open, product, reset]);
 
@@ -122,7 +125,10 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => setImageUrl(reader.result as string);
+    reader.onloadend = () => {
+      setImageUrl(reader.result as string);
+      setImageChanged(true);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -165,8 +171,14 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
         sort_order: data.sort_order ?? 0,
         // Image : soit on garde l'URL deja en place, soit on envoie un data:
         // URL (uniquement en mock pour eviter l'upload Supabase Storage).
-        image_url_local: imageUrl.startsWith('data:') ? imageUrl : null,
-        image_url: imageUrl && !imageUrl.startsWith('data:') ? imageUrl : null,
+        // En édition, l'URL /api/media représente l'image déjà enregistrée :
+        // on n'envoie rien tant que l'admin ne remplace/supprime pas la photo.
+        ...(!product || imageChanged
+          ? {
+              image_url_local: imageUrl.startsWith('data:') ? imageUrl : null,
+              image_url: imageUrl && !imageUrl.startsWith('data:') ? imageUrl : null,
+            }
+          : {}),
         specs: product?.specs ?? [],
         filter_lifespan_months: data.category === 'consommables' ? 12 : null,
       };
@@ -386,7 +398,10 @@ function ProductFormDialog({ open, product, onClose, onSaved, canEditWholesalePr
                   {imageUrl && (
                     <button
                       type="button"
-                      onClick={() => setImageUrl('')}
+                      onClick={() => {
+                        setImageUrl('');
+                        setImageChanged(true);
+                      }}
                       className="text-xs text-danger hover:opacity-80 self-start font-semibold"
                     >
                       Supprimer la photo
@@ -553,14 +568,15 @@ export default function CatalogueManager({ initialProducts }: { initialProducts:
   };
 
   const onSaved = (p: Product) => {
+    const displayProduct = withPublicMediaUrl('product', p);
     setProducts(prev => {
       const idx = prev.findIndex(x => x.id === p.id);
       if (idx >= 0) {
         const copy = [...prev];
-        copy[idx] = p;
+        copy[idx] = displayProduct;
         return copy;
       }
-      return [p, ...prev];
+      return [displayProduct, ...prev];
     });
   };
 

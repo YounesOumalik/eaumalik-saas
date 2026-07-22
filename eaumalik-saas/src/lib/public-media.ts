@@ -61,3 +61,34 @@ export function toPublicProduct(record: Product): Product {
 
   return withPublicMediaUrl('product', product);
 }
+
+/**
+ * DTO du catalogue admin : conserve le prix de gros, mais retire les colonnes
+ * historiques non typées telles que image_url_local qui peuvent contenir une
+ * seconde copie Base64 de plusieurs mégaoctets.
+ */
+export function toAdminProduct(record: Product): Product {
+  const product: Product = {
+    id: record.id,
+    name: record.name,
+    slug: record.slug,
+    description: record.description,
+    price: record.price,
+    category: record.category,
+    image_url: record.image_url,
+    specs: record.specs,
+    is_featured: record.is_featured,
+    stock: record.stock,
+    stock_alert_threshold: record.stock_alert_threshold,
+    filter_lifespan_months: record.filter_lifespan_months,
+    wholesale_price: record.wholesale_price,
+    price_on_request: record.price_on_request,
+    sort_order: record.sort_order,
+    is_out_of_stock: record.is_out_of_stock,
+    is_archived: record.is_archived,
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+  };
+
+  return withPublicMediaUrl('product', product);
+}

@@ -173,9 +173,15 @@ export async function updateProductAction(id: string, raw: unknown) {
     const callerRole = await getCallerRole();
     // Defense en profondeur : un appelant non-admin ne peut pas modifier wholesale_price.
     const safeData = sanitizeProductPayloadForRole(data, callerRole);
+    const { image_url_local: imageUrlLocal, ...productData } = safeData;
+    const imagePatch = imageUrlLocal
+      ? { image_url: imageUrlLocal }
+      : productData.image_url !== undefined
+        ? { image_url: productData.image_url }
+        : {};
     const updated = await updateProduct(id, {
-      ...safeData,
-      image_url: safeData.image_url_local || safeData.image_url || undefined,
+      ...productData,
+      ...imagePatch,
     });
     revalidatePath('/boutique');
     revalidatePath('/admin/catalogue');
