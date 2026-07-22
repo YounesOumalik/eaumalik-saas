@@ -45,17 +45,41 @@ interface FlipbookState {
 const RENDER_SCALE = 1.4; // compromis qualité/performances
 
 export default function CatalogueFlipbookSection() {
+  const sectionRef = useRef<HTMLElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [state, setState] = useState<FlipbookState>({ pageCount: 0, pages: [] });
   const [currentPage, setCurrentPage] = useState(0); // 0 = couverture
-  const [loading, setLoading] = useState(true);
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const pdfDocRef = useRef<any>(null);
 
+  // Ne télécharge ni pdfjs, ni son worker, ni le PDF pendant le chargement
+  // critique de la landing. On commence juste avant que la section soit visible.
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    if (!('IntersectionObserver' in window)) {
+      setShouldLoad(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setShouldLoad(true);
+        observer.disconnect();
+      },
+      { rootMargin: '500px 0px' },
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, []);
+
   // Charge le PDF une seule fois (lazy import pdfjs-dist).
   useEffect(() => {
+    if (!shouldLoad) return;
     let cancelled = false;
     (async () => {
       try {
@@ -98,7 +122,7 @@ export default function CatalogueFlipbookSection() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [shouldLoad]);
 
   // Rend la page courante dans le canvas (memo par page).
   const renderPage = useCallback(
@@ -213,6 +237,7 @@ export default function CatalogueFlipbookSection() {
 
   return (
     <section
+      ref={sectionRef}
       id="catalogue-flipbook"
       className="py-24 surface-page"
       aria-labelledby="flipbook-heading"
@@ -259,8 +284,16 @@ export default function CatalogueFlipbookSection() {
             </div>
           ) : null}
 
+          {/* Placeholder léger avant l'approche de la section. */}
+          {!shouldLoad ? (
+            <div className="flex flex-col items-center justify-center py-24 text-meta">
+              <BookOpen className="w-8 h-8 mb-3" aria-hidden="true" />
+              <span>Le catalogue se prépare à l’approche de cette section…</span>
+            </div>
+          ) : null}
+
           {/* Loader */}
-          {loading ? (
+          {shouldLoad && loading ? (
             <div className="flex items-center justify-center py-24 text-meta">
               <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Chargement du catalogue…
             </div>

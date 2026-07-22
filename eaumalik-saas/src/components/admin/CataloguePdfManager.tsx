@@ -32,6 +32,8 @@ import {
   Loader2,
   CheckCircle2,
   RefreshCw,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useToast } from '@/components/shared/ToastProvider';
 import {
@@ -83,11 +85,18 @@ export default function CataloguePdfManager() {
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [record, setRecord] = useState<CataloguePdfState>(null);
-  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+  const [metadataLoaded, setMetadataLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  // L'aperçu PDF (iframe) est OPTIONNEL : il ne se charge que si l'admin
+  // clique sur "Afficher l'aperçu". Par défaut, on évite de télécharger
+  // et de rendre le PDF à chaque ouverture du panneau — gain net sur
+  // le temps de premier rendu de la page admin.
+  const [showPreview, setShowPreview] = useState(false);
   // Petit "nonce" pour forcer le navigateur à recharger l'iframe d'aperçu
   // quand l'admin upload un nouveau PDF (sinon le cache HTTP du navigateur
   // continue de servir l'ancien PDF dans l'iframe).
@@ -111,13 +120,15 @@ export default function CataloguePdfManager() {
       toast('Le catalogue PDF utilise le fallback. Vous pouvez réessayer.', 'error');
     } finally {
       setLoading(false);
+      setMetadataLoaded(true);
     }
   }, [toast]);
 
-  // Chargement initial des métadonnées du PDF courant.
+  // Le PDF et ses métadonnées sont chargés uniquement quand l'admin ouvre
+  // le panneau. Le premier rendu reste ainsi léger et instantané.
   useEffect(() => {
-    void loadRecord();
-  }, [loadRecord]);
+    if (expanded && !metadataLoaded) void loadRecord();
+  }, [expanded, loadRecord, metadataLoaded]);
 
   async function uploadFile(file: File) {
     if (!file) return;
@@ -197,16 +208,79 @@ export default function CataloguePdfManager() {
     fileInputRef.current?.click();
   }
 
-  if (loading) {
+  if (!expanded) {
     return (
-      <div className="glass-card p-6 flex items-center gap-3 text-sm text-meta">
-        <Loader2 className="w-4 h-4 animate-spin" /> Chargement du catalogue PDF…
-      </div>
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="glass-card w-full p-4 flex items-center justify-between gap-4 text-left transition-colors hover:border-primary/60"
+        aria-expanded="false"
+        aria-controls="catalogue-pdf-panel"
+      >
+        <span className="flex items-center gap-3 min-w-0">
+          <FileText className="w-5 h-5 shrink-0" style={{ color: 'var(--primary)' }} />
+          <span className="min-w-0 truncate">
+            <span className="font-serif text-xl text-heading">Catalogue PDF</span>
+            <span className="hidden sm:inline text-sm text-meta">
+              {' · '}Déployer pour gérer le PDF et son aperçu
+            </span>
+          </span>
+        </span>
+        <span className="shrink-0 text-sm font-semibold" style={{ color: 'var(--primary)' }}>
+          Ouvrir <span aria-hidden="true">→</span>
+        </span>
+      </button>
+    );
+  }
+
+  // L'état de chargement couvre aussi le tout premier rendu après le clic,
+  // avant que l'effet ne puisse démarrer la Server Action.
+  if (!metadataLoaded) {
+    return (
+      <section id="catalogue-pdf-panel" className="glass-card p-6" aria-busy="true">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5" style={{ color: 'var(--primary)' }} />
+            <h2 className="font-serif text-xl text-heading">Catalogue PDF</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="btn-outline text-xs"
+            aria-label="Replier la gestion du catalogue PDF"
+          >
+            Replier
+          </button>
+        </div>
+        <div className="mt-6 flex items-center gap-3 text-sm text-meta">
+          <Loader2 className="w-4 h-4 animate-spin" /> Chargement de la gestion du catalogue…
+        </div>
+      </section>
     );
   }
 
   return (
-    <section className="glass-card p-6 space-y-4" aria-labelledby="catalogue-pdf-heading">
+    <section
+      id="catalogue-pdf-panel"
+      className="glass-card p-6 space-y-4"
+      aria-labelledby="catalogue-pdf-heading"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <FileText className="w-5 h-5" style={{ color: 'var(--primary)' }} />
+          <h2 id="catalogue-pdf-heading" className="font-serif text-xl text-heading">
+            Catalogue PDF (Flipbook landing page)
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="btn-outline text-xs"
+          aria-label="Replier la gestion du catalogue PDF"
+        >
+          Replier
+        </button>
+      </div>
       {loadError ? (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           <span>{loadError} Le PDF de fallback reste disponible.</span>
@@ -344,22 +418,46 @@ export default function CataloguePdfManager() {
           )}
         </div>
 
-        {/* Aperçu */}
-        <div className="rounded-2xl border-soft overflow-hidden bg-slate-100 dark:bg-slate-900">
-          {record ? (
+        {/* Aperçu — masqué par défaut, ne charge le PDF qu'à la demande */}
+        <div className="rounded-2xl border-soft bg-slate-100 dark:bg-slate-900 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 p-3 border-b border-soft">
+            <span className="text-xs font-bold uppercase tracking-wider text-meta">
+              Aperçu PDF
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowPreview((v) => !v)}
+              className="btn-outline text-xs flex items-center gap-1.5"
+              aria-expanded={showPreview}
+              aria-controls="catalogue-pdf-iframe"
+            >
+              {showPreview ? (
+                <>
+                  <EyeOff size={13} /> Masquer l&apos;aperçu
+                </>
+              ) : (
+                <>
+                  <Eye size={13} /> Afficher l&apos;aperçu
+                </>
+              )}
+            </button>
+          </div>
+          {showPreview ? (
             <iframe
+              id="catalogue-pdf-iframe"
               key={previewNonce}
               src={`/api/catalogue/pdf?v=${previewNonce}`}
-              title="Aperçu du catalogue PDF"
-              className="w-full h-72"
+              title={record ? 'Aperçu du catalogue PDF' : 'Aperçu du catalogue PDF de fallback'}
+              className="w-full h-72 border-0"
+              loading="lazy"
             />
           ) : (
-            <iframe
-              key={`fallback-${previewNonce}`}
-              src={`/api/catalogue/pdf?v=${previewNonce}`}
-              title="Aperçu du catalogue PDF de fallback"
-              className="w-full h-72"
-            />
+            <div className="flex items-center justify-center h-32 px-4 text-center">
+              <p className="text-xs text-meta">
+                Aperçu non chargé. Cliquez sur « Afficher l&apos;aperçu » pour rendre le PDF
+                dans cette page (utile pour vérifier le rendu sans ouvrir un nouvel onglet).
+              </p>
+            </div>
           )}
         </div>
       </div>

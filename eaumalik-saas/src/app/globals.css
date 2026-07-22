@@ -1165,3 +1165,17 @@
 }
 
 .cat-btn.active { background: #0284c7; color: white; }
+/* Les sections hors écran ne sont ni peintes ni mises en page au premier
+   rendu. La taille intrinsèque réserve leur espace et évite tout CLS. */
+.landing-deferred > section,
+.product-card-deferred {
+  content-visibility: auto;
+}
+
+.landing-deferred > section {
+  contain-intrinsic-size: auto 900px;
+}
+
+.product-card-deferred {
+  contain-intrinsic-size: auto 620px;
+}

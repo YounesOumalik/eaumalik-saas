@@ -1,8 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useMemo, ReactNode, useCallback } from 'react';
-import { maybeSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { User, Session } from '@supabase/supabase-js';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import type { User, Session, SupabaseClient } from '@supabase/supabase-js';
 
 interface AuthContextValue {
   user: User | null;
@@ -43,10 +42,44 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   // sans reload (événement custom + re-fetch).
   const [devUser, setDevUser] = useState<any>(null);
 
-  // Keep one browser client for the lifetime of the provider. Creating a new
-  // client on every render recreates the auth listener and refresh callbacks,
-  // which can cause session flapping (and apparent automatic logouts).
-  const supabase = useMemo(() => maybeSupabaseBrowserClient(), []);
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
+  const [clientReady, setClientReady] = useState(false);
+
+  // Supabase représente une part importante du JavaScript public. Son client
+  // est chargé après le premier rendu : le contenu et les interactions de base
+  // deviennent disponibles sans attendre le SDK d'authentification.
+  useEffect(() => {
+    const hasConfig = Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim(),
+    );
+    if (!hasConfig) {
+      setClientReady(true);
+      return;
+    }
+
+    let cancelled = false;
+    const loadClient = async () => {
+      const { maybeSupabaseBrowserClient } = await import('@/lib/supabase/client');
+      if (cancelled) return;
+      setSupabase(maybeSupabaseBrowserClient());
+      setClientReady(true);
+    };
+
+    let idleId: number | undefined;
+    let timerId: ReturnType<typeof setTimeout> | undefined;
+    if ('requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(() => void loadClient(), { timeout: 1000 });
+    } else {
+      timerId = setTimeout(() => void loadClient(), 0);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleId !== undefined) window.cancelIdleCallback(idleId);
+      if (timerId !== undefined) clearTimeout(timerId);
+    };
+  }, []);
 
   const fetchProfile = useCallback(async (uid: string, currentUser?: any) => {
     if (!supabase) return;
@@ -73,6 +106,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   }, [supabase]);
 
   const refresh = useCallback(async () => {
+    if (!clientReady) return;
     if (!supabase) {
       setLoading(false);
       return;
@@ -89,7 +123,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
       setDisplayName('');
     }
     setLoading(false);
-  }, [supabase, fetchProfile]);
+  }, [clientReady, supabase, fetchProfile]);
 
   useEffect(() => {
     void refresh();
@@ -119,7 +153,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   // recharge aussi à chaque événement custom (login, checkout invité) émis
   // dans le même onglet.
   useEffect(() => {
-    if (supabase) return;
+    if (!clientReady || supabase) return;
     let cancelled = false;
     const loadDevSession = async () => {
       try {
@@ -144,7 +178,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       window.removeEventListener('eaumalik:dev-session-change', onDevSession);
     };
-  }, [supabase]);
+  }, [clientReady, supabase]);
 
   // la session factice est portée par le cookie
   // httpOnly `eaumalik_dev_session`, lue via /api/auth/dev-session.

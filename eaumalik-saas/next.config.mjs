@@ -20,6 +20,9 @@ const nextConfig = {
   // AFM (Helvetica/Courier/Times) seront copiées via COPY.
   output: 'standalone',
   images: {
+    // Les images catalogue changent d'URL quand leur version change : leur
+    // variante WebP optimisée peut donc rester longtemps dans le cache.
+    minimumCacheTTL: 2678400,
     remotePatterns: [
       { protocol: 'https', hostname: 'picsum.photos' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
@@ -94,6 +97,18 @@ const nextConfig = {
     const cataloguePdfCsp = "default-src 'self'; frame-ancestors 'self'; object-src 'none'";
 
     return [
+      {
+        source: '/products/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=2678400, stale-while-revalidate=86400' },
+        ],
+      },
+      {
+        source: '/pdfjs/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
       {
         source: '/:path*',
         headers: [

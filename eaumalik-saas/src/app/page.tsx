@@ -14,7 +14,7 @@ import BoutiquePromotions from '@/components/boutique/BoutiquePromotions';
 import ProductsPreview from '@/components/landing/ProductsPreview';
 import IndustrialSection from '@/components/landing/IndustrialSection';
 import ContactSection from '@/components/landing/ContactSection';
-import { listProducts, listActivePromotions } from '@/data/repositories';
+import { getCachedPublicProducts, getCachedPublicPromotions } from '@/data/publicCatalog';
 import { toPublicProduct, withPublicMediaUrl } from '@/lib/public-media';
 
 // Page d'accueil — design "EauMalik — Catalogue Produits" (maquette adoptée le 2026-07-14) :
@@ -32,7 +32,10 @@ export default async function HomePage() {
   //  - all : tous les produits actifs, dont on dérive les produits phares ;
   //  - promotions : carrousel public.
   // Une seule lecture catalogue suffit, au lieu de deux requêtes identiques.
-  const [all, promotions] = await Promise.all([listProducts(), listActivePromotions(12)]);
+  const [all, promotions] = await Promise.all([
+    getCachedPublicProducts(),
+    getCachedPublicPromotions(),
+  ]);
   const featured = all.filter((product) => product.is_featured);
   const previewProducts = (featured.length > 0 ? featured : all.slice(0, 6))
     .slice(0, 6)
@@ -41,12 +44,14 @@ export default async function HomePage() {
   return (
     <>
       <HeroSection />
-      <FiltrationSection />
-      <CatalogueFlipbookSection />
-      <BoutiquePromotions promotions={publicPromotions} showNews={false} />
-      <ProductsPreview products={previewProducts} />
-      <IndustrialSection />
-      <ContactSection />
+      <div className="landing-deferred">
+        <FiltrationSection />
+        <CatalogueFlipbookSection />
+        <BoutiquePromotions promotions={publicPromotions} showNews={false} />
+        <ProductsPreview products={previewProducts} />
+        <IndustrialSection />
+        <ContactSection />
+      </div>
     </>
   );
 }

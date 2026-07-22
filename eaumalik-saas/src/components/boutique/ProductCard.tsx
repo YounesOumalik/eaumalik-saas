@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { CATEGORY_LABELS } from '@/types';
 import type { Product } from '@/types';
@@ -9,8 +10,10 @@ import { formatCurrency, shouldSkipImageOptimization } from '@/lib/utils';
 import { useCart } from '@/components/shared/CartProvider';
 import { useToast } from '@/components/shared/ToastProvider';
 import { useSupabaseAuth } from '@/components/shared/SupabaseAuthProvider';
-import ProductDetailModal from './ProductDetailModal';
 import AddToCartButton from './AddToCartButton';
+
+// Le détail complet n'est nécessaire qu'après un clic sur une carte.
+const ProductDetailModal = dynamic(() => import('./ProductDetailModal'));
 
 /**
  * Mapping des categories existantes vers les libelles visuels du nouveau design.
@@ -67,7 +70,7 @@ export default function ProductCard({ product }: { product: Product }) {
         role="button"
         tabIndex={0}
         aria-label={`Voir ${product.name}`}
-        className="group glass-card overflow-hidden hover:shadow-xl hover:-translate-y-2 transition-all duration-500 cursor-pointer h-full flex flex-col"
+        className="product-card-deferred group glass-card overflow-hidden hover:shadow-xl hover:-translate-y-2 transition-all duration-500 cursor-pointer h-full flex flex-col"
       >
         <div className="aspect-square overflow-hidden relative" style={{ background: 'var(--bg-surface)' }}>
           {product.image_url ? (

@@ -1,4 +1,4 @@
-import { listProducts, listActivePromotions } from '@/data/repositories';
+import { getCachedPublicProducts, getCachedPublicPromotions } from '@/data/publicCatalog';
 import BoutiqueClient from './BoutiqueClient';
 import { Metadata } from 'next';
 import { toPublicProduct, withPublicMediaUrl } from '@/lib/public-media';
@@ -17,8 +17,8 @@ export const metadata: Metadata = {
 export default async function BoutiquePage() {
   // Chargement en parallèle : produits à vendre + promos actives uniquement.
   const [products, promotions] = await Promise.all([
-    listProducts(),
-    listActivePromotions(12),
+    getCachedPublicProducts(),
+    getCachedPublicPromotions(),
   ]);
 
   return (

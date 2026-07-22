@@ -86,7 +86,7 @@ export default function HeroSection() {
               alt="EAUMALIK SARL — Captage, traitement et distribution d'eau"
               fill
               priority
-              sizes="(max-width: 768px) 80vw, 1100px"
+              sizes="(max-width: 768px) 80vw, (max-width: 1280px) 45vw, 560px"
               className="object-contain select-none"
               draggable={false}
             />
